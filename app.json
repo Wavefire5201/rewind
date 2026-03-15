@@ -1,30 +1,64 @@
 {
   "expo": {
-    "name": "rewind-tmp",
-    "slug": "rewind-tmp",
+    "name": "Rewind",
+    "slug": "rewind",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#1A1A1C",
+    "scheme": "rewind",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1A1A1C"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rewind.app",
+      "backgroundColor": "#1A1A1C",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Rewind needs camera access to capture your daily photos.",
+        "NSPhotoLibraryUsageDescription": "Rewind needs photo library access to set your profile avatar."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1A1A1C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "backgroundColor": "#1A1A1C",
+      "package": "com.rewind.app",
+      "permissions": ["CAMERA"]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Rewind needs camera access to capture your daily photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Rewind needs photo library access to set your profile avatar."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png"
+        }
+      ]
+    ]
   }
 }
