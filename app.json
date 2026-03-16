@@ -58,7 +58,15 @@
         {
           "icon": "./assets/icon.png"
         }
-      ]
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Rewind to save photos and timelapses to your library.",
+          "savePhotosPermission": "Allow Rewind to save photos and timelapses to your library."
+        }
+      ],
+      "expo-document-picker"
     ]
   }
 }

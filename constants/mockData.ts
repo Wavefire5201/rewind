@@ -80,4 +80,5 @@ export const MOCK_SETTINGS: AppSettings = {
   reminderTime: '08:00',
   photoQuality: 'high',
   cloudBackupEnabled: false,
+  mirrorSelfies: true,
 };

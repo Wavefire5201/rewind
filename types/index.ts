@@ -18,6 +18,7 @@ export interface AppSettings {
   reminderTime: string; // HH:MM
   photoQuality: 'low' | 'medium' | 'high';
   cloudBackupEnabled: boolean;
+  mirrorSelfies: boolean;
 }
 
 export interface AppState {

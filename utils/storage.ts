@@ -13,6 +13,7 @@ export function getDefaultSettings(): AppSettings {
     reminderTime: '08:00',
     photoQuality: 'high',
     cloudBackupEnabled: false,
+    mirrorSelfies: true,
   };
 }
 
@@ -40,5 +41,7 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 
 export async function loadSettings(): Promise<AppSettings> {
   const data = await AsyncStorage.getItem(KEYS.SETTINGS);
-  return data ? JSON.parse(data) : getDefaultSettings();
+  if (!data) return getDefaultSettings();
+  const stored = JSON.parse(data) as Partial<AppSettings>;
+  return { ...getDefaultSettings(), ...stored };
 }
