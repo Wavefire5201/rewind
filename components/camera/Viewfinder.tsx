@@ -10,10 +10,11 @@ interface ViewfinderProps {
   facing: 'front' | 'back';
   ghostOpacity: number;
   onGhostOpacityChange: (value: number) => void;
+  isMirrored: boolean;
 }
 
 const Viewfinder = forwardRef<CameraView, ViewfinderProps>(
-  ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange }, ref) => {
+  ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange, isMirrored }, ref) => {
     const [permission, requestPermission] = useCameraPermissions();
 
     if (!permission) {
@@ -38,7 +39,11 @@ const Viewfinder = forwardRef<CameraView, ViewfinderProps>(
 
     return (
       <View style={styles.container}>
-        <CameraView ref={ref} style={StyleSheet.absoluteFill} facing={facing} />
+        <CameraView
+          ref={ref}
+          style={[StyleSheet.absoluteFill, facing === 'front' && !isMirrored ? { transform: [{ scaleX: -1 }] } : null]}
+          facing={facing}
+        />
         {ghostImageUri ? (
           <GhostOverlay
             imageUri={ghostImageUri}

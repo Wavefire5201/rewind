@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,23 +15,19 @@ import { haptics } from '@/utils/haptics';
 
 interface DateRangeSheetProps {
   visible: boolean;
-  dates: string[];       // all dates with photos (YYYY-MM-DD format)
+  dates: string[];       // available YYYY-MM-DD dates
   startDate: string;
   endDate: string;
   onApply: (start: string, end: string) => void;
   onClose: () => void;
 }
 
-function formatMMDD(dateStr: string): string {
+function formatMMDDYY(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${month}-${day}`;
-}
-
-function formatDisplay(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const year = String(d.getFullYear()).slice(-2);
+  return `${month}-${day}-${year}`;
 }
 
 export default function DateRangeSheet({
@@ -45,31 +41,47 @@ export default function DateRangeSheet({
   const insets = useSafeAreaInsets();
   const [selStart, setSelStart] = useState(startDate);
   const [selEnd, setSelEnd] = useState(endDate);
-  const [selecting, setSelecting] = useState<'start' | 'end' | null>(null);
+  const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
+  const listScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible) {
       setSelStart(startDate);
       setSelEnd(endDate);
-      setSelecting(null);
+      setActiveField(null);
     }
   }, [visible, startDate, endDate]);
 
-  function handleDateTap(date: string) {
+  function handleStartFieldTap() {
     haptics.tap();
-    if (selecting === null || selecting === 'start') {
-      setSelStart(date);
-      setSelEnd(date);
-      setSelecting('end');
-    } else {
-      // selecting === 'end'
+    setActiveField(prev => (prev === 'start' ? null : 'start'));
+  }
+
+  function handleEndFieldTap() {
+    haptics.tap();
+    setActiveField(prev => (prev === 'end' ? null : 'end'));
+  }
+
+  function handleDateSelect(date: string) {
+    haptics.tap();
+    if (activeField === 'start') {
+      if (date > selEnd) {
+        setSelStart(selEnd);
+        setSelEnd(date);
+        setActiveField('end');
+      } else {
+        setSelStart(date);
+        setActiveField(null);
+      }
+    } else if (activeField === 'end') {
       if (date < selStart) {
         setSelEnd(selStart);
         setSelStart(date);
+        setActiveField('start');
       } else {
         setSelEnd(date);
+        setActiveField(null);
       }
-      setSelecting(null);
     }
   }
 
@@ -78,7 +90,7 @@ export default function DateRangeSheet({
     if (dates.length > 0) {
       setSelStart(dates[0]);
       setSelEnd(dates[dates.length - 1]);
-      setSelecting(null);
+      setActiveField(null);
     }
   }
 
@@ -87,33 +99,7 @@ export default function DateRangeSheet({
     onApply(selStart, selEnd);
   }
 
-  function chipStyle(date: string) {
-    const isStart = date === selStart;
-    const isEnd = date === selEnd;
-    const inRange = date >= selStart && date <= selEnd;
-
-    if (isStart || isEnd) {
-      return [styles.chip, styles.chipEndpoint];
-    }
-    if (inRange) {
-      return [styles.chip, styles.chipInRange];
-    }
-    return [styles.chip];
-  }
-
-  function chipTextStyle(date: string) {
-    const isStart = date === selStart;
-    const isEnd = date === selEnd;
-    const inRange = date >= selStart && date <= selEnd;
-
-    if (isStart || isEnd) {
-      return [styles.chipText, styles.chipTextEndpoint];
-    }
-    if (inRange) {
-      return [styles.chipText, styles.chipTextInRange];
-    }
-    return [styles.chipText];
-  }
+  const sortedDates = [...dates].sort();
 
   return (
     <Modal
@@ -126,41 +112,63 @@ export default function DateRangeSheet({
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Select Date Range</Text>
+          <Text style={styles.title}>Date Range</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
             <X size={20} color={Colors.textSecondary} weight="light" />
           </TouchableOpacity>
         </View>
 
-        {/* Range display */}
-        <View style={styles.rangeRow}>
-          <Text style={styles.rangeText}>
-            {selStart === selEnd
-              ? formatDisplay(selStart)
-              : `${formatDisplay(selStart)} — ${formatDisplay(selEnd)}`}
-          </Text>
-          {selecting === 'end' && (
-            <Text style={styles.hintText}>tap another date to set end</Text>
-          )}
+        {/* Date field row */}
+        <View style={styles.fieldRow}>
+          <TouchableOpacity
+            style={[styles.dateField, activeField === 'start' && styles.dateFieldActive]}
+            onPress={handleStartFieldTap}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive]}>
+              {formatMMDDYY(selStart)}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.toText}>TO</Text>
+
+          <TouchableOpacity
+            style={[styles.dateField, activeField === 'end' && styles.dateFieldActive]}
+            onPress={handleEndFieldTap}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive]}>
+              {formatMMDDYY(selEnd)}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Date grid */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.grid}
-          showsVerticalScrollIndicator={false}
-        >
-          {dates.map((date) => (
-            <TouchableOpacity
-              key={date}
-              style={chipStyle(date)}
-              onPress={() => handleDateTap(date)}
-              activeOpacity={0.7}
-            >
-              <Text style={chipTextStyle(date)}>{formatMMDD(date)}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Scrollable date list */}
+        {activeField !== null && (
+          <ScrollView
+            ref={listScrollRef}
+            style={styles.dateList}
+            showsVerticalScrollIndicator={false}
+          >
+            {sortedDates.map((date) => {
+              const isSelected =
+                (activeField === 'start' && date === selStart) ||
+                (activeField === 'end' && date === selEnd);
+              return (
+                <TouchableOpacity
+                  key={date}
+                  style={[styles.dateListItem, isSelected && styles.dateListItemSelected]}
+                  onPress={() => handleDateSelect(date)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected]}>
+                    {formatMMDDYY(date)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {/* Footer buttons */}
         <View style={styles.footer}>
@@ -191,63 +199,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   title: {
     fontFamily: Fonts.mono.medium,
     fontSize: 14,
     color: Colors.textPrimary,
   },
-  rangeRow: {
-    marginBottom: 16,
-    gap: 4,
-  },
-  rangeText: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 13,
-    color: Colors.accent,
-  },
-  hintText: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 10,
-    color: Colors.textTertiary,
-  },
-  scrollView: {
-    maxHeight: 220,
-  },
-  grid: {
+  fieldRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 16,
   },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+  dateField: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     backgroundColor: Colors.bgSurface,
-    minWidth: 60,
     alignItems: 'center',
   },
-  chipEndpoint: {
-    backgroundColor: Colors.accent,
+  dateFieldActive: {
+    borderWidth: 1,
+    borderColor: Colors.accent,
   },
-  chipInRange: {
-    backgroundColor: Colors.accentDeep,
-  },
-  chipText: {
+  dateFieldText: {
     fontFamily: Fonts.mono.regular,
-    fontSize: 11,
+    fontSize: 13,
     color: Colors.textSecondary,
   },
-  chipTextEndpoint: {
-    color: Colors.bgPage,
+  dateFieldTextActive: {
+    color: Colors.accent,
   },
-  chipTextInRange: {
-    color: Colors.textPrimary,
+  toText: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
+  },
+  dateList: {
+    maxHeight: 200,
+    marginBottom: 16,
+  },
+  dateListItem: {
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderPrimary,
+  },
+  dateListItemSelected: {
+    backgroundColor: Colors.bgSurface,
+  },
+  dateListText: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  dateListTextSelected: {
+    color: Colors.accent,
   },
   footer: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
+    marginTop: 4,
   },
   resetButton: {
     flex: 1,

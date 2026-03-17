@@ -36,7 +36,7 @@ export default function GhostOverlay({ imageUri, opacity, onOpacityChange }: Gho
 const styles = StyleSheet.create({
   controls: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     left: 16,
     right: 16,
     flexDirection: 'row',

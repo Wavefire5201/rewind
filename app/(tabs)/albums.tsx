@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -67,7 +67,7 @@ export default function AlbumsScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>albums</Text>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => haptics.tap()}>
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Custom album creation will be available in a future update.'); }}>
             <Plus size={18} color={Colors.textSecondary} weight="regular" />
           </TouchableOpacity>
         </View>

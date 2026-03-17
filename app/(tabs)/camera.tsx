@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
+import { ImageManipulator, FlipType } from 'expo-image-manipulator';
 import { Colors, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
@@ -23,6 +24,7 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
+  const [isMirrored, setIsMirrored] = useState(settings.mirrorSelfies);
   const [ghostOpacity, setGhostOpacity] = useState(0.3);
   const [showTimer, setShowTimer] = useState(false);
   const [timerDuration, setTimerDuration] = useState(0);
@@ -37,7 +39,17 @@ export default function CameraScreen() {
     const quality = QUALITY_MAP[settings.photoQuality] ?? 0.8;
     const photo = await cameraRef.current?.takePictureAsync({ quality });
     if (photo?.uri) {
-      setCapturedUri(photo.uri);
+      let uri = photo.uri;
+      if (facing === 'front' && !isMirrored) {
+        try {
+          const imageRef = await ImageManipulator.manipulate(uri)
+            .flip(FlipType.Horizontal)
+            .renderAsync();
+          const saved = await imageRef.saveAsync();
+          uri = saved.uri;
+        } catch {}
+      }
+      setCapturedUri(uri);
       setShowPreview(true);
     }
   };
@@ -73,7 +85,11 @@ export default function CameraScreen() {
     }
   };
 
-  const handleFlip = () => setFacing(prev => prev === 'front' ? 'back' : 'front');
+  const handleFlip = () => {
+    setFacing(prev => prev === 'front' ? 'back' : 'front');
+    setIsMirrored(settings.mirrorSelfies);
+  };
+  const handleMirrorToggle = () => setIsMirrored(prev => !prev);
   const handleTimerToggle = () => setShowTimer(prev => !prev);
 
   const handleGhostOpacity = useCallback((value: number) => {
@@ -107,6 +123,7 @@ export default function CameraScreen() {
         facing={facing}
         ghostOpacity={ghostOpacity}
         onGhostOpacityChange={handleGhostOpacity}
+        isMirrored={isMirrored}
       />
 
       <View style={styles.content}>
@@ -120,6 +137,9 @@ export default function CameraScreen() {
           onCapture={handleCapture}
           onFlip={handleFlip}
           onTimerToggle={handleTimerToggle}
+          onMirrorToggle={handleMirrorToggle}
+          isMirrored={isMirrored}
+          isFrontCamera={facing === 'front'}
         />
 
         {showTimer && (
@@ -134,8 +154,6 @@ export default function CameraScreen() {
       <CapturePreview
         visible={showPreview}
         imageUri={capturedUri}
-        isFrontCamera={facing === 'front'}
-        mirrorDefault={settings.mirrorSelfies}
         onSave={handleSave}
         onRetake={handleRetake}
       />

@@ -111,7 +111,7 @@ export default function AlbumDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage } }} />
+      <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage }, animation: 'slide_from_right' }} />
       <View style={styles.header}>
         <Pressable onPress={() => { haptics.tap(); router.back(); }} hitSlop={12} style={styles.backBtn}>
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
