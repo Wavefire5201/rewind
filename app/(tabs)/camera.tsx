@@ -5,6 +5,7 @@ import { CameraView } from 'expo-camera';
 import { Colors, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
+import { useAppContext } from '@/context/AppContext';
 import { getToday, formatDateLabel } from '@/utils/dates';
 import Viewfinder from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
@@ -12,9 +13,12 @@ import TimerSelector from '@/components/camera/TimerSelector';
 import CapturePreview from '@/components/camera/CapturePreview';
 import type { PhotoEntry } from '@/types';
 
+const QUALITY_MAP: Record<string, number> = { low: 0.5, medium: 0.7, high: 1.0 };
+
 export default function CameraScreen() {
   const { mostRecentPhoto, addPhoto } = usePhotos();
   const { dayNumber } = useGreeting();
+  const { settings } = useAppContext();
 
   const cameraRef = useRef<CameraView>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -30,7 +34,8 @@ export default function CameraScreen() {
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = async () => {
-    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.8 });
+    const quality = QUALITY_MAP[settings.photoQuality] ?? 0.8;
+    const photo = await cameraRef.current?.takePictureAsync({ quality });
     if (photo?.uri) {
       setCapturedUri(photo.uri);
       setShowPreview(true);
@@ -129,6 +134,8 @@ export default function CameraScreen() {
       <CapturePreview
         visible={showPreview}
         imageUri={capturedUri}
+        isFrontCamera={facing === 'front'}
+        mirrorDefault={settings.mirrorSelfies}
         onSave={handleSave}
         onRetake={handleRetake}
       />
