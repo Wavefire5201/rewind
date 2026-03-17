@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HouseSimple, Camera, FolderSimple, Play, User } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Sizes, BorderRadius } from '@/constants/theme';
 
 const TABS = [
@@ -28,7 +28,7 @@ function TabItem({
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
         onPress();
       }}
       style={styles.tabItem}

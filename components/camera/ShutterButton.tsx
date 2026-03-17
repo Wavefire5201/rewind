@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, View, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Sizes } from '@/constants/theme';
 
 interface ShutterButtonProps {
@@ -11,7 +11,7 @@ export default function ShutterButton({ onPress }: ShutterButtonProps) {
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.shutter();
         onPress();
       }}
       style={({ pressed }) => [

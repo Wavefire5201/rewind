@@ -2,7 +2,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 
 interface ScrubberProps {
@@ -32,7 +32,7 @@ function Scrubber({ currentIndex, total, startDate, endDate, onSeek }: ScrubberP
   const doSeek = useCallback((index: number) => {
     if (index !== lastSeekIndex.current) {
       lastSeekIndex.current = index;
-      Haptics.selectionAsync();
+      haptics.tap();
       onSeek(index);
     }
   }, [onSeek]);

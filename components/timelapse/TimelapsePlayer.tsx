@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, f
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Play, Pause, SkipBack, SkipForward } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 
 function formatBadgeDate(dateStr: string): string {
@@ -75,13 +75,13 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
     }, []);
 
     const togglePlay = useCallback(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
       if (isPlaying) stopPlayback();
       else startPlayback();
     }, [isPlaying, stopPlayback, startPlayback]);
 
     const skipPrev = useCallback(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
       const next = frameRef.current > 0 ? frameRef.current - 1 : photos.length - 1;
       frameRef.current = next;
       setFrameIndex(next);
@@ -89,7 +89,7 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
     }, [photos.length]);
 
     const skipNext = useCallback(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
       const next = frameRef.current < photos.length - 1 ? frameRef.current + 1 : 0;
       frameRef.current = next;
       setFrameIndex(next);

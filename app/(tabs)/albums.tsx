@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Plus, CaretRight, Camera } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import EmptyState from '@/components/ui/EmptyState';
@@ -67,7 +67,7 @@ export default function AlbumsScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>albums</Text>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => haptics.tap()}>
             <Plus size={18} color={Colors.textSecondary} weight="regular" />
           </TouchableOpacity>
         </View>
@@ -76,7 +76,7 @@ export default function AlbumsScreen() {
           {albums.map((album, index) => (
             <React.Fragment key={album.id}>
               {index > 0 && <View style={styles.divider} />}
-              <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/album/[id]', params: { id: album.id, name: album.name } }); }}>
+              <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => { haptics.tap(); router.push({ pathname: '/album/[id]', params: { id: album.id, name: album.name } }); }}>
                 <View style={styles.thumbnail}>
                   {album.imageUri ? (
                     <Image

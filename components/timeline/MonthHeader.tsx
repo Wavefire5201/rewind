@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { CaretLeft, CaretRight } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Typography, Sizes } from '@/constants/theme';
 import { formatMonthYear } from '@/utils/dates';
 
@@ -17,10 +17,10 @@ export default function MonthHeader({ year, month, onPrev, onNext }: MonthHeader
     <View style={styles.row}>
       <Text style={Typography.displayTitle}>{formatMonthYear(year, month)}</Text>
       <View style={styles.navRow}>
-        <TouchableOpacity style={styles.navButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPrev(); }} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.navButton} onPress={() => { haptics.tap(); onPrev(); }} activeOpacity={0.7}>
           <CaretLeft size={16} color={Colors.textSecondary} weight="light" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onNext(); }} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.navButton} onPress={() => { haptics.tap(); onNext(); }} activeOpacity={0.7}>
           <CaretRight size={16} color={Colors.textSecondary} weight="light" />
         </TouchableOpacity>
       </View>

@@ -3,7 +3,6 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { CaretLeft, DownloadSimple } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
 import { Colors, Fonts } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useAppContext } from '@/context/AppContext';
@@ -114,7 +113,7 @@ export default function AlbumDetailScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage } }} />
       <View style={styles.header}>
-        <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }} hitSlop={12} style={styles.backBtn}>
+        <Pressable onPress={() => { haptics.tap(); router.back(); }} hitSlop={12} style={styles.backBtn}>
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
         </Pressable>
         <Text style={styles.title}>{albumName}</Text>

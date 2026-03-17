@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 import { getImageSource } from '@/utils/imageSource';
 
@@ -34,7 +34,7 @@ export default function ProfileHeader({ name, avatarUri, joinDate, onNamePress }
         )}
       </View>
 
-      <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onNamePress?.(); }} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+      <Pressable onPress={() => { haptics.tap(); onNamePress?.(); }} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
         <Text style={styles.name}>{name}</Text>
       </Pressable>
 

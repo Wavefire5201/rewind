@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 
 interface SpeedSelectorProps {
@@ -23,7 +23,7 @@ function SpeedSelector({ selectedSpeed, onSelect }: SpeedSelectorProps) {
         return (
           <Pressable
             key={value}
-            onPress={() => { Haptics.selectionAsync(); onSelect(value); }}
+            onPress={() => { haptics.tap(); onSelect(value); }}
             style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
           >
             <Text style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel]}>

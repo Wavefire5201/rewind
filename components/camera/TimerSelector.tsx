@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 
 const TIMER_OPTIONS: { label: string; value: number }[] = [
@@ -26,7 +26,7 @@ export default function TimerSelector({ selectedDuration, onSelect, visible }: T
         return (
           <Pressable
             key={option.value}
-            onPress={() => { Haptics.selectionAsync(); onSelect(option.value); }}
+            onPress={() => { haptics.tap(); onSelect(option.value); }}
             style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
           >
             <Text style={[styles.pillText, isActive ? styles.pillTextActive : styles.pillTextInactive]}>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors } from '@/constants/theme';
 
 interface CircleButtonProps {
@@ -14,7 +14,7 @@ export default function CircleButton({ children, onPress, size = 48, style }: Ci
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
         onPress();
       }}
       style={({ pressed }) => [

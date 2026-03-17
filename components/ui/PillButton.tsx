@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/utils/haptics';
 import { Colors, BorderRadius, Fonts } from '@/constants/theme';
 
 interface PillButtonProps {
@@ -17,7 +17,7 @@ export default function PillButton({ label, onPress, variant = 'filled', icon, s
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
         onPress();
       }}
       style={({ pressed }) => [
