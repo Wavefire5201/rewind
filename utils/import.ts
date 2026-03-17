@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import JSZip from 'jszip';
 import type { PhotoEntry } from '@/types';
+import { getToday } from '@/utils/dates';
 
 export async function pickPhotosFromLibrary(): Promise<{ uri: string; date: string | null }[]> {
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -15,8 +16,15 @@ export async function pickPhotosFromLibrary(): Promise<{ uri: string; date: stri
   return result.assets.map(asset => ({
     uri: asset.uri,
     date: asset.exif?.DateTimeOriginal
-      ? new Date(asset.exif.DateTimeOriginal).toISOString().split('T')[0]
-      : null,
+      ? (() => {
+          try {
+            // EXIF format: "YYYY:MM:DD HH:MM:SS"
+            const raw = String(asset.exif.DateTimeOriginal);
+            const datePart = raw.split(' ')[0].replace(/:/g, '-');
+            return datePart; // YYYY-MM-DD
+          } catch { return getToday(); }
+        })()
+      : getToday(),
   }));
 }
 

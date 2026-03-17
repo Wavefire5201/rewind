@@ -13,6 +13,7 @@ import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
 import PhotoModal from '@/components/timeline/PhotoModal';
+import ImportPhotoModal from '@/components/ImportPhotoModal';
 
 export default function AlbumDetailScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
@@ -26,6 +27,8 @@ export default function AlbumDetailScreen() {
   });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [importPhotos, setImportPhotos] = useState<{ uri: string; suggestedDate: string }[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const monthPhotos = getPhotosByMonth(currentMonth.year, currentMonth.month);
   const captured = monthPhotos.length;
@@ -61,15 +64,8 @@ export default function AlbumDetailScreen() {
           try {
             const picked = await pickPhotosFromLibrary();
             if (picked.length === 0) return;
-            for (const item of picked) {
-              const date = item.date ?? getToday();
-              const existing = photos.find(p => p.date === date);
-              if (existing) continue; // skip conflicts
-              const entry = createPhotoEntry(item.uri, date);
-              addPhoto(entry);
-            }
-            haptics.success();
-            Alert.alert('Imported', 'Photos imported successfully.');
+            setImportPhotos(picked.map(p => ({ uri: p.uri, suggestedDate: p.date ?? getToday() })));
+            setShowImportModal(true);
           } catch (e: any) {
             haptics.error();
             Alert.alert('Import Failed', e.message);
@@ -97,6 +93,19 @@ export default function AlbumDetailScreen() {
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
+  }
+
+  function handleImportSave(entries: { uri: string; date: string; caption: string }[]) {
+    for (const entry of entries) {
+      const existing = photos.find(p => p.date === entry.date);
+      if (existing) continue;
+      const photoEntry = createPhotoEntry(entry.uri, entry.date, entry.caption);
+      addPhoto(photoEntry);
+    }
+    setShowImportModal(false);
+    setImportPhotos([]);
+    haptics.success();
+    Alert.alert('Imported', `${entries.length} photo${entries.length !== 1 ? 's' : ''} imported.`);
   }
 
   function handleDayPress(date: string) {
@@ -150,6 +159,13 @@ export default function AlbumDetailScreen() {
         onClose={() => setModalVisible(false)}
         onDelete={(id) => { deletePhoto(id); if (monthPhotos.length <= 1) setModalVisible(false); }}
         onUpdateCaption={(id, caption) => updatePhoto(id, { caption })}
+      />
+
+      <ImportPhotoModal
+        visible={showImportModal}
+        photos={importPhotos}
+        onSave={handleImportSave}
+        onCancel={() => { setShowImportModal(false); setImportPhotos([]); }}
       />
     </SafeAreaView>
   );

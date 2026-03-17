@@ -1,5 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
+import { Directory, Paths } from 'expo-file-system';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { BellSimple, HardDrive, Image, Cloud, CaretRight } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import SectionLabel from '@/components/ui/SectionLabel';
@@ -32,6 +34,49 @@ function formatReminderTime(time: string): string {
 }
 
 export default function SettingsList({ settings, updateSettings }: SettingsListProps) {
+  const [storageSize, setStorageSize] = useState('—');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  function getTimeAsDate(timeStr: string): Date {
+    const [h, m] = timeStr.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+
+  async function handleTimeChange(_event: any, selectedDate?: Date) {
+    if (Platform.OS === 'android') setShowTimePicker(false);
+    if (!selectedDate) return;
+    const hh = String(selectedDate.getHours()).padStart(2, '0');
+    const mm = String(selectedDate.getMinutes()).padStart(2, '0');
+    const newTime = `${hh}:${mm}`;
+    updateSettings({ reminderTime: newTime });
+    await scheduleDailyReminder(newTime);
+  }
+
+  useEffect(() => {
+    async function calcStorage() {
+      try {
+        const docDir = new Directory(Paths.document);
+        const files = docDir.list();
+        const photoCount = files.filter(
+          (f) => f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png')
+        ).length;
+        const estimatedMB = photoCount * 2;
+        if (estimatedMB < 1) {
+          setStorageSize('< 1 MB');
+        } else if (estimatedMB < 1000) {
+          setStorageSize(`~${estimatedMB} MB`);
+        } else {
+          setStorageSize(`~${(estimatedMB / 1000).toFixed(1)} GB`);
+        }
+      } catch {
+        setStorageSize('—');
+      }
+    }
+    calcStorage();
+  }, [settings]);
+
   return (
     <View>
       <SectionLabel>settings</SectionLabel>
@@ -64,6 +109,33 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
           </Text>
         </Pressable>
 
+        {settings.reminderEnabled && (
+          <View>
+            <View style={styles.divider} />
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              onPress={() => { haptics.tap(); setShowTimePicker(prev => !prev); }}
+            >
+              <View style={styles.left}>
+                <Text style={styles.rowLabel}>Reminder Time</Text>
+              </View>
+              <Text style={[styles.rowValue, { color: Colors.accent }]}>
+                {formatReminderTime(settings.reminderTime)}
+              </Text>
+            </Pressable>
+            {showTimePicker && (
+              <DateTimePicker
+                value={getTimeAsDate(settings.reminderTime)}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleTimeChange}
+                themeVariant="dark"
+                minuteInterval={5}
+              />
+            )}
+          </View>
+        )}
+
         <View style={styles.divider} />
 
         {/* Row 2: Storage */}
@@ -72,7 +144,7 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
             <HardDrive size={20} color={Colors.textSecondary} weight="light" />
             <Text style={styles.rowLabel}>Storage</Text>
           </View>
-          <Text style={styles.rowValue}>1.2 GB</Text>
+          <Text style={styles.rowValue}>{storageSize}</Text>
         </View>
 
         <View style={styles.divider} />

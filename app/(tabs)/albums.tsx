@@ -9,26 +9,9 @@ import { Colors, Fonts, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import EmptyState from '@/components/ui/EmptyState';
 
-const STATIC_ALBUMS = [
-  {
-    id: 'workspace',
-    name: 'workspace',
-    photoCount: 45,
-    streak: 32,
-    imageUri: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'plant-growth',
-    name: 'plant growth',
-    photoCount: 89,
-    streak: 89,
-    imageUri: 'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=200&h=200&fit=crop',
-  },
-];
-
 export default function AlbumsScreen() {
   const router = useRouter();
-  const { mostRecentPhoto } = usePhotos();
+  const { mostRecentPhoto, totalPhotos } = usePhotos();
 
   // Check if user has any real photos
   if (!mostRecentPhoto) {
@@ -51,11 +34,9 @@ export default function AlbumsScreen() {
     {
       id: 'daily-selfie',
       name: 'daily selfie',
-      photoCount: 127,
-      streak: 127,
+      photoCount: totalPhotos,
       imageUri: mostRecentPhoto?.imageUri ?? null,
     },
-    ...STATIC_ALBUMS,
   ];
 
   return (
@@ -91,7 +72,7 @@ export default function AlbumsScreen() {
                 <View style={styles.info}>
                   <Text style={styles.albumName}>{album.name}</Text>
                   <Text style={styles.meta}>
-                    {album.photoCount} photos · {album.streak}d streak
+                    {album.photoCount} photos
                   </Text>
                 </View>
                 <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
