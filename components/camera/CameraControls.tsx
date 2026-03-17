@@ -24,20 +24,19 @@ export default function CameraControls({
 }: CameraControlsProps) {
   return (
     <View style={styles.row}>
-      <View style={styles.leftGroup}>
-        <CircleButton onPress={onFlip} size={48} style={styles.buttonNoBorder}>
-          <ArrowsClockwise size={20} color={Colors.textSecondary} weight="light" />
-        </CircleButton>
-        {isFrontCamera && (
-          <CircleButton onPress={onMirrorToggle} size={36} style={styles.buttonNoBorder}>
-            <ArrowsLeftRight size={16} color={isMirrored ? Colors.accent : Colors.textSecondary} weight="light" />
-          </CircleButton>
-        )}
-      </View>
-      <ShutterButton onPress={onCapture} />
-      <CircleButton onPress={onTimerToggle} size={48} style={styles.buttonNoBorder}>
-        <Timer size={20} color={Colors.textSecondary} weight="light" />
+      <CircleButton onPress={onFlip} size={48} style={styles.buttonNoBorder}>
+        <ArrowsClockwise size={20} color={Colors.textSecondary} weight="light" />
       </CircleButton>
+      <ShutterButton onPress={onCapture} />
+      {isFrontCamera ? (
+        <CircleButton onPress={onMirrorToggle} size={48} style={styles.buttonNoBorder}>
+          <ArrowsLeftRight size={20} color={isMirrored ? Colors.accent : Colors.textSecondary} weight="light" />
+        </CircleButton>
+      ) : (
+        <CircleButton onPress={onTimerToggle} size={48} style={styles.buttonNoBorder}>
+          <Timer size={20} color={Colors.textSecondary} weight="light" />
+        </CircleButton>
+      )}
     </View>
   );
 }
@@ -48,10 +47,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-  },
-  leftGroup: {
-    alignItems: 'center',
-    gap: 6,
   },
   buttonNoBorder: {
     borderWidth: 0,

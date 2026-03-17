@@ -182,30 +182,27 @@ export default function TimelapseScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <Text style={Typography.displayTitle}>timelapse</Text>
-          <View style={styles.headerActions}>
-            {/* Date range pill */}
-            <TouchableOpacity
-              style={[styles.pillButton, hasDateFilter && styles.pillButtonActive]}
-              onPress={() => { haptics.tap(); setShowDateRange(true); }}
-              activeOpacity={0.7}
-            >
-              <CalendarBlank
-                size={12}
-                color={hasDateFilter ? Colors.bgPage : Colors.textSecondary}
-                weight="light"
-              />
-              <Text style={[styles.pillLabel, hasDateFilter && styles.pillLabelActive]}>
-                {formatMMDD(rangeStart)} — {formatMMDD(rangeEnd)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Export button */}
-            <TouchableOpacity style={styles.exportButton} onPress={handleExport} activeOpacity={0.7}>
-              <Export size={16} color={Colors.textPrimary} weight="light" />
-              <Text style={styles.exportLabel}>export</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.exportButton} onPress={handleExport} activeOpacity={0.7}>
+            <Export size={16} color={Colors.textPrimary} weight="light" />
+            <Text style={styles.exportLabel}>export</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Date range row */}
+        <TouchableOpacity
+          style={[styles.dateRangeRow, hasDateFilter && styles.dateRangeRowActive]}
+          onPress={() => { haptics.tap(); setShowDateRange(true); }}
+          activeOpacity={0.7}
+        >
+          <CalendarBlank
+            size={14}
+            color={hasDateFilter ? Colors.accent : Colors.textTertiary}
+            weight="light"
+          />
+          <Text style={[styles.dateRangeText, hasDateFilter && styles.dateRangeTextActive]}>
+            {formatMMDD(rangeStart)}  —  {formatMMDD(rangeEnd)}
+          </Text>
+        </TouchableOpacity>
 
         {/* Player fills remaining space */}
         <TimelapsePlayer
@@ -277,31 +274,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  headerActions: {
+  dateRangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    paddingVertical: 8,
+    marginBottom: 8,
   },
-  pillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderPrimary,
-  },
-  pillButtonActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  pillLabel: {
+  dateRangeRowActive: {},
+  dateRangeText: {
     fontFamily: Fonts.mono.regular,
-    fontSize: 10,
-    color: Colors.textSecondary,
+    fontSize: 12,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
   },
-  pillLabelActive: {
-    color: Colors.bgPage,
+  dateRangeTextActive: {
+    color: Colors.accent,
   },
   exportButton: {
     flexDirection: 'row',
