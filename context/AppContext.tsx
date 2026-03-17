@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import * as FileSystem from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings } from '@/types';
 import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
@@ -78,6 +79,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deletePhoto = useCallback((id: string) => {
     setPhotos(prev => {
+      const target = prev.find(p => p.id === id);
+      if (target?.imageUri && target.imageUri.startsWith('file://')) {
+        FileSystem.deleteAsync(target.imageUri, { idempotent: true }).catch(() => {});
+      }
       const next = prev.filter(p => p.id !== id);
       savePhotos(next);
       return next;

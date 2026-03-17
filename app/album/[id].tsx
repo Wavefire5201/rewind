@@ -11,20 +11,19 @@ import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
 import PhotoModal from '@/components/timeline/PhotoModal';
-import type { PhotoEntry } from '@/types';
 
 export default function AlbumDetailScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const router = useRouter();
-  const { photos, getPhotosByMonth, getPhotoByDate } = usePhotos();
-  const { profile } = useAppContext();
+  const { photos, getPhotosByMonth } = usePhotos();
+  const { profile, updatePhoto, deletePhoto } = useAppContext();
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
-  const [selectedPhoto, setSelectedPhoto] = useState<PhotoEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
   const monthPhotos = getPhotosByMonth(currentMonth.year, currentMonth.month);
   const captured = monthPhotos.length;
@@ -52,9 +51,9 @@ export default function AlbumDetailScreen() {
   }
 
   function handleDayPress(date: string) {
-    const photo = getPhotoByDate(date);
-    if (photo) {
-      setSelectedPhoto(photo);
+    const index = monthPhotos.findIndex(p => p.date === date);
+    if (index >= 0) {
+      setSelectedPhotoIndex(index);
       setModalVisible(true);
     }
   }
@@ -94,11 +93,12 @@ export default function AlbumDetailScreen() {
 
       <PhotoModal
         visible={modalVisible}
-        photo={selectedPhoto}
-        onClose={() => {
-          setModalVisible(false);
-          setSelectedPhoto(null);
-        }}
+        photos={monthPhotos}
+        initialIndex={selectedPhotoIndex}
+        joinDate={profile.joinDate}
+        onClose={() => setModalVisible(false)}
+        onDelete={(id) => { deletePhoto(id); if (monthPhotos.length <= 1) setModalVisible(false); }}
+        onUpdateCaption={(id, caption) => updatePhoto(id, { caption })}
       />
     </SafeAreaView>
   );
