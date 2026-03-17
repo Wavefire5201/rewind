@@ -46,9 +46,15 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             const isFuture = date > today;
             const isBeforeJoin = date < joinDate;
 
-            // Before join date: empty cell
+            // Before join date: show day number but dimmed
             if (isBeforeJoin) {
-              return <View key={di} style={styles.cell} />;
+              return (
+                <View key={di} style={styles.cell}>
+                  <Text style={[styles.dayNumber, { opacity: 0.15 }]}>
+                    {parseInt(date.split('-')[2], 10)}
+                  </Text>
+                </View>
+              );
             }
 
             // Future day

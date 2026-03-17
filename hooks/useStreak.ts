@@ -59,6 +59,7 @@ export function useStreak() {
   const consistency = useMemo(() => {
     if (!profile.joinDate || photos.length === 0) return 0;
     const daysSinceJoin = getDayNumber(profile.joinDate);
+    if (daysSinceJoin <= 0) return 100; // First day — 100% if any photo exists
     return Math.round((photos.length / daysSinceJoin) * 100);
   }, [photos, profile.joinDate]);
 
