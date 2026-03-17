@@ -1,20 +1,52 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Export, Camera } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import { Export, Camera, CalendarBlank } from 'phosphor-react-native';
 import { Colors, Typography, Fonts } from '@/constants/theme';
 import TimelapsePlayer, { TimelapsePlayerHandle } from '@/components/timelapse/TimelapsePlayer';
 import Scrubber from '@/components/timelapse/Scrubber';
 import Filmstrip from '@/components/timelapse/Filmstrip';
 import SpeedSelector from '@/components/timelapse/SpeedSelector';
+import DateRangeSheet from '@/components/timelapse/DateRangeSheet';
+import ExportSheet, { ExportFormat } from '@/components/timelapse/ExportSheet';
+import ExportProgress from '@/components/timelapse/ExportProgress';
+import { exportToPhotoAlbum, exportToBackup, shareFile, cleanupExportDir } from '@/utils/export';
+import { haptics } from '@/utils/haptics';
 import { usePhotos } from '@/hooks/usePhotos';
+
+function formatMMDD(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${month}-${day}`;
+}
 
 export default function TimelapseScreen() {
   const { photos } = usePhotos();
   const [speed, setSpeed] = useState(1);
   const [displayIndex, setDisplayIndex] = useState(0);
   const playerRef = useRef<TimelapsePlayerHandle>(null);
+
+  // Date range state
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [showDateRange, setShowDateRange] = useState(false);
+
+  // Export state
+  const [showExportSheet, setShowExportSheet] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportLabel, setExportLabel] = useState('');
+  const [exportCurrent, setExportCurrent] = useState(0);
+  const [exportTotal, setExportTotal] = useState(0);
+  const cancelRef = useRef({ cancelled: false });
+
+  // Derived data
+  const allDates = photos.map((p) => p.date).sort();
+  const rangeStart = dateRange?.start ?? (allDates[0] ?? '');
+  const rangeEnd = dateRange?.end ?? (allDates[allDates.length - 1] ?? '');
+
+  const filteredPhotos = dateRange
+    ? photos.filter((p) => p.date >= dateRange.start && p.date <= dateRange.end)
+    : photos;
 
   const handleFrameChange = useCallback((index: number) => {
     setDisplayIndex(index);
@@ -37,19 +69,109 @@ export default function TimelapseScreen() {
   const handleSpeedSelect = useCallback((s: number) => setSpeed(s), []);
 
   function handleExport() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('Coming Soon', 'Export will be available in a future update.');
+    haptics.tap();
+    setShowExportSheet(true);
   }
 
-  if (photos.length < 2) {
+  async function handleExportFormat(format: ExportFormat) {
+    setShowExportSheet(false);
+
+    cancelRef.current = { cancelled: false };
+
+    if (format === 'album') {
+      setExportLabel('Saving to Photo Album...');
+      setExportCurrent(0);
+      setExportTotal(filteredPhotos.length);
+      setExporting(true);
+      try {
+        await exportToPhotoAlbum(
+          filteredPhotos,
+          (current, total) => {
+            setExportCurrent(current);
+            setExportTotal(total);
+          },
+          cancelRef.current
+        );
+        setExporting(false);
+        haptics.success();
+        Alert.alert('Done', `${filteredPhotos.length} photos saved to the Rewind album.`);
+      } catch (err: unknown) {
+        setExporting(false);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message !== 'Cancelled') {
+          haptics.error();
+          Alert.alert('Export Failed', message);
+        }
+      }
+    } else if (format === 'backup') {
+      setExportLabel('Creating Rewind Backup...');
+      setExportCurrent(0);
+      setExportTotal(filteredPhotos.length + 1);
+      setExporting(true);
+      try {
+        const filePath = await exportToBackup(
+          filteredPhotos,
+          'Rewind',
+          (current, total) => {
+            setExportCurrent(current);
+            setExportTotal(total);
+          },
+          cancelRef.current
+        );
+        setExporting(false);
+        haptics.success();
+        await shareFile(filePath);
+        await cleanupExportDir();
+      } catch (err: unknown) {
+        setExporting(false);
+        await cleanupExportDir();
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message !== 'Cancelled') {
+          haptics.error();
+          Alert.alert('Export Failed', message);
+        }
+      }
+    }
+  }
+
+  function handleCancelExport() {
+    cancelRef.current.cancelled = true;
+    haptics.tap();
+  }
+
+  function handleDateRangeApply(start: string, end: string) {
+    const isAll = start === allDates[0] && end === allDates[allDates.length - 1];
+    setDateRange(isAll ? null : { start, end });
+    setShowDateRange(false);
+    setDisplayIndex(0);
+    playerRef.current?.seekTo(0);
+  }
+
+  const hasDateFilter = dateRange !== null;
+
+  if (filteredPhotos.length < 2) {
+    const message = hasDateFilter
+      ? 'No photos in this date range — try a wider range'
+      : 'Take more photos to create your timelapse';
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.emptyContainer}>
           <Camera size={48} color={Colors.textTertiary} weight="light" />
-          <Text style={styles.emptyText}>
-            Take more photos to create your timelapse
-          </Text>
+          <Text style={styles.emptyText}>{message}</Text>
+          {hasDateFilter && (
+            <TouchableOpacity onPress={() => setShowDateRange(true)} activeOpacity={0.7}>
+              <Text style={styles.emptyLink}>adjust range</Text>
+            </TouchableOpacity>
+          )}
         </View>
+        <DateRangeSheet
+          visible={showDateRange}
+          dates={allDates}
+          startDate={rangeStart}
+          endDate={rangeEnd}
+          onApply={handleDateRangeApply}
+          onClose={() => setShowDateRange(false)}
+        />
       </SafeAreaView>
     );
   }
@@ -60,16 +182,35 @@ export default function TimelapseScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <Text style={Typography.displayTitle}>timelapse</Text>
-          <TouchableOpacity style={styles.exportButton} onPress={handleExport} activeOpacity={0.7}>
-            <Export size={16} color={Colors.textPrimary} weight="light" />
-            <Text style={styles.exportLabel}>export</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {/* Date range pill */}
+            <TouchableOpacity
+              style={[styles.pillButton, hasDateFilter && styles.pillButtonActive]}
+              onPress={() => { haptics.tap(); setShowDateRange(true); }}
+              activeOpacity={0.7}
+            >
+              <CalendarBlank
+                size={12}
+                color={hasDateFilter ? Colors.bgPage : Colors.textSecondary}
+                weight="light"
+              />
+              <Text style={[styles.pillLabel, hasDateFilter && styles.pillLabelActive]}>
+                {formatMMDD(rangeStart)} — {formatMMDD(rangeEnd)}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Export button */}
+            <TouchableOpacity style={styles.exportButton} onPress={handleExport} activeOpacity={0.7}>
+              <Export size={16} color={Colors.textPrimary} weight="light" />
+              <Text style={styles.exportLabel}>export</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Player fills remaining space */}
         <TimelapsePlayer
           ref={playerRef}
-          photos={photos}
+          photos={filteredPhotos}
           speed={speed}
           onFrameChange={handleFrameChange}
           onPlaybackEnd={handlePlaybackEnd}
@@ -79,19 +220,42 @@ export default function TimelapseScreen() {
         <View style={styles.controls}>
           <Scrubber
             currentIndex={displayIndex}
-            total={photos.length}
-            startDate={photos[0].date}
-            endDate={photos[photos.length - 1].date}
+            total={filteredPhotos.length}
+            startDate={filteredPhotos[0].date}
+            endDate={filteredPhotos[filteredPhotos.length - 1].date}
             onSeek={handleSeek}
           />
           <Filmstrip
-            photos={photos}
+            photos={filteredPhotos}
             currentIndex={displayIndex}
             onSelect={handleFilmstripSelect}
           />
           <SpeedSelector selectedSpeed={speed} onSelect={handleSpeedSelect} />
         </View>
       </View>
+
+      <DateRangeSheet
+        visible={showDateRange}
+        dates={allDates}
+        startDate={rangeStart}
+        endDate={rangeEnd}
+        onApply={handleDateRangeApply}
+        onClose={() => setShowDateRange(false)}
+      />
+
+      <ExportSheet
+        visible={showExportSheet}
+        onSelect={handleExportFormat}
+        onClose={() => setShowExportSheet(false)}
+      />
+
+      <ExportProgress
+        visible={exporting}
+        label={exportLabel}
+        current={exportCurrent}
+        total={exportTotal}
+        onCancel={handleCancelExport}
+      />
     </SafeAreaView>
   );
 }
@@ -112,6 +276,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderPrimary,
+  },
+  pillButtonActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  pillLabel: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 10,
+    color: Colors.textSecondary,
+  },
+  pillLabelActive: {
+    color: Colors.bgPage,
   },
   exportButton: {
     flexDirection: 'row',
@@ -145,5 +335,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textTertiary,
     textAlign: 'center',
+  },
+  emptyLink: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    color: Colors.accent,
+    textDecorationLine: 'underline',
   },
 });
