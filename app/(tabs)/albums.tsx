@@ -3,10 +3,11 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Plus, CaretRight } from 'phosphor-react-native';
+import { Plus, CaretRight, Camera } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
+import EmptyState from '@/components/ui/EmptyState';
 
 const STATIC_ALBUMS = [
   {
@@ -28,6 +29,23 @@ const STATIC_ALBUMS = [
 export default function AlbumsScreen() {
   const router = useRouter();
   const { mostRecentPhoto } = usePhotos();
+
+  // Check if user has any real photos
+  if (!mostRecentPhoto) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>albums</Text>
+        </View>
+        <EmptyState
+          icon={<Camera size={48} color={Colors.textTertiary} weight="light" />}
+          message="No albums yet. Take your first photo to get started."
+          ctaLabel="Open Camera"
+          onCta={() => router.push('/(tabs)/camera')}
+        />
+      </SafeAreaView>
+    );
+  }
 
   const albums = [
     {

@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { BellSimple, HardDrive, Image, Cloud, CaretRight } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
 import { Colors, Fonts } from '@/constants/theme';
 import SectionLabel from '@/components/ui/SectionLabel';
+import { requestNotificationPermission, scheduleDailyReminder, cancelAllReminders } from '@/utils/notifications';
+import { haptics } from '@/utils/haptics';
 import type { AppSettings } from '@/types';
 
 interface SettingsListProps {
@@ -36,13 +37,32 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
       <SectionLabel>settings</SectionLabel>
       <View style={styles.container}>
         {/* Row 1: Daily Reminder */}
-        <View style={styles.row}>
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          onPress={async () => {
+            haptics.tap();
+            const newEnabled = !settings.reminderEnabled;
+            if (newEnabled) {
+              const granted = await requestNotificationPermission();
+              if (!granted) {
+                Alert.alert('Permission Required', 'Enable notifications in Settings to use reminders.');
+                return;
+              }
+              await scheduleDailyReminder(settings.reminderTime);
+            } else {
+              await cancelAllReminders();
+            }
+            updateSettings({ reminderEnabled: newEnabled });
+          }}
+        >
           <View style={styles.left}>
-            <BellSimple size={20} color={Colors.textSecondary} weight="light" />
+            <BellSimple size={20} color={settings.reminderEnabled ? Colors.accent : Colors.textSecondary} weight="light" />
             <Text style={styles.rowLabel}>Daily Reminder</Text>
           </View>
-          <Text style={styles.rowValue}>{formatReminderTime(settings.reminderTime)}</Text>
-        </View>
+          <Text style={styles.rowValue}>
+            {settings.reminderEnabled ? formatReminderTime(settings.reminderTime) : 'Off'}
+          </Text>
+        </Pressable>
 
         <View style={styles.divider} />
 
@@ -60,7 +80,7 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
         {/* Row 3: Photo Quality */}
         <Pressable
           style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); updateSettings({ photoQuality: cyclePhotoQuality(settings.photoQuality) }); }}
+          onPress={() => { haptics.tap(); updateSettings({ photoQuality: cyclePhotoQuality(settings.photoQuality) }); }}
         >
           <View style={styles.left}>
             <Image size={20} color={Colors.textSecondary} weight="light" />
@@ -74,7 +94,7 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
         {/* Row 4: Cloud Backup */}
         <Pressable
           style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Alert.alert('Coming Soon', 'Cloud backup will be available in a future update.'); }}
+          onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Cloud backup will be available in a future update.'); }}
         >
           <View style={styles.left}>
             <Cloud size={20} color={Colors.textSecondary} weight="light" />

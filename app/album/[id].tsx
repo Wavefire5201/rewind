@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { CaretLeft } from 'phosphor-react-native';
+import { CaretLeft, DownloadSimple } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Fonts } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useAppContext } from '@/context/AppContext';
+import { pickPhotosFromLibrary, importFromBackup, createPhotoEntry } from '@/utils/import';
+import { haptics } from '@/utils/haptics';
+import { getToday } from '@/utils/dates';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
@@ -16,7 +19,7 @@ export default function AlbumDetailScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const router = useRouter();
   const { photos, getPhotosByMonth } = usePhotos();
-  const { profile, updatePhoto, deletePhoto } = useAppContext();
+  const { profile, addPhoto, updatePhoto, deletePhoto } = useAppContext();
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -50,6 +53,53 @@ export default function AlbumDetailScreen() {
     });
   }
 
+  async function handleImport() {
+    haptics.tap();
+    Alert.alert('Import Photos', 'Choose import source', [
+      {
+        text: 'Camera Roll',
+        onPress: async () => {
+          try {
+            const picked = await pickPhotosFromLibrary();
+            if (picked.length === 0) return;
+            for (const item of picked) {
+              const date = item.date ?? getToday();
+              const existing = photos.find(p => p.date === date);
+              if (existing) continue; // skip conflicts
+              const entry = createPhotoEntry(item.uri, date);
+              addPhoto(entry);
+            }
+            haptics.success();
+            Alert.alert('Imported', 'Photos imported successfully.');
+          } catch (e: any) {
+            haptics.error();
+            Alert.alert('Import Failed', e.message);
+          }
+        },
+      },
+      {
+        text: 'Rewind Backup',
+        onPress: async () => {
+          try {
+            const entries = await importFromBackup();
+            if (entries.length === 0) return;
+            for (const entry of entries) {
+              const existing = photos.find(p => p.date === entry.date);
+              if (existing) continue;
+              addPhoto(entry);
+            }
+            haptics.success();
+            Alert.alert('Imported', `${entries.length} photos restored from backup.`);
+          } catch (e: any) {
+            haptics.error();
+            Alert.alert('Import Failed', e.message);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
   function handleDayPress(date: string) {
     const index = monthPhotos.findIndex(p => p.date === date);
     if (index >= 0) {
@@ -68,7 +118,9 @@ export default function AlbumDetailScreen() {
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
         </Pressable>
         <Text style={styles.title}>{albumName}</Text>
-        <View style={styles.backBtn} />
+        <Pressable onPress={handleImport} hitSlop={12} style={styles.backBtn}>
+          <DownloadSimple size={20} color={Colors.textPrimary} weight="regular" />
+        </Pressable>
       </View>
 
       <ScrollView
