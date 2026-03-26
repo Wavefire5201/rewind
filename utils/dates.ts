@@ -15,7 +15,7 @@ export function getDayNumber(joinDate: string, currentDate?: string): number {
   const join = new Date(joinDate + 'T00:00:00');
   const current = currentDate ? new Date(currentDate + 'T00:00:00') : new Date();
   const diff = Math.floor((current.getTime() - join.getTime()) / (1000 * 60 * 60 * 24));
-  return diff + 1; // Day 1 on join date
+  return Math.max(1, diff + 1); // Day 1 minimum, even with timezone edge cases
 }
 
 export function getToday(): string {

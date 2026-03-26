@@ -25,5 +25,6 @@ const styles = StyleSheet.create({
   card: {
     gap: 6,
     flex: 1,
+    alignItems: 'center',
   },
 });

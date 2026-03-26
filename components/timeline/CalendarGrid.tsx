@@ -46,13 +46,8 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             const isFuture = date > today;
             const isBeforeJoin = date < joinDate;
 
-            // Before join date: empty cell (user wasn't tracking yet)
-            if (isBeforeJoin) {
-              return <View key={di} style={styles.cell} />;
-            }
-
-            // Future day
-            if (isFuture) {
+            // Future day or day before album existed
+            if (isFuture || isBeforeJoin) {
               return (
                 <View key={di} style={styles.cell}>
                   <Text style={[styles.dayNumber, { opacity: 0.3 }]}>

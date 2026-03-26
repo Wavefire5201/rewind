@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Export, Camera, CalendarBlank } from 'phosphor-react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { CaretLeft, Export, Camera, CalendarBlank } from 'phosphor-react-native';
 import { Colors, Typography, Fonts } from '@/constants/theme';
 import TimelapsePlayer, { TimelapsePlayerHandle } from '@/components/timelapse/TimelapsePlayer';
 import Scrubber from '@/components/timelapse/Scrubber';
@@ -22,11 +23,14 @@ function formatMMDD(dateStr: string): string {
   return `${month}-${day}`;
 }
 
-export default function TimelapseScreen() {
+export default function AlbumTimelapseScreen() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  const router = useRouter();
   const { albums } = useAppContext();
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string>(albums[0]?.id ?? 'daily-selfie');
-  const { photos: allPhotos } = usePhotos();
-  const photos = allPhotos.filter(p => p.albumId === selectedAlbumId);
+  const album = albums.find(a => a.id === albumId);
+  const albumName = album?.name ?? albumId ?? 'album';
+
+  const { photos } = usePhotos(albumId);
   const [speed, setSpeed] = useState(1);
   const [displayIndex, setDisplayIndex] = useState(0);
   const playerRef = useRef<TimelapsePlayerHandle>(null);
@@ -115,7 +119,7 @@ export default function TimelapseScreen() {
       try {
         const filePath = await exportToBackup(
           filteredPhotos,
-          'Rewind',
+          albumName,
           (current, total) => {
             setExportCurrent(current);
             setExportTotal(total);
@@ -158,7 +162,20 @@ export default function TimelapseScreen() {
       ? 'No photos in this date range — try a wider range'
       : 'Take more photos to create your timelapse';
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+            hitSlop={12}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{albumName}</Text>
+          <View style={styles.headerRight} />
+        </View>
         <View style={styles.emptyContainer}>
           <Camera size={48} color={Colors.textTertiary} weight="light" />
           <Text style={styles.emptyText}>{message}</Text>
@@ -181,48 +198,25 @@ export default function TimelapseScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <Stack.Screen options={{ headerShown: false, animation: 'slide_from_bottom' }} />
       <View style={styles.container}>
         {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={Typography.displayTitle}>timelapse</Text>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+            hitSlop={12}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{albumName}</Text>
           <TouchableOpacity style={styles.exportButton} onPress={handleExport} activeOpacity={0.7}>
             <Export size={16} color={Colors.textPrimary} weight="light" />
             <Text style={styles.exportLabel}>export</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Album selector */}
-        {albums.length > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.albumSelectorScroll}
-            contentContainerStyle={styles.albumSelectorContent}
-          >
-            {albums.map((album) => {
-              const isSelected = album.id === selectedAlbumId;
-              return (
-                <TouchableOpacity
-                  key={album.id}
-                  style={[styles.albumPill, isSelected && styles.albumPillActive]}
-                  onPress={() => {
-                    haptics.tap();
-                    setSelectedAlbumId(album.id);
-                    setDateRange(null);
-                    setDisplayIndex(0);
-                    playerRef.current?.seekTo(0);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.albumPillText, isSelected && styles.albumPillTextActive]}>
-                    {album.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
 
         {/* Date range row */}
         <TouchableOpacity
@@ -251,7 +245,7 @@ export default function TimelapseScreen() {
           />
         </View>
 
-        {/* Controls pinned above tab bar */}
+        {/* Controls */}
         <View style={styles.controls}>
           <Scrubber
             currentIndex={displayIndex}
@@ -266,7 +260,7 @@ export default function TimelapseScreen() {
             onSelect={handleFilmstripSelect}
           />
         </View>
-        <SpeedSelector selectedSpeed={speed} onSelect={handleSpeedSelect} />
+        <SpeedSelector selectedSpeed={speed} onSelect={handleSpeedSelect} style={{ paddingBottom: 8 }} />
       </View>
 
       <DateRangeSheet
@@ -303,17 +297,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 28,
-    paddingTop: 16,
+    paddingTop: 0,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 16,
+    color: Colors.textPrimary,
+  },
+  headerRight: {
+    width: 44,
   },
   playerArea: {
     flex: 1,
     marginBottom: 4,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
   },
   dateRangeRow: {
     flexDirection: 'row',
@@ -370,31 +378,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.accent,
     textDecorationLine: 'underline',
-  },
-  albumSelectorScroll: {
-    marginBottom: 8,
-  },
-  albumSelectorContent: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  albumPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.borderPrimary,
-  },
-  albumPillActive: {
-    borderColor: Colors.accent,
-    backgroundColor: 'rgba(143, 166, 122, 0.12)',
-  },
-  albumPillText: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    color: Colors.textTertiary,
-    letterSpacing: 1,
-  },
-  albumPillTextActive: {
-    color: Colors.accent,
   },
 });

@@ -1,17 +1,57 @@
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import TextInputModal from '@/components/ui/TextInputModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Plus, CaretRight, Camera } from 'phosphor-react-native';
+import { Plus, CaretRight, Camera, PencilSimple } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
 import { Colors, Fonts, Typography } from '@/constants/theme';
-import { usePhotos } from '@/hooks/usePhotos';
+import { useAppContext } from '@/context/AppContext';
 import EmptyState from '@/components/ui/EmptyState';
+import { createAlbum } from '@/utils/albums';
+import type { Album } from '@/types';
 
 export default function AlbumsScreen() {
   const router = useRouter();
-  const { mostRecentPhoto, totalPhotos } = usePhotos();
+  const { photos, albums, addAlbum, updateAlbum } = useAppContext();
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const renameTargetRef = useRef<Album | null>(null);
+
+  // Derive a global mostRecentPhoto for the empty-state check
+  const mostRecentPhoto = photos.length > 0
+    ? [...photos].sort((a, b) => b.date.localeCompare(a.date))[0]
+    : null;
+
+  function handleCreateAlbum() {
+    haptics.tap();
+    setShowCreateModal(true);
+  }
+
+  function handleConfirmCreate(name: string) {
+    setShowCreateModal(false);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    addAlbum(createAlbum(trimmed));
+    haptics.success();
+  }
+
+  function handleRenameAlbum(album: Album) {
+    haptics.tap();
+    renameTargetRef.current = album;
+    setShowRenameModal(true);
+  }
+
+  function handleConfirmRename(name: string) {
+    setShowRenameModal(false);
+    const trimmed = name.trim();
+    if (!trimmed || !renameTargetRef.current) return;
+    updateAlbum(renameTargetRef.current.id, { name: trimmed });
+    haptics.success();
+    renameTargetRef.current = null;
+  }
 
   // Check if user has any real photos
   if (!mostRecentPhoto) {
@@ -30,15 +70,6 @@ export default function AlbumsScreen() {
     );
   }
 
-  const albums = [
-    {
-      id: 'daily-selfie',
-      name: 'daily selfie',
-      photoCount: totalPhotos,
-      imageUri: mostRecentPhoto?.imageUri ?? null,
-    },
-  ];
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
@@ -48,39 +79,88 @@ export default function AlbumsScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>albums</Text>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Custom album creation will be available in a future update.'); }}>
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={handleCreateAlbum}>
             <Plus size={18} color={Colors.textSecondary} weight="regular" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.list}>
-          {albums.map((album, index) => (
-            <React.Fragment key={album.id}>
-              {index > 0 && <View style={styles.divider} />}
-              <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => { haptics.tap(); router.push({ pathname: '/album/[id]', params: { id: album.id, name: album.name } }); }}>
-                <View style={styles.thumbnail}>
-                  {album.imageUri ? (
-                    <Image
-                      source={{ uri: album.imageUri }}
-                      style={styles.thumbnailImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.thumbnailPlaceholder} />
-                  )}
-                </View>
-                <View style={styles.info}>
-                  <Text style={styles.albumName}>{album.name}</Text>
-                  <Text style={styles.meta}>
-                    {album.photoCount} photos
-                  </Text>
-                </View>
-                <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
+          {albums.map((album, index) => {
+            const albumPhotos = photos.filter(p => p.albumId === album.id);
+            const photoCount = albumPhotos.length;
+            const albumMostRecent = albumPhotos.length > 0
+              ? [...albumPhotos].sort((a, b) => b.date.localeCompare(a.date))[0]
+              : null;
+            const imageUri = albumMostRecent?.imageUri ?? null;
+
+            return (
+              <React.Fragment key={album.id}>
+                {index > 0 && <View style={styles.divider} />}
+                <TouchableOpacity
+                  style={styles.row}
+                  activeOpacity={0.7}
+                  onPress={() => { haptics.tap(); router.push({ pathname: '/album/[id]', params: { id: album.id } }); }}
+                >
+                  <View style={styles.thumbnail}>
+                    {imageUri ? (
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={styles.thumbnailImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={styles.thumbnailPlaceholder} />
+                    )}
+                  </View>
+                  <View style={styles.info}>
+                    <Text style={styles.albumName}>{album.name}</Text>
+                    <Text style={styles.meta}>
+                      {photoCount} photos
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: album.id } }); }}
+                    hitSlop={12}
+                    style={styles.cameraBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Camera size={16} color={Colors.textTertiary} weight="regular" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleRenameAlbum(album)}
+                    hitSlop={12}
+                    style={styles.editBtn}
+                    activeOpacity={0.7}
+                  >
+                    <PencilSimple size={14} color={Colors.textTertiary} weight="regular" />
+                  </TouchableOpacity>
+                  <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+                </TouchableOpacity>
+              </React.Fragment>
+            );
+          })}
         </View>
       </ScrollView>
+
+      <TextInputModal
+        visible={showCreateModal}
+        title="New Album"
+        message="Enter a name for the album"
+        placeholder="Album name"
+        confirmLabel="Create"
+        onConfirm={handleConfirmCreate}
+        onCancel={() => setShowCreateModal(false)}
+      />
+      <TextInputModal
+        visible={showRenameModal}
+        title="Rename Album"
+        message="Enter a new name"
+        placeholder="Album name"
+        defaultValue={renameTargetRef.current?.name ?? ''}
+        confirmLabel="Rename"
+        onConfirm={handleConfirmRename}
+        onCancel={() => setShowRenameModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -153,5 +233,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: Colors.textTertiary,
+  },
+  cameraBtn: {
+    padding: 8,
+  },
+  editBtn: {
+    padding: 8,
   },
 });

@@ -18,6 +18,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  interpolate,
+  runOnJS,
 } from 'react-native-reanimated';
 import {
   GestureDetector,
@@ -145,6 +147,30 @@ export default function PhotoModal({
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState('');
 
+  const translateY = useSharedValue(0);
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetY(10)
+    .failOffsetX([-20, 20])
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > 100) {
+        translateY.value = withSpring(600, { damping: 20 });
+        runOnJS(onClose)();
+      } else {
+        translateY.value = withSpring(0);
+      }
+    });
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: interpolate(translateY.value, [0, 400], [1, 0]),
+  }));
+
   const flatListRef = useRef<FlatList>(null);
 
   const photoWidth = screenWidth;
@@ -152,6 +178,7 @@ export default function PhotoModal({
 
   // Sync index when modal opens with a (possibly new) initialIndex
   const handleVisible = useCallback(() => {
+    translateY.value = 0;
     setCurrentIndex(initialIndex);
     setEditingCaption(false);
     setTimeout(() => {
@@ -229,93 +256,98 @@ export default function PhotoModal({
       onShow={handleVisible}
     >
       <GestureHandlerRootView style={styles.root}>
-        <View style={styles.backdrop}>
-          {/* Header */}
-          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-            <Pressable
-              style={styles.headerBtn}
-              onPress={() => { haptics.tap(); onClose(); }}
-              hitSlop={8}
-            >
-              <X size={20} color={Colors.textPrimary} weight="light" />
-            </Pressable>
-            <Pressable
-              style={styles.headerBtn}
-              onPress={handleDeletePress}
-              hitSlop={8}
-            >
-              <Trash size={20} color="#E85D5D" weight="light" />
-            </Pressable>
-          </View>
+        {/* Tap-to-dismiss backdrop */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-          {/* Pager */}
-          {photos.length > 0 && (
-            <FlatList
-              ref={flatListRef}
-              data={photos}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              initialScrollIndex={initialIndex}
-              getItemLayout={(_, index) => ({
-                length: photoWidth,
-                offset: photoWidth * index,
-                index,
-              })}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig.current}
-              style={styles.pager}
-            />
-          )}
-
-          {/* Metadata + caption */}
-          {currentPhoto && (
-            <View style={styles.meta}>
-              <Text style={[Typography.sectionLabel, styles.dateRow]}>
-                {formatDateLabel(currentPhoto.date)}
-                {'  ·  '}
-                {formatTime(currentPhoto.capturedAt)}
-                {'  ·  DAY '}
-                {getDayNumber(joinDate, currentPhoto.date)}
-              </Text>
-
-              {editingCaption ? (
-                <View style={styles.captionEditRow}>
-                  <TextInput
-                    style={styles.captionInput}
-                    value={captionDraft}
-                    onChangeText={setCaptionDraft}
-                    placeholder="Add caption..."
-                    placeholderTextColor={Colors.textTertiary}
-                    autoFocus
-                    multiline
-                    returnKeyType="done"
-                    onSubmitEditing={handleCaptionSave}
-                  />
-                  <Pressable onPress={handleCaptionSave} hitSlop={8} style={styles.captionAction}>
-                    <Check size={18} color={Colors.accent} weight="bold" />
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable onPress={handleCaptionEditPress} style={styles.captionRow}>
-                  <Text style={[Typography.caption, styles.captionText]}>
-                    {currentPhoto.caption || 'Add caption...'}
-                  </Text>
-                  <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
-                </Pressable>
-              )}
-
-              <Text style={[Typography.tiny, styles.pageIndicator]}>
-                {currentIndex + 1} / {photos.length}
-              </Text>
+        <GestureDetector gesture={panGesture}>
+          <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+              <Pressable
+                style={styles.headerBtn}
+                onPress={() => { haptics.tap(); onClose(); }}
+                hitSlop={8}
+              >
+                <X size={20} color={Colors.textPrimary} weight="light" />
+              </Pressable>
+              <Pressable
+                style={styles.headerBtn}
+                onPress={handleDeletePress}
+                hitSlop={8}
+              >
+                <Trash size={20} color="#E85D5D" weight="light" />
+              </Pressable>
             </View>
-          )}
 
-          {/* Bottom safe area spacer */}
-          <View style={{ height: insets.bottom + 8 }} />
-        </View>
+            {/* Pager */}
+            {photos.length > 0 && (
+              <FlatList
+                ref={flatListRef}
+                data={photos}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={initialIndex}
+                getItemLayout={(_, index) => ({
+                  length: photoWidth,
+                  offset: photoWidth * index,
+                  index,
+                })}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig.current}
+                style={styles.pager}
+              />
+            )}
+
+            {/* Metadata + caption */}
+            {currentPhoto && (
+              <View style={styles.meta}>
+                <Text style={[Typography.sectionLabel, styles.dateRow]}>
+                  {formatDateLabel(currentPhoto.date)}
+                  {'  ·  '}
+                  {formatTime(currentPhoto.capturedAt)}
+                  {'  ·  DAY '}
+                  {getDayNumber(joinDate, currentPhoto.date)}
+                </Text>
+
+                {editingCaption ? (
+                  <View style={styles.captionEditRow}>
+                    <TextInput
+                      style={styles.captionInput}
+                      value={captionDraft}
+                      onChangeText={setCaptionDraft}
+                      placeholder="Add caption..."
+                      placeholderTextColor={Colors.textTertiary}
+                      autoFocus
+                      multiline
+                      returnKeyType="done"
+                      onSubmitEditing={handleCaptionSave}
+                    />
+                    <Pressable onPress={handleCaptionSave} hitSlop={8} style={styles.captionAction}>
+                      <Check size={18} color={Colors.accent} weight="bold" />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable onPress={handleCaptionEditPress} style={styles.captionRow}>
+                    <Text style={[Typography.caption, styles.captionText]}>
+                      {currentPhoto.caption || 'Add caption...'}
+                    </Text>
+                    <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
+                  </Pressable>
+                )}
+
+                <Text style={[Typography.tiny, styles.pageIndicator]}>
+                  {currentIndex + 1} / {photos.length}
+                </Text>
+              </View>
+            )}
+
+            {/* Bottom safe area spacer */}
+            <View style={{ height: insets.bottom + 8 }} />
+          </Animated.View>
+        </GestureDetector>
       </GestureHandlerRootView>
     </Modal>
   );

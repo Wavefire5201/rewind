@@ -56,6 +56,7 @@ function generateMockPhotos(): PhotoEntry[] {
 
     photos.push({
       id: `mock-${String(i + 1).padStart(4, '0')}`,
+      albumId: 'daily-selfie',
       date: dateStr,
       imageUri: MOCK_IMAGES[i % MOCK_IMAGES.length],
       caption: CAPTIONS[i % CAPTIONS.length],
@@ -76,8 +77,6 @@ export const MOCK_PROFILE: UserProfile = {
 };
 
 export const MOCK_SETTINGS: AppSettings = {
-  reminderEnabled: true,
-  reminderTime: '08:00',
   photoQuality: 'high',
   cloudBackupEnabled: false,
   mirrorSelfies: true,

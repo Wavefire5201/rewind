@@ -1,25 +1,35 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
-import { Colors, Typography } from '@/constants/theme';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { Colors, Fonts, Typography } from '@/constants/theme';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
 import { useAppContext } from '@/context/AppContext';
 import { getToday, formatDateLabel } from '@/utils/dates';
+import { haptics } from '@/utils/haptics';
 import Viewfinder from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
 import TimerSelector from '@/components/camera/TimerSelector';
 import CapturePreview from '@/components/camera/CapturePreview';
+import FaceGuide from '@/components/camera/FaceGuide';
+import { UserFocus, CaretLeft } from 'phosphor-react-native';
 import type { PhotoEntry } from '@/types';
 
 const QUALITY_MAP: Record<string, number> = { low: 0.5, medium: 0.7, high: 1.0 };
 
 export default function CameraScreen() {
-  const { mostRecentPhoto, addPhoto } = usePhotos();
+  const insets = useSafeAreaInsets();
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const canGoBack = navigation.canGoBack();
+  const { albums, settings } = useAppContext();
+  const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
-  const { settings } = useAppContext();
+  const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
   const cameraRef = useRef<CameraView>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -31,6 +41,7 @@ export default function CameraScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [capturedUri, setCapturedUri] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [showFaceGuide, setShowFaceGuide] = useState(false);
 
   const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
@@ -91,23 +102,41 @@ export default function CameraScreen() {
   };
   const handleMirrorToggle = () => setIsMirrored(prev => !prev);
   const handleTimerToggle = () => setShowTimer(prev => !prev);
+  const handleFaceGuideToggle = () => setShowFaceGuide(prev => !prev);
 
   const handleGhostOpacity = useCallback((value: number) => {
     setGhostOpacity(value);
   }, []);
 
   const handleSave = (caption: string, savedUri: string) => {
-    const newPhoto: PhotoEntry = {
-      id: Date.now().toString(),
-      date: today,
-      imageUri: savedUri,
-      caption,
-      capturedAt: new Date().toISOString(),
-      cameraDirection: facing,
+    const doSave = () => {
+      const newPhoto: PhotoEntry = {
+        id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        albumId: albumId,
+        date: today,
+        imageUri: savedUri,
+        caption,
+        capturedAt: new Date().toISOString(),
+        cameraDirection: facing,
+      };
+      addPhoto(newPhoto);
+      setShowPreview(false);
+      setCapturedUri('');
+      router.replace({ pathname: '/album/[id]', params: { id: albumId } });
     };
-    addPhoto(newPhoto);
-    setShowPreview(false);
-    setCapturedUri('');
+
+    if (todayPhoto) {
+      Alert.alert(
+        'Replace Photo',
+        "You've already captured today. Replace it with this one?",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace', style: 'destructive', onPress: doSave },
+        ],
+      );
+    } else {
+      doSave();
+    }
   };
 
   const handleRetake = () => {
@@ -126,7 +155,32 @@ export default function CameraScreen() {
         isMirrored={isMirrored}
       />
 
-      <View style={styles.content}>
+      {showFaceGuide ? <FaceGuide /> : null}
+
+      <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.topRow}>
+          <TouchableOpacity
+            onPress={() => { haptics.tap(); canGoBack ? router.back() : router.replace('/'); }}
+            style={styles.backBtn}
+            hitSlop={12}
+            activeOpacity={0.7}
+          >
+            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+          </TouchableOpacity>
+          <Text style={styles.albumLabel}>{albumName}</Text>
+          <TouchableOpacity
+            onPress={handleFaceGuideToggle}
+            style={styles.backBtn}
+            hitSlop={12}
+            activeOpacity={0.7}
+          >
+            <UserFocus
+              size={20}
+              color={showFaceGuide ? Colors.accent : Colors.textSecondary}
+              weight="light"
+            />
+          </TouchableOpacity>
+        </View>
         <Text style={[Typography.sectionLabel, styles.dateLabel]}>{dateLabel}</Text>
 
         {countdown !== null ? (
@@ -169,9 +223,28 @@ const styles = StyleSheet.create({
   content: {
     paddingVertical: 16,
     paddingHorizontal: 28,
-    paddingBottom: 100,
     alignItems: 'center',
     gap: 12,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  albumLabel: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 13,
+    color: Colors.accent,
+    textAlign: 'center',
+    letterSpacing: 2,
+    textTransform: 'lowercase',
   },
   dateLabel: {
     color: Colors.textTertiary,

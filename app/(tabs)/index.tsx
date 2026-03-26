@@ -1,55 +1,419 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import TextInputModal from '@/components/ui/TextInputModal';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Camera } from 'phosphor-react-native';
-import { Colors } from '@/constants/theme';
+import { Plus, CaretRight, Camera, GearSix } from 'phosphor-react-native';
+import { Colors, Fonts, Sizes } from '@/constants/theme';
+import { useAppContext } from '@/context/AppContext';
 import { usePhotos } from '@/hooks/usePhotos';
-import HomeHeader from '@/components/home/HomeHeader';
-import TodayCard from '@/components/home/TodayCard';
-import StreakCards from '@/components/home/StreakCards';
-import WeekProgress from '@/components/home/WeekProgress';
-import EmptyState from '@/components/ui/EmptyState';
+import { useStreak } from '@/hooks/useStreak';
+import { useGreeting } from '@/hooks/useGreeting';
+import { haptics } from '@/utils/haptics';
+import { getImageSource } from '@/utils/imageSource';
+import { createAlbum } from '@/utils/albums';
+import type { Album } from '@/types';
 
-export default function HomeScreen() {
-  const { totalPhotos } = usePhotos();
+// ─── HeroCard ───────────────────────────────────────────────────────────────
+
+function HeroCard({
+  albumId,
+  albumName,
+  albumCreatedAt,
+}: {
+  albumId: string;
+  albumName: string;
+  albumCreatedAt: string;
+}) {
   const router = useRouter();
+  const { todayPhoto } = usePhotos(albumId);
+  const { currentStreak, weekStatus } = useStreak(albumId, albumCreatedAt);
 
-  if (totalPhotos === 0) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <EmptyState
-          icon={<Camera size={48} color={Colors.textTertiary} weight="light" />}
-          message="Take your first photo to start your journey"
-          ctaLabel="Open Camera"
-          onCta={() => router.push('/(tabs)/camera')}
-        />
-      </SafeAreaView>
-    );
+  function handlePress() {
+    haptics.tap();
+    router.push({ pathname: '/album/[id]', params: { id: albumId } });
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.content}>
-        <HomeHeader />
-        <TodayCard />
-        <StreakCards />
-        <WeekProgress />
+    <TouchableOpacity
+      style={styles.heroCard}
+      activeOpacity={0.8}
+      onPress={handlePress}
+    >
+      {todayPhoto ? (
+        <Image
+          source={getImageSource(todayPhoto.imageUri)}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.heroEmpty]}>
+          <Camera size={36} color={Colors.textTertiary} weight="light" />
+          <Text style={styles.heroEmptyText}>take today's photo</Text>
+        </View>
+      )}
+
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.72)']}
+        style={styles.heroGradient}
+      />
+
+      <View style={styles.heroOverlay}>
+        <View style={styles.heroOverlayTop}>
+          <View style={styles.heroOverlayLeft}>
+            <Text style={styles.heroAlbumName}>{albumName}</Text>
+            <Text style={styles.heroStreak}>
+              {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
+            </Text>
+          </View>
+          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+        </View>
+        <View style={styles.weekRow}>
+          {weekStatus.map((wd) => (
+            <View key={wd.date} style={styles.weekDayCol}>
+              <View
+                style={[
+                  styles.weekDot,
+                  (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
+                  wd.status === 'today-pending' && styles.weekDotToday,
+                  (wd.status === 'disabled' || wd.status === 'upcoming') && styles.weekDotDim,
+                ]}
+              />
+            </View>
+          ))}
+        </View>
       </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── AlbumRow ────────────────────────────────────────────────────────────────
+
+function AlbumRow({ album }: { album: Album }) {
+  const router = useRouter();
+  const { totalPhotos, mostRecentPhoto } = usePhotos(album.id);
+  const { currentStreak } = useStreak(album.id, album.createdAt);
+  const imageUri = mostRecentPhoto?.imageUri ?? null;
+
+  function handlePress() {
+    haptics.tap();
+    router.push({ pathname: '/album/[id]', params: { id: album.id } });
+  }
+
+  return (
+    <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={handlePress}>
+      <View style={styles.thumbnail}>
+        {imageUri ? (
+          <Image
+            source={getImageSource(imageUri)}
+            style={styles.thumbnailImage}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.thumbnailPlaceholder} />
+        )}
+      </View>
+      <View style={styles.rowInfo}>
+        <Text style={styles.rowName}>{album.name}</Text>
+        <Text style={styles.rowMeta}>
+          {currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
+        </Text>
+      </View>
+      <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+    </TouchableOpacity>
+  );
+}
+
+// ─── HomeScreen ──────────────────────────────────────────────────────────────
+
+export default function HomeScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { albums, isLoading, addAlbum } = useAppContext();
+  const { greeting, dayNumber } = useGreeting();
+  const [showNewAlbumModal, setShowNewAlbumModal] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && albums.length === 0) {
+      router.replace('/onboarding');
+    }
+  }, [isLoading, albums.length, router]);
+
+  function handleCreateAlbum() {
+    haptics.tap();
+    setShowNewAlbumModal(true);
+  }
+
+  function handleConfirmNewAlbum(name: string) {
+    setShowNewAlbumModal(false);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    addAlbum(createAlbum(trimmed));
+    haptics.success();
+  }
+
+  if (isLoading || albums.length === 0) {
+    return null;
+  }
+
+  const [heroAlbum, ...restAlbums] = albums;
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.dayNumber}>day {dayNumber}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.gearBtn}
+            activeOpacity={0.7}
+            onPress={() => { haptics.tap(); router.push('/(tabs)/profile'); }}
+            hitSlop={12}
+          >
+            <GearSix size={22} color={Colors.textSecondary} weight="regular" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Hero card */}
+        <HeroCard
+          albumId={heroAlbum.id}
+          albumName={heroAlbum.name}
+          albumCreatedAt={heroAlbum.createdAt}
+        />
+
+        {/* Album list */}
+        {restAlbums.length > 0 && (
+          <View style={styles.list}>
+            {restAlbums.map((album, index) => (
+              <React.Fragment key={album.id}>
+                {index > 0 && <View style={styles.divider} />}
+                <AlbumRow album={album} />
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+
+        {/* New album button */}
+        <TouchableOpacity style={styles.newAlbumRow} activeOpacity={0.7} onPress={handleCreateAlbum}>
+          <View style={styles.newAlbumIcon}>
+            <Plus size={20} color={Colors.accent} weight="regular" />
+          </View>
+          <Text style={styles.newAlbumText}>new album</Text>
+        </TouchableOpacity>
+      </ScrollView>
+      <TextInputModal
+        visible={showNewAlbumModal}
+        title="New Album"
+        message="Enter a name for the album"
+        placeholder="Album name"
+        confirmLabel="Create"
+        onConfirm={handleConfirmNewAlbum}
+        onCancel={() => setShowNewAlbumModal(false)}
+      />
     </SafeAreaView>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: Colors.bgPage,
   },
-  content: {
+  scroll: {
     flex: 1,
-    paddingTop: 16,
-    paddingHorizontal: 28,
-    paddingBottom: 100,
-    gap: 32,
   },
+  content: {
+    paddingHorizontal: 28,
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  headerLeft: {
+    gap: 2,
+  },
+  gearBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  greeting: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 28,
+    lineHeight: 36,
+    letterSpacing: -1,
+    color: Colors.textPrimary,
+  },
+  dayNumber: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.textSecondary,
+  },
+
+  // Hero card
+  heroCard: {
+    width: '100%',
+    height: 300,
+    backgroundColor: Colors.bgCard,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  heroEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  heroEmptyText: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.textTertiary,
+  },
+  heroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 160,
+  },
+  heroOverlay: {
+    padding: 16,
+    gap: 8,
+  },
+  heroOverlayTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  heroOverlayLeft: {
+    gap: 2,
+  },
+  heroAlbumName: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 16,
+    lineHeight: 22,
+    color: Colors.textPrimary,
+  },
+  heroStreak: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.accent,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  weekDayCol: {
+    alignItems: 'center',
+  },
+  weekDot: {
+    width: Sizes.weekDot,
+    height: Sizes.weekDot,
+    borderRadius: Sizes.weekDot / 2,
+    backgroundColor: Colors.bgSurface,
+    borderWidth: 1,
+    borderColor: Colors.borderPrimary,
+  },
+  weekDotFilled: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  weekDotToday: {
+    borderColor: Colors.accent,
+    backgroundColor: 'transparent',
+  },
+  weekDotDim: {
+    opacity: 0.3,
+  },
+
+  // Album list
+  list: {
+    marginTop: 24,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.borderDivider,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 14,
+  },
+  thumbnail: {
+    width: 48,
+    height: 48,
+    overflow: 'hidden',
+  },
+  thumbnailImage: {
+    width: 48,
+    height: 48,
+  },
+  thumbnailPlaceholder: {
+    width: 48,
+    height: 48,
+    backgroundColor: Colors.bgCard,
+  },
+  rowInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  rowName: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.textPrimary,
+  },
+  rowMeta: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.textTertiary,
+  },
+
+  // New album button
+  newAlbumRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    borderStyle: 'dashed',
+    paddingHorizontal: 16,
+  },
+  newAlbumIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newAlbumText: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.accent,
+  },
+
 });

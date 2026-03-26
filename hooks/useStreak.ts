@@ -3,12 +3,17 @@ import { useAppContext } from '@/context/AppContext';
 import { getToday, getWeekDays, getDayNumber } from '@/utils/dates';
 import type { DayStatus, WeekDay } from '@/types';
 
-export function useStreak() {
+export function useStreak(albumId?: string, albumCreatedAt?: string) {
   const { photos, profile } = useAppContext();
 
+  const filteredPhotos = useMemo(
+    () => albumId ? photos.filter(p => p.albumId === albumId) : photos,
+    [photos, albumId]
+  );
+
   const photoDates = useMemo(
-    () => new Set(photos.map(p => p.date)),
-    [photos]
+    () => new Set(filteredPhotos.map(p => p.date)),
+    [filteredPhotos]
   );
 
   const currentStreak = useMemo(() => {
@@ -35,8 +40,8 @@ export function useStreak() {
   }, [photoDates]);
 
   const bestStreak = useMemo(() => {
-    if (photos.length === 0) return 0;
-    const sorted = [...photos].sort((a, b) => a.date.localeCompare(b.date));
+    if (filteredPhotos.length === 0) return 0;
+    const sorted = [...filteredPhotos].sort((a, b) => a.date.localeCompare(b.date));
     let best = 1;
     let current = 1;
 
@@ -54,33 +59,37 @@ export function useStreak() {
     }
 
     return best;
-  }, [photos]);
+  }, [filteredPhotos]);
+
+  const referenceDate = albumCreatedAt ?? profile.joinDate;
 
   const consistency = useMemo(() => {
-    if (!profile.joinDate || photos.length === 0) return 0;
-    const daysSinceJoin = getDayNumber(profile.joinDate);
-    if (daysSinceJoin <= 0) return 100; // First day — 100% if any photo exists
-    return Math.round((photos.length / daysSinceJoin) * 100);
-  }, [photos, profile.joinDate]);
+    if (!referenceDate || filteredPhotos.length === 0) return 0;
+    const daysSinceStart = getDayNumber(referenceDate);
+    if (daysSinceStart <= 0) return 100; // First day — 100% if any photo exists
+    return Math.min(100, Math.round((filteredPhotos.length / daysSinceStart) * 100));
+  }, [filteredPhotos, referenceDate]);
 
   const weekStatus = useMemo((): WeekDay[] => {
     const today = getToday();
     const weekDays = getWeekDays(today);
+    // Use albumCreatedAt for disabled check if provided
+    const startDate = albumCreatedAt ?? profile.joinDate;
 
     return weekDays.map(wd => {
       let status: DayStatus;
-      if (wd.date > today) {
+      if (startDate && wd.date < startDate) {
+        status = 'disabled';
+      } else if (wd.date > today) {
         status = 'upcoming';
       } else if (wd.date === today) {
         status = photoDates.has(today) ? 'today-done' : 'today-pending';
-      } else if (wd.date < profile.joinDate) {
-        status = 'disabled';
       } else {
         status = photoDates.has(wd.date) ? 'captured' : 'missed';
       }
       return { ...wd, status };
     });
-  }, [photoDates, profile.joinDate]);
+  }, [photoDates, profile.joinDate, albumCreatedAt]);
 
   return { currentStreak, bestStreak, consistency, weekStatus };
 }

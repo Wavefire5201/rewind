@@ -6,17 +6,16 @@ import { useStreak } from '@/hooks/useStreak';
 import type { WeekDay } from '@/types';
 
 function DayColumn({ day }: { day: WeekDay }) {
-  if (day.status === 'disabled') {
-    return <View style={styles.dayColumn} />;
-  }
-
   const isCaptured = day.status === 'captured' || day.status === 'today-done';
   const isTodayPending = day.status === 'today-pending';
+  const isDisabled = day.status === 'disabled';
 
   return (
     <View style={styles.dayColumn}>
-      <Text style={styles.dayLabel}>{day.dayLabel}</Text>
-      {isCaptured ? (
+      <Text style={[styles.dayLabel, isDisabled && { opacity: 0.3 }]}>{day.dayLabel}</Text>
+      {isDisabled ? (
+        <View style={styles.dotSpacer} />
+      ) : isCaptured ? (
         <View style={[styles.dot, styles.dotFilled]} />
       ) : (
         <View
@@ -30,8 +29,13 @@ function DayColumn({ day }: { day: WeekDay }) {
   );
 }
 
-export default function WeekProgress() {
-  const { weekStatus } = useStreak();
+interface WeekProgressProps {
+  albumId: string;
+  albumCreatedAt: string;
+}
+
+export default function WeekProgress({ albumId, albumCreatedAt }: WeekProgressProps) {
+  const { weekStatus } = useStreak(albumId, albumCreatedAt);
 
   return (
     <View style={styles.container}>
@@ -78,5 +82,9 @@ const styles = StyleSheet.create({
   },
   dotDefault: {
     backgroundColor: Colors.bgSurface,
+  },
+  dotSpacer: {
+    width: Sizes.weekDot,
+    height: Sizes.weekDot,
   },
 });

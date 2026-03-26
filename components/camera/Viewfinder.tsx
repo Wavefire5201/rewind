@@ -41,7 +41,7 @@ const Viewfinder = forwardRef<CameraView, ViewfinderProps>(
       <View style={styles.container}>
         <CameraView
           ref={ref}
-          style={[StyleSheet.absoluteFill, facing === 'front' && !isMirrored ? { transform: [{ scaleX: -1 }] } : null]}
+          style={[StyleSheet.absoluteFill, { transform: [{ scaleX: facing === 'front' && !isMirrored ? -1 : 1 }] }]}
           facing={facing}
         />
         {ghostImageUri ? (

@@ -1,5 +1,6 @@
 export interface PhotoEntry {
   id: string;
+  albumId: string;
   date: string; // YYYY-MM-DD
   imageUri: string;
   caption: string;
@@ -14,11 +15,17 @@ export interface UserProfile {
 }
 
 export interface AppSettings {
-  reminderEnabled: boolean;
-  reminderTime: string; // HH:MM
   photoQuality: 'low' | 'medium' | 'high';
   cloudBackupEnabled: boolean;
   mirrorSelfies: boolean;
+}
+
+export interface Album {
+  id: string;
+  name: string;
+  createdAt: string;
+  reminderEnabled: boolean;
+  reminderTime: string; // HH:MM
 }
 
 export interface AppState {

@@ -1,41 +1,35 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/theme';
+import { useRouter } from 'expo-router';
+import { CaretLeft } from 'phosphor-react-native';
+import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
-import ProfileHeader from '@/components/profile/ProfileHeader';
+import { haptics } from '@/utils/haptics';
 import LifetimeStats from '@/components/profile/LifetimeStats';
 import SettingsList from '@/components/profile/SettingsList';
-import EditNameModal from '@/components/profile/EditNameModal';
 
 export default function ProfileScreen() {
-  const { profile, settings, updateProfile, updateSettings } = useAppContext();
+  const router = useRouter();
+  const { settings, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
   const { totalPhotos } = usePhotos();
   const { currentStreak, consistency } = useStreak();
-  const [showEditName, setShowEditName] = useState(false);
-
-  function handleSaveName(name: string) {
-    if (name.trim()) {
-      updateProfile({ name: name.trim() });
-    }
-    setShowEditName(false);
-  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.header}>
+        <Pressable onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }} hitSlop={12} style={styles.backBtn}>
+          <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+        </Pressable>
+        <Text style={styles.title}>profile</Text>
+        <View style={styles.backBtn} />
+      </View>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <ProfileHeader
-          name={profile.name}
-          avatarUri={profile.avatarUri}
-          joinDate={profile.joinDate}
-          onNamePress={() => setShowEditName(true)}
-        />
-
         <LifetimeStats
           totalPhotos={totalPhotos}
           currentStreak={currentStreak}
@@ -45,15 +39,10 @@ export default function ProfileScreen() {
         <SettingsList
           settings={settings}
           updateSettings={updateSettings}
+          onClearData={resetAllData}
+          onSeedMock={seedMockPhotos}
         />
       </ScrollView>
-
-      <EditNameModal
-        visible={showEditName}
-        currentName={profile.name}
-        onSave={handleSaveName}
-        onClose={() => setShowEditName(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -63,10 +52,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bgPage,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 16,
+    color: Colors.textPrimary,
+  },
   content: {
     paddingHorizontal: 28,
-    paddingTop: 16,
-    paddingBottom: 120,
+    paddingBottom: 40,
     gap: 32,
   },
 });

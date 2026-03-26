@@ -8,8 +8,12 @@ import { usePhotos } from '@/hooks/usePhotos';
 import { formatDateLabel, formatTime } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 
-export default function TodayCard() {
-  const { todayPhoto } = usePhotos();
+interface TodayCardProps {
+  albumId: string;
+}
+
+export default function TodayCard({ albumId }: TodayCardProps) {
+  const { todayPhoto } = usePhotos(albumId);
 
   if (!todayPhoto) {
     return (
@@ -38,7 +42,7 @@ export default function TodayCard() {
         <Text style={[Typography.sectionLabel, styles.dateLabel]}>
           TODAY — {formatDateLabel(todayPhoto.date)}
         </Text>
-        <Text style={Typography.caption}>{todayPhoto.caption}</Text>
+        {todayPhoto.caption ? <Text style={Typography.caption}>{todayPhoto.caption}</Text> : null}
         <Text style={Typography.small}>
           Captured at {formatTime(todayPhoto.capturedAt)}
         </Text>
@@ -49,13 +53,13 @@ export default function TodayCard() {
 
 const styles = StyleSheet.create({
   card: {
-    height: 340,
+    flex: 1,
     borderRadius: BorderRadius.card,
     overflow: 'hidden',
     backgroundColor: Colors.bgCard,
   },
   emptyCard: {
-    height: 340,
+    flex: 1,
     borderRadius: BorderRadius.card,
     overflow: 'hidden',
     backgroundColor: Colors.bgCard,

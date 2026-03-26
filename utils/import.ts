@@ -28,7 +28,7 @@ export async function pickPhotosFromLibrary(): Promise<{ uri: string; date: stri
   }));
 }
 
-export async function importFromBackup(): Promise<PhotoEntry[]> {
+export async function importFromBackup(albumId: string = 'daily-selfie'): Promise<PhotoEntry[]> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',
     copyToCacheDirectory: true,
@@ -49,7 +49,8 @@ export async function importFromBackup(): Promise<PhotoEntry[]> {
     const destFile = new File(Paths.document, filename);
     destFile.write(imageBase64, { encoding: 'base64' });
     photos.push({
-      id: `import_${Date.now()}_${entry.date}`,
+      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entry.date}`,
+      albumId,
       date: entry.date,
       imageUri: destFile.uri,
       caption: entry.caption || '',
@@ -60,22 +61,22 @@ export async function importFromBackup(): Promise<PhotoEntry[]> {
   return photos;
 }
 
-export function createPhotoEntry(uri: string, date: string, caption: string = ''): PhotoEntry {
+export function createPhotoEntry(uri: string, date: string, caption: string = '', albumId: string = 'daily-selfie'): PhotoEntry {
   const filename = `rewind_import_${Date.now()}.jpg`;
   try {
     const src = new File(uri);
     const dest = new File(Paths.document, filename);
     src.copy(dest);
     return {
-      id: `import_${Date.now()}_${date}`,
-      date, imageUri: dest.uri, caption,
+      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
+      albumId, date, imageUri: dest.uri, caption,
       capturedAt: new Date().toISOString(),
       cameraDirection: 'front',
     };
   } catch {
     return {
-      id: `import_${Date.now()}_${date}`,
-      date, imageUri: uri, caption,
+      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
+      albumId, date, imageUri: uri, caption,
       capturedAt: new Date().toISOString(),
       cameraDirection: 'front',
     };

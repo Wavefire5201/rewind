@@ -5,8 +5,13 @@ import SectionLabel from '@/components/ui/SectionLabel';
 import StatCard from '@/components/ui/StatCard';
 import { useStreak } from '@/hooks/useStreak';
 
-export default function StreakCards() {
-  const { currentStreak, bestStreak } = useStreak();
+interface StreakCardsProps {
+  albumId: string;
+  albumCreatedAt: string;
+}
+
+export default function StreakCards({ albumId, albumCreatedAt }: StreakCardsProps) {
+  const { currentStreak, bestStreak } = useStreak(albumId, albumCreatedAt);
 
   return (
     <View style={styles.container}>

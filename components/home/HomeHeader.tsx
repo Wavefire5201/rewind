@@ -5,7 +5,11 @@ import { Colors, Typography, Sizes } from '@/constants/theme';
 import CircleButton from '@/components/ui/CircleButton';
 import { useGreeting } from '@/hooks/useGreeting';
 
-export default function HomeHeader() {
+interface HomeHeaderProps {
+  albumName?: string;
+}
+
+export default function HomeHeader({ albumName }: HomeHeaderProps) {
   const { greeting, dayNumber } = useGreeting();
 
   return (
@@ -13,6 +17,7 @@ export default function HomeHeader() {
       <View style={styles.textGroup}>
         <Text style={Typography.small}>{greeting}</Text>
         <Text style={Typography.displayTitle}>day {dayNumber}</Text>
+        {albumName ? <Text style={Typography.caption}>{albumName}</Text> : null}
       </View>
       <CircleButton onPress={() => {}} size={Sizes.notifButton}>
         <BellSimple size={18} color={Colors.textSecondary} weight="light" />

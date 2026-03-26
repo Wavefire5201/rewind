@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { BellSimple, HardDrive, Image, Cloud, CaretRight } from 'phosphor-react-native';
+import { HardDrive, Image, Cloud, CaretRight, Trash, Database } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import SectionLabel from '@/components/ui/SectionLabel';
-import { requestNotificationPermission, scheduleDailyReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 import type { AppSettings } from '@/types';
 
 interface SettingsListProps {
   settings: AppSettings;
   updateSettings: (updates: Partial<AppSettings>) => void;
+  onClearData: () => void;
+  onSeedMock: () => void;
 }
 
 function capitalize(str: string): string {
@@ -24,35 +24,9 @@ function cyclePhotoQuality(current: AppSettings['photoQuality']): AppSettings['p
   return 'low';
 }
 
-function formatReminderTime(time: string): string {
-  const [hourStr, minuteStr] = time.split(':');
-  const hour = parseInt(hourStr, 10);
-  const minute = minuteStr;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-  return `${displayHour}:${minute} ${period}`;
-}
 
-export default function SettingsList({ settings, updateSettings }: SettingsListProps) {
+export default function SettingsList({ settings, updateSettings, onClearData, onSeedMock }: SettingsListProps) {
   const [storageSize, setStorageSize] = useState('—');
-  const [showTimePicker, setShowTimePicker] = useState(false);
-
-  function getTimeAsDate(timeStr: string): Date {
-    const [h, m] = timeStr.split(':').map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d;
-  }
-
-  async function handleTimeChange(_event: any, selectedDate?: Date) {
-    if (Platform.OS === 'android') setShowTimePicker(false);
-    if (!selectedDate) return;
-    const hh = String(selectedDate.getHours()).padStart(2, '0');
-    const mm = String(selectedDate.getMinutes()).padStart(2, '0');
-    const newTime = `${hh}:${mm}`;
-    updateSettings({ reminderTime: newTime });
-    await scheduleDailyReminder(newTime);
-  }
 
   useEffect(() => {
     async function calcStorage() {
@@ -81,64 +55,9 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
     <View>
       <SectionLabel>settings</SectionLabel>
       <View style={styles.container}>
-        {/* Row 1: Daily Reminder */}
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          onPress={async () => {
-            haptics.tap();
-            const newEnabled = !settings.reminderEnabled;
-            if (newEnabled) {
-              const granted = await requestNotificationPermission();
-              if (!granted) {
-                Alert.alert('Permission Required', 'Enable notifications in Settings to use reminders.');
-                return;
-              }
-              await scheduleDailyReminder(settings.reminderTime);
-            } else {
-              await cancelAllReminders();
-            }
-            updateSettings({ reminderEnabled: newEnabled });
-          }}
-        >
-          <View style={styles.left}>
-            <BellSimple size={20} color={settings.reminderEnabled ? Colors.accent : Colors.textSecondary} weight="light" />
-            <Text style={styles.rowLabel}>Daily Reminder</Text>
-          </View>
-          <Text style={styles.rowValue}>
-            {settings.reminderEnabled ? formatReminderTime(settings.reminderTime) : 'Off'}
-          </Text>
-        </Pressable>
+        {/* Reminders are now per-album — configure them from each album's detail page */}
 
-        {settings.reminderEnabled && (
-          <View>
-            <View style={styles.divider} />
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-              onPress={() => { haptics.tap(); setShowTimePicker(prev => !prev); }}
-            >
-              <View style={styles.left}>
-                <Text style={styles.rowLabel}>Reminder Time</Text>
-              </View>
-              <Text style={[styles.rowValue, { color: Colors.accent }]}>
-                {formatReminderTime(settings.reminderTime)}
-              </Text>
-            </Pressable>
-            {showTimePicker && (
-              <DateTimePicker
-                value={getTimeAsDate(settings.reminderTime)}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={handleTimeChange}
-                themeVariant="dark"
-                minuteInterval={5}
-              />
-            )}
-          </View>
-        )}
-
-        <View style={styles.divider} />
-
-        {/* Row 2: Storage */}
+        {/* Row 1: Storage */}
         <View style={styles.row}>
           <View style={styles.left}>
             <HardDrive size={20} color={Colors.textSecondary} weight="light" />
@@ -175,6 +94,41 @@ export default function SettingsList({ settings, updateSettings }: SettingsListP
           <CaretRight size={16} color={Colors.textTertiary} weight="light" />
         </Pressable>
       </View>
+
+      {__DEV__ && (
+        <>
+          <SectionLabel style={{ marginTop: 24 }}>dev tools</SectionLabel>
+          <View style={styles.container}>
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                haptics.tap();
+                Alert.alert('Clear All Data', 'This will delete all photos, albums, and settings. Are you sure?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Clear', style: 'destructive', onPress: onClearData },
+                ]);
+              }}
+            >
+              <View style={styles.left}>
+                <Trash size={20} color="#E57373" weight="light" />
+                <Text style={[styles.rowLabel, { color: '#E57373' }]}>Clear All Data</Text>
+              </View>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              onPress={() => { haptics.tap(); onSeedMock(); }}
+            >
+              <View style={styles.left}>
+                <Database size={20} color={Colors.textSecondary} weight="light" />
+                <Text style={styles.rowLabel}>Add Mock Photos (7 days)</Text>
+              </View>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }

@@ -10,12 +10,15 @@ interface MonthHeaderProps {
   month: number;
   onPrev: () => void;
   onNext: () => void;
+  onTitlePress?: () => void;
 }
 
-export default function MonthHeader({ year, month, onPrev, onNext }: MonthHeaderProps) {
+export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress }: MonthHeaderProps) {
   return (
     <View style={styles.row}>
-      <Text style={Typography.displayTitle}>{formatMonthYear(year, month)}</Text>
+      <TouchableOpacity onPress={() => { haptics.tap(); onTitlePress?.(); }} activeOpacity={0.7} disabled={!onTitlePress}>
+        <Text style={Typography.displayTitle}>{formatMonthYear(year, month)}</Text>
+      </TouchableOpacity>
       <View style={styles.navRow}>
         <TouchableOpacity style={styles.navButton} onPress={() => { haptics.tap(); onPrev(); }} activeOpacity={0.7}>
           <CaretLeft size={16} color={Colors.textSecondary} weight="light" />

@@ -26,8 +26,11 @@ export interface ImportPhotoModalProps {
 }
 
 function dateStrToDate(str: string): Date {
+  if (!str) return new Date();
   const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return new Date();
+  return date;
 }
 
 function dateToStr(d: Date): string {
@@ -66,14 +69,14 @@ export default function ImportPhotoModal({
       setCaption('');
       setShowDatePicker(false);
       if (photos.length > 0) {
-        setDate(photos[0].suggestedDate);
+        setDate(photos[0].suggestedDate || dateToStr(new Date()));
       }
     }
   }, [visible, photos]);
 
   useEffect(() => {
     if (photos[currentIndex]) {
-      setDate(photos[currentIndex].suggestedDate);
+      setDate(photos[currentIndex].suggestedDate || dateToStr(new Date()));
       setCaption('');
       setShowDatePicker(false);
     }

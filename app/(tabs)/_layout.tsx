@@ -1,22 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Colors } from '@/constants/theme';
-import TabBar from '@/components/TabBar';
 
-export default function TabLayout() {
+export default function AppLayout() {
   return (
-    <Tabs
-      tabBar={(props) => <TabBar {...props} />}
+    <Stack
       screenOptions={{
         headerShown: false,
-        sceneStyle: { backgroundColor: Colors.bgPage },
-        animation: 'shift',
+        contentStyle: { backgroundColor: Colors.bgPage },
+        animation: 'slide_from_right',
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'home' }} />
-      <Tabs.Screen name="camera" options={{ title: 'capture' }} />
-      <Tabs.Screen name="albums" options={{ title: 'albums' }} />
-      <Tabs.Screen name="timelapse" options={{ title: 'timelapse' }} />
-      <Tabs.Screen name="profile" options={{ title: 'profile' }} />
-    </Tabs>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="camera" />
+      <Stack.Screen name="profile" />
+      <Stack.Screen name="albums" />
+      <Stack.Screen name="timelapse" />
+    </Stack>
   );
 }

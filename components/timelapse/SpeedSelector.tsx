@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
 
 interface SpeedSelectorProps {
   selectedSpeed: number;
   onSelect: (speed: number) => void;
+  style?: ViewStyle;
 }
 
 const SPEEDS = [
@@ -15,9 +16,9 @@ const SPEEDS = [
   { label: '4x', value: 4 },
 ];
 
-function SpeedSelector({ selectedSpeed, onSelect }: SpeedSelectorProps) {
+function SpeedSelector({ selectedSpeed, onSelect, style }: SpeedSelectorProps) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, style]}>
       {SPEEDS.map(({ label, value }) => {
         const isActive = selectedSpeed === value;
         return (
@@ -45,7 +46,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   item: {
-    paddingVertical: 12,
+    paddingVertical: 6,
     paddingHorizontal: 8,
   },
   label: {

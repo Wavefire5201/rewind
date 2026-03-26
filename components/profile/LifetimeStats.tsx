@@ -27,6 +27,7 @@ export default function LifetimeStats({ totalPhotos, currentStreak, consistency 
   return (
     <View>
       <SectionLabel>stats</SectionLabel>
+      <Text style={styles.subtitle}>across all albums</Text>
       <View style={styles.wrapper}>
         <StatItem value={totalPhotos} label="photos" />
         <StatItem value={currentStreak} label="day streak" />
@@ -37,6 +38,13 @@ export default function LifetimeStats({ totalPhotos, currentStreak, consistency 
 }
 
 const styles = StyleSheet.create({
+  subtitle: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.textTertiary,
+    marginTop: 4,
+  },
   wrapper: {
     flexDirection: 'row',
     backgroundColor: Colors.bgCard,
