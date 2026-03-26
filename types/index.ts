@@ -18,6 +18,7 @@ export interface AppSettings {
   photoQuality: 'low' | 'medium' | 'high';
   cloudBackupEnabled: boolean;
   mirrorSelfies: boolean;
+  fontFamily: 'jetbrains' | 'commitmono';
 }
 
 export interface Album {

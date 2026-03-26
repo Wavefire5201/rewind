@@ -6,11 +6,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 
 interface DateRangeSheetProps {
@@ -38,6 +38,7 @@ export default function DateRangeSheet({
   onApply,
   onClose,
 }: DateRangeSheetProps) {
+  const { fonts } = useFont();
   const insets = useSafeAreaInsets();
   const [selStart, setSelStart] = useState(startDate);
   const [selEnd, setSelEnd] = useState(endDate);
@@ -112,35 +113,33 @@ export default function DateRangeSheet({
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Date Range</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Date Range</Text>
+          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
             <X size={20} color={Colors.textSecondary} weight="light" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Date field row */}
         <View style={styles.fieldRow}>
-          <TouchableOpacity
-            style={[styles.dateField, activeField === 'start' && styles.dateFieldActive]}
+          <Pressable
+            style={({ pressed }) => [styles.dateField, activeField === 'start' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleStartFieldTap}
-            activeOpacity={0.7}
           >
-            <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive]}>
+            <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selStart)}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <Text style={styles.toText}>TO</Text>
+          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>TO</Text>
 
-          <TouchableOpacity
-            style={[styles.dateField, activeField === 'end' && styles.dateFieldActive]}
+          <Pressable
+            style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleEndFieldTap}
-            activeOpacity={0.7}
           >
-            <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive]}>
+            <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selEnd)}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Scrollable date list */}
@@ -155,16 +154,15 @@ export default function DateRangeSheet({
                 (activeField === 'start' && date === selStart) ||
                 (activeField === 'end' && date === selEnd);
               return (
-                <TouchableOpacity
+                <Pressable
                   key={date}
-                  style={[styles.dateListItem, isSelected && styles.dateListItemSelected]}
+                  style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: 0.7 }]}
                   onPress={() => handleDateSelect(date)}
-                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected]}>
+                  <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected, { fontFamily: fonts.regular }]}>
                     {formatMMDDYY(date)}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -172,12 +170,12 @@ export default function DateRangeSheet({
 
         {/* Footer buttons */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.resetButton} onPress={handleReset} activeOpacity={0.7}>
-            <Text style={styles.resetText}>Reset to all</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.7}>
-            <Text style={styles.applyText}>Apply</Text>
-          </TouchableOpacity>
+          <Pressable style={({ pressed }) => [styles.resetButton, pressed && { opacity: 0.7 }]} onPress={handleReset}>
+            <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>Reset to all</Text>
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]} onPress={handleApply}>
+            <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>Apply</Text>
+          </Pressable>
         </View>
       </View>
     </Modal>

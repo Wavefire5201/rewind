@@ -1,13 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Plus, CaretRight, Camera, PencilSimple } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
-import { Colors, Fonts, Typography } from '@/constants/theme';
+import { Colors, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
+import { useFont } from '@/context/FontContext';
 import EmptyState from '@/components/ui/EmptyState';
 import { createAlbum } from '@/utils/albums';
 import type { Album } from '@/types';
@@ -15,6 +16,7 @@ import type { Album } from '@/types';
 export default function AlbumsScreen() {
   const router = useRouter();
   const { photos, albums, addAlbum, updateAlbum } = useAppContext();
+  const { fonts, typography } = useFont();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
@@ -58,12 +60,13 @@ export default function AlbumsScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.title}>albums</Text>
+          <Text style={[styles.title, { fontFamily: fonts.light }]}>albums</Text>
         </View>
         <EmptyState
           icon={<Camera size={48} color={Colors.textTertiary} weight="light" />}
-          message="No albums yet. Take your first photo to get started."
-          ctaLabel="Open Camera"
+          message="no albums yet"
+          subtitle="your photo albums will appear here once you start capturing"
+          ctaLabel="open camera"
           onCta={() => router.push('/(tabs)/camera')}
         />
       </SafeAreaView>
@@ -78,10 +81,15 @@ export default function AlbumsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>albums</Text>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.7} onPress={handleCreateAlbum}>
+          <Text style={[styles.title, { fontFamily: fonts.light }]}>albums</Text>
+          <Pressable
+            style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+            onPress={handleCreateAlbum}
+            accessibilityLabel="Create new album"
+            accessibilityRole="button"
+          >
             <Plus size={18} color={Colors.textSecondary} weight="regular" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.list}>
@@ -96,10 +104,11 @@ export default function AlbumsScreen() {
             return (
               <React.Fragment key={album.id}>
                 {index > 0 && <View style={styles.divider} />}
-                <TouchableOpacity
-                  style={styles.row}
-                  activeOpacity={0.7}
+                <Pressable
+                  style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
                   onPress={() => { haptics.tap(); router.push({ pathname: '/album/[id]', params: { id: album.id } }); }}
+                  accessibilityLabel={`${album.name}, ${photoCount} photos`}
+                  accessibilityRole="button"
                 >
                   <View style={styles.thumbnail}>
                     {imageUri ? (
@@ -113,29 +122,31 @@ export default function AlbumsScreen() {
                     )}
                   </View>
                   <View style={styles.info}>
-                    <Text style={styles.albumName}>{album.name}</Text>
-                    <Text style={styles.meta}>
+                    <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
+                    <Text style={[typography.small, { color: Colors.textTertiary }]}>
                       {photoCount} photos
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: album.id } }); }}
                     hitSlop={12}
-                    style={styles.cameraBtn}
-                    activeOpacity={0.7}
+                    style={({ pressed }) => [styles.cameraBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel={`Take photo for ${album.name}`}
+                    accessibilityRole="button"
                   >
                     <Camera size={16} color={Colors.textTertiary} weight="regular" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </Pressable>
+                  <Pressable
                     onPress={() => handleRenameAlbum(album)}
                     hitSlop={12}
-                    style={styles.editBtn}
-                    activeOpacity={0.7}
+                    style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel={`Rename ${album.name}`}
+                    accessibilityRole="button"
                   >
                     <PencilSimple size={14} color={Colors.textTertiary} weight="regular" />
-                  </TouchableOpacity>
+                  </Pressable>
                   <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
-                </TouchableOpacity>
+                </Pressable>
               </React.Fragment>
             );
           })}
@@ -222,22 +233,16 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  albumName: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.textPrimary,
-  },
-  meta: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Colors.textTertiary,
-  },
   cameraBtn: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editBtn: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

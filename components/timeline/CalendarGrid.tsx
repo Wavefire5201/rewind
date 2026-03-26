@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { getCalendarMonth, getToday } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 import type { PhotoEntry } from '@/types';
@@ -18,6 +19,7 @@ const DAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // Cell size is dynamic — use flex instead of fixed width
 
 export default function CalendarGrid({ year, month, photos, joinDate, onDayPress }: CalendarGridProps) {
+  const { fonts } = useFont();
   const weeks = getCalendarMonth(year, month);
   const today = getToday();
   const photoMap = new Map<string, PhotoEntry>(photos.map(p => [p.date, p]));
@@ -28,7 +30,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
       <View style={styles.headerRow}>
         {DAY_HEADERS.map((label, i) => (
           <View key={i} style={styles.headerCell}>
-            <Text style={styles.headerText}>{label}</Text>
+            <Text style={[styles.headerText, { fontFamily: fonts.regular }]}>{label}</Text>
           </View>
         ))}
       </View>
@@ -50,7 +52,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             if (isFuture || isBeforeJoin) {
               return (
                 <View key={di} style={styles.cell}>
-                  <Text style={[styles.dayNumber, { opacity: 0.3 }]}>
+                  <Text style={[styles.dayNumber, { opacity: 0.3, fontFamily: fonts.regular }]}>
                     {parseInt(date.split('-')[2], 10)}
                   </Text>
                 </View>
@@ -60,18 +62,17 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             // Today with photo
             if (isToday && photo) {
               return (
-                <TouchableOpacity
+                <Pressable
                   key={di}
-                  style={[styles.cell, styles.photoCell, styles.todayCell]}
+                  style={({ pressed }) => [styles.cell, styles.photoCell, styles.todayCell, pressed && { opacity: 0.8 }]}
                   onPress={() => onDayPress(date)}
-                  activeOpacity={0.8}
                 >
                   <Image
                     source={getImageSource(photo.imageUri)}
                     style={styles.thumbnail}
                     contentFit="cover"
                   />
-                </TouchableOpacity>
+                </Pressable>
               );
             }
 
@@ -79,7 +80,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             if (isToday && !photo) {
               return (
                 <View key={di} style={[styles.cell, styles.todayCell]}>
-                  <Text style={[styles.dayNumber, styles.todayNumber]}>
+                  <Text style={[styles.dayNumber, styles.todayNumber, { fontFamily: fonts.regular }]}>
                     {parseInt(date.split('-')[2], 10)}
                   </Text>
                 </View>
@@ -89,25 +90,24 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             // Past day with photo
             if (photo) {
               return (
-                <TouchableOpacity
+                <Pressable
                   key={di}
-                  style={[styles.cell, styles.photoCell]}
+                  style={({ pressed }) => [styles.cell, styles.photoCell, pressed && { opacity: 0.8 }]}
                   onPress={() => onDayPress(date)}
-                  activeOpacity={0.8}
                 >
                   <Image
                     source={getImageSource(photo.imageUri)}
                     style={styles.thumbnail}
                     contentFit="cover"
                   />
-                </TouchableOpacity>
+                </Pressable>
               );
             }
 
             // Past day, no photo (missed)
             return (
               <View key={di} style={styles.cell}>
-                <Text style={styles.dayNumber}>
+                <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
                   {parseInt(date.split('-')[2], 10)}
                 </Text>
               </View>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   todayCell: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.textSecondary,
+    borderBottomColor: Colors.streak,
   },
   thumbnail: {
     ...StyleSheet.absoluteFillObject,
@@ -166,6 +166,6 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
   },
   todayNumber: {
-    color: Colors.textPrimary,
+    color: Colors.streak,
   },
 });

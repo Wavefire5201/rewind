@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface ScrubberProps {
   currentIndex: number;
@@ -21,6 +22,7 @@ function formatShortDate(dateStr: string): string {
 const THUMB_SIZE = 14;
 
 function Scrubber({ currentIndex, total, startDate, endDate, onSeek }: ScrubberProps) {
+  const { fonts } = useFont();
   const trackWidth = useSharedValue(0);
   const thumbX = useSharedValue(0);
   const lastSeekIndex = useRef(currentIndex);
@@ -96,9 +98,9 @@ function Scrubber({ currentIndex, total, startDate, endDate, onSeek }: ScrubberP
   return (
     <View style={styles.container}>
       <View style={styles.labels}>
-        <Text style={styles.dateText}>{formatShortDate(startDate)}</Text>
-        <Text style={styles.frameText}>{currentIndex + 1} / {total}</Text>
-        <Text style={styles.dateText}>{formatShortDate(endDate)}</Text>
+        <Text style={[styles.dateText, { fontFamily: fonts.regular }]}>{formatShortDate(startDate)}</Text>
+        <Text style={[styles.frameText, { fontFamily: fonts.regular }]}>{currentIndex + 1} / {total}</Text>
+        <Text style={[styles.dateText, { fontFamily: fonts.regular }]}>{formatShortDate(endDate)}</Text>
       </View>
 
       <GestureDetector gesture={gesture}>

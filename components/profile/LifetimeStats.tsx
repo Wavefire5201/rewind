@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
 
 interface LifetimeStatsProps {
@@ -15,19 +16,21 @@ interface StatItemProps {
 }
 
 function StatItem({ value, label }: StatItemProps) {
+  const { fonts, typography } = useFont();
   return (
     <View style={styles.statItem}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{value}</Text>
+      <Text style={typography.small}>{label}</Text>
     </View>
   );
 }
 
 export default function LifetimeStats({ totalPhotos, currentStreak, consistency }: LifetimeStatsProps) {
+  const { fonts } = useFont();
   return (
     <View>
       <SectionLabel>stats</SectionLabel>
-      <Text style={styles.subtitle}>across all albums</Text>
+      <Text style={[styles.subtitle, { fontFamily: fonts.regular }]}>across all albums</Text>
       <View style={styles.wrapper}>
         <StatItem value={totalPhotos} label="photos" />
         <StatItem value={currentStreak} label="day streak" />
@@ -64,10 +67,5 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     letterSpacing: -1,
     color: Colors.textPrimary,
-  },
-  statLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    color: Colors.textSecondary,
   },
 });

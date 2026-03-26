@@ -1,16 +1,16 @@
 import React from 'react';
-import { Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, ViewStyle, PressableProps } from 'react-native';
 import { haptics } from '@/utils/haptics';
 import { Colors } from '@/constants/theme';
 
-interface CircleButtonProps {
+interface CircleButtonProps extends Omit<PressableProps, 'onPress' | 'style'> {
   children: React.ReactNode;
   onPress: () => void;
   size?: number;
   style?: ViewStyle;
 }
 
-export default function CircleButton({ children, onPress, size = 48, style }: CircleButtonProps) {
+export default function CircleButton({ children, onPress, size = 48, style, ...rest }: CircleButtonProps) {
   return (
     <Pressable
       onPress={() => {
@@ -27,6 +27,7 @@ export default function CircleButton({ children, onPress, size = 48, style }: Ci
         pressed && { opacity: 0.7 },
         style,
       ]}
+      {...rest}
     >
       {children}
     </Pressable>

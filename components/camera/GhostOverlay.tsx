@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Stack } from 'phosphor-react-native';
 import Slider from '@/components/ui/OpacitySlider';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface GhostOverlayProps {
   imageUri: string;
@@ -12,6 +13,7 @@ interface GhostOverlayProps {
 }
 
 export default function GhostOverlay({ imageUri, opacity, onOpacityChange }: GhostOverlayProps) {
+  const { fonts } = useFont();
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <Image
@@ -23,7 +25,7 @@ export default function GhostOverlay({ imageUri, opacity, onOpacityChange }: Gho
       <View style={styles.controls} pointerEvents="box-none">
         <View style={styles.badge}>
           <Stack size={12} color={Colors.textPrimary} weight="light" />
-          <Text style={styles.badgeText}>{Math.round(opacity * 100)}%</Text>
+          <Text style={[styles.badgeText, { fontFamily: fonts.regular }]}>{Math.round(opacity * 100)}%</Text>
         </View>
         <View style={styles.sliderWrap}>
           <Slider value={opacity} onValueChange={onOpacityChange} />
@@ -47,7 +49,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1A1A1C99',
+    backgroundColor: Colors.bgPageTranslucent,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },

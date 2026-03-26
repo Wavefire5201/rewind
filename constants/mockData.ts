@@ -80,4 +80,5 @@ export const MOCK_SETTINGS: AppSettings = {
   photoQuality: 'high',
   cloudBackupEnabled: false,
   mirrorSelfies: true,
+  fontFamily: 'jetbrains',
 };

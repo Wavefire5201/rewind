@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { Colors, Fonts, Typography } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
 import { useAppContext } from '@/context/AppContext';
@@ -31,6 +32,7 @@ export default function CameraScreen() {
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
+  const { fonts, typography } = useFont();
   const cameraRef = useRef<CameraView>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
@@ -58,7 +60,9 @@ export default function CameraScreen() {
             .renderAsync();
           const saved = await imageRef.saveAsync();
           uri = saved.uri;
-        } catch {}
+        } catch (e) {
+          console.warn('Image flip failed, using original:', e);
+        }
       }
       setCapturedUri(uri);
       setShowPreview(true);
@@ -159,32 +163,40 @@ export default function CameraScreen() {
 
       <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.topRow}>
-          <TouchableOpacity
+          <Pressable
             onPress={() => { haptics.tap(); canGoBack ? router.back() : router.replace('/'); }}
-            style={styles.backBtn}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
             hitSlop={12}
-            activeOpacity={0.7}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
-          </TouchableOpacity>
-          <Text style={styles.albumLabel}>{albumName}</Text>
-          <TouchableOpacity
+          </Pressable>
+          <Text style={[styles.albumLabel, { fontFamily: fonts.regular }]}>{albumName}</Text>
+          <Pressable
             onPress={handleFaceGuideToggle}
-            style={styles.backBtn}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
             hitSlop={12}
-            activeOpacity={0.7}
+            accessibilityLabel={showFaceGuide ? 'Hide face guide' : 'Show face guide'}
+            accessibilityRole="button"
           >
             <UserFocus
               size={20}
               color={showFaceGuide ? Colors.accent : Colors.textSecondary}
               weight="light"
             />
-          </TouchableOpacity>
+          </Pressable>
         </View>
-        <Text style={[Typography.sectionLabel, styles.dateLabel]}>{dateLabel}</Text>
+        <Text style={[typography.sectionLabel, styles.dateLabel]}>{dateLabel}</Text>
 
         {countdown !== null ? (
-          <Text style={[Typography.bigNumber, styles.countdown]}>{countdown}</Text>
+          <Text
+            style={[typography.bigNumber, styles.countdown]}
+            accessibilityRole="timer"
+            accessibilityLabel={`Timer: ${countdown} seconds`}
+          >
+            {countdown}
+          </Text>
         ) : null}
 
         <CameraControls
@@ -252,6 +264,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   countdown: {
-    color: Colors.accent,
+    color: Colors.streak,
   },
 });

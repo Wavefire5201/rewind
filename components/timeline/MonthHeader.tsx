@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CaretLeft, CaretRight } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
-import { Colors, Typography, Sizes } from '@/constants/theme';
+import { Colors, Sizes } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { formatMonthYear } from '@/utils/dates';
 
 interface MonthHeaderProps {
@@ -14,18 +15,19 @@ interface MonthHeaderProps {
 }
 
 export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress }: MonthHeaderProps) {
+  const { typography } = useFont();
   return (
     <View style={styles.row}>
-      <TouchableOpacity onPress={() => { haptics.tap(); onTitlePress?.(); }} activeOpacity={0.7} disabled={!onTitlePress}>
-        <Text style={Typography.displayTitle}>{formatMonthYear(year, month)}</Text>
-      </TouchableOpacity>
+      <Pressable onPress={() => { haptics.tap(); onTitlePress?.(); }} style={({ pressed }) => [pressed && { opacity: 0.7 }]} disabled={!onTitlePress}>
+        <Text style={typography.displayTitle}>{formatMonthYear(year, month)}</Text>
+      </Pressable>
       <View style={styles.navRow}>
-        <TouchableOpacity style={styles.navButton} onPress={() => { haptics.tap(); onPrev(); }} activeOpacity={0.7}>
+        <Pressable style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]} onPress={() => { haptics.tap(); onPrev(); }}>
           <CaretLeft size={16} color={Colors.textSecondary} weight="light" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => { haptics.tap(); onNext(); }} activeOpacity={0.7}>
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]} onPress={() => { haptics.tap(); onNext(); }}>
           <CaretRight size={16} color={Colors.textSecondary} weight="light" />
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );

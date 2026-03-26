@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Cloud, CaretRight, Trash, Database } from 'phosphor-react-native';
+import { HardDrive, Image, Cloud, CaretRight, Trash, Database, TextAa } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
 import { haptics } from '@/utils/haptics';
 import type { AppSettings } from '@/types';
@@ -26,6 +27,7 @@ function cyclePhotoQuality(current: AppSettings['photoQuality']): AppSettings['p
 
 
 export default function SettingsList({ settings, updateSettings, onClearData, onSeedMock }: SettingsListProps) {
+  const { fonts, typography } = useFont();
   const [storageSize, setStorageSize] = useState('—');
 
   useEffect(() => {
@@ -61,9 +63,9 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
         <View style={styles.row}>
           <View style={styles.left}>
             <HardDrive size={20} color={Colors.textSecondary} weight="light" />
-            <Text style={styles.rowLabel}>Storage</Text>
+            <Text style={typography.body}>storage</Text>
           </View>
-          <Text style={styles.rowValue}>{storageSize}</Text>
+          <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{storageSize}</Text>
         </View>
 
         <View style={styles.divider} />
@@ -75,9 +77,9 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
         >
           <View style={styles.left}>
             <Image size={20} color={Colors.textSecondary} weight="light" />
-            <Text style={styles.rowLabel}>Photo Quality</Text>
+            <Text style={typography.body}>photo quality</Text>
           </View>
-          <Text style={styles.rowValue}>{capitalize(settings.photoQuality)}</Text>
+          <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{capitalize(settings.photoQuality)}</Text>
         </Pressable>
 
         <View style={styles.divider} />
@@ -85,11 +87,11 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
         {/* Row 4: Cloud Backup */}
         <Pressable
           style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Cloud backup will be available in a future update.'); }}
+          onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Cloud backup is not available yet.'); }}
         >
           <View style={styles.left}>
             <Cloud size={20} color={Colors.textSecondary} weight="light" />
-            <Text style={styles.rowLabel}>Cloud Backup</Text>
+            <Text style={typography.body}>cloud backup</Text>
           </View>
           <CaretRight size={16} color={Colors.textTertiary} weight="light" />
         </Pressable>
@@ -103,15 +105,15 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
               onPress={() => {
                 haptics.tap();
-                Alert.alert('Clear All Data', 'This will delete all photos, albums, and settings. Are you sure?', [
+                Alert.alert('Clear All Data', 'This will permanently delete all photos, albums, and settings. This cannot be undone.', [
                   { text: 'Cancel', style: 'cancel' },
-                  { text: 'Clear', style: 'destructive', onPress: onClearData },
+                  { text: 'Clear Everything', style: 'destructive', onPress: onClearData },
                 ]);
               }}
             >
               <View style={styles.left}>
-                <Trash size={20} color="#E57373" weight="light" />
-                <Text style={[styles.rowLabel, { color: '#E57373' }]}>Clear All Data</Text>
+                <Trash size={20} color={Colors.danger} weight="light" />
+                <Text style={[typography.body, { color: Colors.danger }]}>clear all data</Text>
               </View>
             </Pressable>
 
@@ -123,8 +125,28 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
             >
               <View style={styles.left}>
                 <Database size={20} color={Colors.textSecondary} weight="light" />
-                <Text style={styles.rowLabel}>Add Mock Photos (7 days)</Text>
+                <Text style={typography.body}>add mock photos (7 days)</Text>
               </View>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                haptics.tap();
+                updateSettings({
+                  fontFamily: settings.fontFamily === 'jetbrains' ? 'commitmono' : 'jetbrains',
+                });
+              }}
+            >
+              <View style={styles.left}>
+                <TextAa size={20} color={Colors.textSecondary} weight="light" />
+                <Text style={typography.body}>font family</Text>
+              </View>
+              <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>
+                {settings.fontFamily === 'commitmono' ? 'commit mono' : 'jetbrains mono'}
+              </Text>
             </Pressable>
           </View>
         </>
@@ -151,11 +173,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  rowLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 14,
-    color: Colors.textPrimary,
   },
   rowValue: {
     fontFamily: Fonts.mono.regular,

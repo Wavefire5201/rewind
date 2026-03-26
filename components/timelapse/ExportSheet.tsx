@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Modal, Pressable, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, Text, Modal, Pressable, Alert, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Images, FilmStrip, FolderOpen, DownloadSimple, X } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 
 export type ExportFormat = 'album' | 'backup' | 'gif' | 'mp4';
@@ -51,12 +52,13 @@ const OPTIONS: Option[] = [
 ];
 
 export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetProps) {
+  const { fonts } = useFont();
   const insets = useSafeAreaInsets();
 
   function handlePress(option: Option) {
     if (option.comingSoon) {
       haptics.tap();
-      Alert.alert('Coming Soon', `${option.label} export will be available in a future update.`);
+      Alert.alert('Coming Soon', `${option.label} export is not available yet.`);
       return;
     }
     haptics.tap();
@@ -73,27 +75,26 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
-          <Text style={styles.title}>Export</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Export</Text>
+          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
             <X size={20} color={Colors.textSecondary} weight="light" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {OPTIONS.map((option) => (
-          <TouchableOpacity
+          <Pressable
             key={option.format}
-            style={[styles.row, option.comingSoon && styles.rowDisabled]}
+            style={({ pressed }) => [styles.row, option.comingSoon && styles.rowDisabled, pressed && { opacity: 0.7 }]}
             onPress={() => handlePress(option)}
-            activeOpacity={0.7}
           >
             <View style={styles.iconContainer}>{option.icon}</View>
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, option.comingSoon && styles.rowLabelDisabled]}>
+              <Text style={[styles.rowLabel, option.comingSoon && styles.rowLabelDisabled, { fontFamily: fonts.regular }]}>
                 {option.label}
               </Text>
-              <Text style={styles.rowDescription}>{option.description}</Text>
+              <Text style={[styles.rowDescription, { fontFamily: fonts.regular }]}>{option.description}</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
     </Modal>

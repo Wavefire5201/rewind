@@ -16,6 +16,7 @@ import { X } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 
 export interface ImportPhotoModalProps {
@@ -51,6 +52,7 @@ export default function ImportPhotoModal({
   onSave,
   onCancel,
 }: ImportPhotoModalProps) {
+  const { fonts } = useFont();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -86,7 +88,7 @@ export default function ImportPhotoModal({
   const total = photos.length;
   const isLast = currentIndex === total - 1;
 
-  function handleDateChange(_event: any, selectedDate?: Date) {
+  function handleDateChange(_event: unknown, selectedDate?: Date) {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (selectedDate) {
       setDate(dateToStr(selectedDate));
@@ -127,8 +129,8 @@ export default function ImportPhotoModal({
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={styles.headerTitle}>Import Photo</Text>
-          <Text style={styles.counter}>
+          <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>Import Photo</Text>
+          <Text style={[styles.counter, { fontFamily: fonts.regular }]}>
             {currentIndex + 1} / {total}
           </Text>
           <Pressable onPress={handleCancel} hitSlop={12} style={styles.closeBtn}>
@@ -154,12 +156,12 @@ export default function ImportPhotoModal({
           <View style={styles.fields}>
             {/* Date */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>DATE</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>DATE</Text>
               <Pressable
                 style={styles.dateButton}
                 onPress={() => { haptics.tap(); setShowDatePicker(prev => !prev); }}
               >
-                <Text style={styles.dateButtonText}>
+                <Text style={[styles.dateButtonText, { fontFamily: fonts.regular }]}>
                   {formatDisplayDate(date)}
                 </Text>
               </Pressable>
@@ -177,12 +179,12 @@ export default function ImportPhotoModal({
 
             {/* Caption */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>CAPTION</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>CAPTION</Text>
               <TextInput
-                style={[styles.input, styles.captionInput]}
+                style={[styles.input, styles.captionInput, { fontFamily: fonts.regular }]}
                 value={caption}
                 onChangeText={setCaption}
-                placeholder="optional"
+                placeholder="add a caption..."
                 placeholderTextColor={Colors.textTertiary}
                 returnKeyType="done"
                 multiline
@@ -197,7 +199,7 @@ export default function ImportPhotoModal({
             style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
             onPress={handleSaveNext}
           >
-            <Text style={styles.saveBtnText}>
+            <Text style={[styles.saveBtnText, { fontFamily: fonts.medium }]}>
               {isLast ? 'Save' : 'Save & Next  →'}
             </Text>
           </Pressable>

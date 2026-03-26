@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface TextInputModalProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export default function TextInputModal({
   onConfirm,
   onCancel,
 }: TextInputModalProps) {
+  const { fonts } = useFont();
   const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
@@ -57,10 +59,10 @@ export default function TextInputModal({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+          <Text style={[styles.title, { fontFamily: fonts.regular }]}>{title}</Text>
+          {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontFamily: fonts.regular }]}
             value={value}
             onChangeText={setValue}
             placeholder={placeholder}
@@ -68,13 +70,25 @@ export default function TextInputModal({
             autoFocus
             returnKeyType="done"
             onSubmitEditing={handleConfirm}
+            maxLength={100}
+            accessibilityLabel={placeholder || title}
           />
           <View style={styles.row}>
-            <Pressable style={styles.btn} onPress={onCancel}>
-              <Text style={styles.cancelLabel}>Cancel</Text>
+            <Pressable
+              style={styles.btn}
+              onPress={onCancel}
+              accessibilityLabel="Cancel"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>Cancel</Text>
             </Pressable>
-            <Pressable style={styles.btn} onPress={handleConfirm}>
-              <Text style={styles.confirmLabel}>{confirmLabel}</Text>
+            <Pressable
+              style={styles.btn}
+              onPress={handleConfirm}
+              accessibilityLabel={confirmLabel}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.confirmLabel, { fontFamily: fonts.regular }]}>{confirmLabel}</Text>
             </Pressable>
           </View>
         </View>

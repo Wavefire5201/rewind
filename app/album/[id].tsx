@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { CaretLeft, DownloadSimple, Camera, BellSimple, Play } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
@@ -28,6 +29,8 @@ export default function AlbumDetailScreen() {
   const { profile, albums, addPhoto, updatePhoto, deletePhoto, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === id);
   useStreak(id, album?.createdAt);
+
+  const { fonts, typography } = useFont();
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -76,9 +79,9 @@ export default function AlbumDetailScreen() {
             if (picked.length === 0) return;
             setImportPhotos(picked.map(p => ({ uri: p.uri, suggestedDate: p.date ?? getToday() })));
             setShowImportModal(true);
-          } catch (e: any) {
+          } catch (e: unknown) {
             haptics.error();
-            Alert.alert('Import Failed', e.message);
+            Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
           }
         },
       },
@@ -94,10 +97,10 @@ export default function AlbumDetailScreen() {
               addPhoto(entry);
             }
             haptics.success();
-            Alert.alert('Imported', `${entries.length} photos restored from backup.`);
-          } catch (e: any) {
+            Alert.alert('Import Complete', `${entries.length} photos restored from backup.`);
+          } catch (e: unknown) {
             haptics.error();
-            Alert.alert('Import Failed', e.message);
+            Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
           }
         },
       },
@@ -122,7 +125,7 @@ export default function AlbumDetailScreen() {
     setShowImportModal(false);
     setImportPhotos([]);
     haptics.success();
-    Alert.alert('Imported', `${entries.length} photo${entries.length !== 1 ? 's' : ''} imported.`);
+    Alert.alert('Import Complete', `${entries.length} photo${entries.length !== 1 ? 's' : ''} added to this album.`);
   }
 
   function formatReminderTime(time: string): string {
@@ -156,7 +159,7 @@ export default function AlbumDetailScreen() {
     await syncAllReminders(albums.map(a => a.id === id ? updatedAlbum : a));
   }
 
-  async function handleReminderTimeChange(_event: any, selectedDate?: Date) {
+  async function handleReminderTimeChange(_event: unknown, selectedDate?: Date) {
     if (Platform.OS === 'android') setShowReminderTimePicker(false);
     if (!selectedDate || !album) return;
     const hh = String(selectedDate.getHours()).padStart(2, '0');
@@ -181,12 +184,24 @@ export default function AlbumDetailScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage }, animation: 'slide_from_right' }} />
       <View style={styles.header}>
-        <Pressable onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }} hitSlop={12} style={styles.backBtn}>
+        <Pressable
+          onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+          hitSlop={12}
+          style={styles.backBtn}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
         </Pressable>
-        <Text style={styles.title}>{albumName}</Text>
+        <Text style={[styles.title, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={handleImport} hitSlop={12} style={styles.headerBtn}>
+          <Pressable
+            onPress={handleImport}
+            hitSlop={12}
+            style={styles.headerBtn}
+            accessibilityLabel="Import photos"
+            accessibilityRole="button"
+          >
             <DownloadSimple size={20} color={Colors.textPrimary} weight="regular" />
           </Pressable>
           {photos.length >= 2 && (
@@ -194,6 +209,8 @@ export default function AlbumDetailScreen() {
               onPress={() => { haptics.tap(); router.push({ pathname: '/album/timelapse', params: { albumId: id } }); }}
               hitSlop={12}
               style={styles.headerBtn}
+              accessibilityLabel="Play timelapse"
+              accessibilityRole="button"
             >
               <Play size={20} color={Colors.textPrimary} weight="regular" />
             </Pressable>
@@ -214,14 +231,14 @@ export default function AlbumDetailScreen() {
               contentFit="cover"
             />
             <View style={styles.todayInfo}>
-              <Text style={styles.todayCaptured}>captured today</Text>
+              <Text style={[styles.todayCaptured, { fontFamily: fonts.regular }]}>captured today</Text>
               {todayPhoto.caption ? (
-                <Text style={styles.todayCaption} numberOfLines={1}>{todayPhoto.caption}</Text>
+                <Text style={typography.small} numberOfLines={1}>{todayPhoto.caption}</Text>
               ) : null}
             </View>
           </View>
         ) : (
-          <Text style={styles.todayPrompt}>you haven't captured today</Text>
+          <Text style={[styles.todayPrompt, { fontFamily: fonts.regular }]}>you haven't captured today</Text>
         )}
 
         <MonthHeader
@@ -262,6 +279,8 @@ export default function AlbumDetailScreen() {
             <Pressable
               style={({ pressed }) => [styles.settingsRow, pressed && { opacity: 0.7 }]}
               onPress={handleReminderToggle}
+              accessibilityLabel={album?.reminderEnabled ? 'Disable daily reminder' : 'Enable daily reminder'}
+              accessibilityRole="button"
             >
               <View style={styles.settingsLeft}>
                 <BellSimple
@@ -269,9 +288,9 @@ export default function AlbumDetailScreen() {
                   color={album?.reminderEnabled ? Colors.accent : Colors.textSecondary}
                   weight="light"
                 />
-                <Text style={styles.settingsLabel}>Daily Reminder</Text>
+                <Text style={typography.body}>daily reminder</Text>
               </View>
-              <Text style={styles.settingsValue}>
+              <Text style={[styles.settingsValue, { fontFamily: fonts.regular }]}>
                 {album?.reminderEnabled ? formatReminderTime(album.reminderTime) : 'Off'}
               </Text>
             </Pressable>
@@ -282,11 +301,13 @@ export default function AlbumDetailScreen() {
                 <Pressable
                   style={({ pressed }) => [styles.settingsRow, pressed && { opacity: 0.7 }]}
                   onPress={() => { haptics.tap(); setShowReminderTimePicker(prev => !prev); }}
+                  accessibilityLabel="Change reminder time"
+                  accessibilityRole="button"
                 >
                   <View style={styles.settingsLeft}>
-                    <Text style={styles.settingsLabel}>Reminder Time</Text>
+                    <Text style={typography.body}>reminder time</Text>
                   </View>
-                  <Text style={[styles.settingsValue, { color: Colors.accent }]}>
+                  <Text style={[styles.settingsValue, { fontFamily: fonts.regular, color: Colors.accent }]}>
                     {formatReminderTime(album.reminderTime)}
                   </Text>
                 </Pressable>
@@ -327,8 +348,10 @@ export default function AlbumDetailScreen() {
                 ],
               );
             }}
+            accessibilityLabel="Delete album"
+            accessibilityRole="button"
           >
-            <Text style={styles.deleteBtnText}>delete album</Text>
+            <Text style={[styles.deleteBtnText, { fontFamily: fonts.regular }]}>delete album</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -337,6 +360,8 @@ export default function AlbumDetailScreen() {
       <Pressable
         onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: id } }); }}
         style={[styles.fab, { bottom: insets.bottom + 16 }]}
+        accessibilityLabel="Take photo"
+        accessibilityRole="button"
       >
         <Camera size={24} color={Colors.bgPage} weight="regular" />
       </Pressable>
@@ -417,15 +442,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textPrimary,
   },
-  todayCaption: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    color: Colors.textSecondary,
-  },
   todayPrompt: {
     fontFamily: Fonts.mono.regular,
     fontSize: 13,
-    color: Colors.accent,
+    color: Colors.streak,
   },
   fab: {
     position: 'absolute',
@@ -454,11 +474,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  settingsLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 14,
-    color: Colors.textPrimary,
-  },
   settingsValue: {
     fontFamily: Fonts.mono.regular,
     fontSize: 13,
@@ -477,6 +492,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.mono.regular,
     fontSize: 13,
     lineHeight: 18,
-    color: '#E85D5D',
+    color: Colors.danger,
   },
 });

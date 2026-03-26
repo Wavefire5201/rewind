@@ -49,7 +49,7 @@ function Filmstrip({ photos, currentIndex, onSelect }: FilmstripProps) {
     });
   }, [currentIndex, photos.length]);
 
-  const getItemLayout = useCallback((_: any, index: number) => ({
+  const getItemLayout = useCallback((_: unknown, index: number) => ({
     length: ITEM_WIDTH,
     offset: ITEM_WIDTH * index,
     index,

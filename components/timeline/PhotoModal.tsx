@@ -26,7 +26,8 @@ import {
   Gesture,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
-import { Colors, Fonts, Typography } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import { formatDateLabel, formatTime, getDayNumber } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 import { haptics } from '@/utils/haptics';
@@ -140,6 +141,7 @@ export default function PhotoModal({
   onDelete,
   onUpdateCaption,
 }: PhotoModalProps) {
+  const { fonts, typography } = useFont();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -176,15 +178,18 @@ export default function PhotoModal({
   const photoWidth = screenWidth;
   const photoHeight = Math.min(screenWidth * (4 / 3), screenHeight * 0.55);
 
+  const safeInitialIndex = Math.max(0, Math.min(initialIndex, photos.length - 1));
+
   // Sync index when modal opens with a (possibly new) initialIndex
   const handleVisible = useCallback(() => {
     translateY.value = 0;
-    setCurrentIndex(initialIndex);
+    const safeIdx = Math.max(0, Math.min(initialIndex, photos.length - 1));
+    setCurrentIndex(safeIdx);
     setEditingCaption(false);
     setTimeout(() => {
-      flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      flatListRef.current?.scrollToIndex({ index: safeIdx, animated: false });
     }, 0);
-  }, [initialIndex]);
+  }, [initialIndex, photos.length]);
 
   const currentPhoto = photos[currentIndex] ?? null;
 
@@ -266,16 +271,20 @@ export default function PhotoModal({
               <Pressable
                 style={styles.headerBtn}
                 onPress={() => { haptics.tap(); onClose(); }}
-                hitSlop={8}
+                hitSlop={12}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
               >
                 <X size={20} color={Colors.textPrimary} weight="light" />
               </Pressable>
               <Pressable
                 style={styles.headerBtn}
                 onPress={handleDeletePress}
-                hitSlop={8}
+                hitSlop={12}
+                accessibilityLabel="Delete photo"
+                accessibilityRole="button"
               >
-                <Trash size={20} color="#E85D5D" weight="light" />
+                <Trash size={20} color={Colors.danger} weight="light" />
               </Pressable>
             </View>
 
@@ -289,7 +298,7 @@ export default function PhotoModal({
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                initialScrollIndex={initialIndex}
+                initialScrollIndex={safeInitialIndex}
                 getItemLayout={(_, index) => ({
                   length: photoWidth,
                   offset: photoWidth * index,
@@ -304,7 +313,7 @@ export default function PhotoModal({
             {/* Metadata + caption */}
             {currentPhoto && (
               <View style={styles.meta}>
-                <Text style={[Typography.sectionLabel, styles.dateRow]}>
+                <Text style={[typography.sectionLabel, styles.dateRow]}>
                   {formatDateLabel(currentPhoto.date)}
                   {'  ·  '}
                   {formatTime(currentPhoto.capturedAt)}
@@ -315,30 +324,42 @@ export default function PhotoModal({
                 {editingCaption ? (
                   <View style={styles.captionEditRow}>
                     <TextInput
-                      style={styles.captionInput}
+                      style={[styles.captionInput, { fontFamily: fonts.regular }]}
                       value={captionDraft}
                       onChangeText={setCaptionDraft}
-                      placeholder="Add caption..."
+                      placeholder="add a caption..."
                       placeholderTextColor={Colors.textTertiary}
                       autoFocus
                       multiline
                       returnKeyType="done"
                       onSubmitEditing={handleCaptionSave}
+                      maxLength={200}
                     />
-                    <Pressable onPress={handleCaptionSave} hitSlop={8} style={styles.captionAction}>
+                    <Pressable
+                      onPress={handleCaptionSave}
+                      hitSlop={12}
+                      style={styles.captionAction}
+                      accessibilityLabel="Save caption"
+                      accessibilityRole="button"
+                    >
                       <Check size={18} color={Colors.accent} weight="bold" />
                     </Pressable>
                   </View>
                 ) : (
-                  <Pressable onPress={handleCaptionEditPress} style={styles.captionRow}>
-                    <Text style={[Typography.caption, styles.captionText]}>
-                      {currentPhoto.caption || 'Add caption...'}
+                  <Pressable
+                    onPress={handleCaptionEditPress}
+                    style={styles.captionRow}
+                    accessibilityLabel="Edit caption"
+                    accessibilityRole="button"
+                  >
+                    <Text style={[typography.caption, styles.captionText]}>
+                      {currentPhoto.caption || 'add a caption...'}
                     </Text>
                     <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
                   </Pressable>
                 )}
 
-                <Text style={[Typography.tiny, styles.pageIndicator]}>
+                <Text style={[typography.tiny, styles.pageIndicator]}>
                   {currentIndex + 1} / {photos.length}
                 </Text>
               </View>
@@ -420,8 +441,10 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   captionAction: {
-    paddingLeft: 8,
-    paddingTop: 2,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pageIndicator: {
     color: Colors.textSecondary,

@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: BorderRadius.pill,
+    borderRadius: BorderRadius.none,
     paddingVertical: 10,
     paddingHorizontal: 20,
     gap: 8,

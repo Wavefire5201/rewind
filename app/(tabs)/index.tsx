@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Plus, CaretRight, Camera, GearSix } from 'phosphor-react-native';
-import { Colors, Fonts, Sizes } from '@/constants/theme';
+import { Colors, Fonts, Sizes, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
+import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { useGreeting } from '@/hooks/useGreeting';
@@ -30,6 +31,7 @@ function HeroCard({
   const router = useRouter();
   const { todayPhoto } = usePhotos(albumId);
   const { currentStreak, weekStatus } = useStreak(albumId, albumCreatedAt);
+  const { fonts, typography } = useFont();
 
   function handlePress() {
     haptics.tap();
@@ -37,10 +39,11 @@ function HeroCard({
   }
 
   return (
-    <TouchableOpacity
-      style={styles.heroCard}
-      activeOpacity={0.8}
+    <Pressable
+      style={({ pressed }) => [styles.heroCard, pressed && { opacity: 0.8 }]}
       onPress={handlePress}
+      accessibilityLabel={`${albumName} album`}
+      accessibilityRole="button"
     >
       {todayPhoto ? (
         <Image
@@ -51,7 +54,7 @@ function HeroCard({
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.heroEmpty]}>
           <Camera size={36} color={Colors.textTertiary} weight="light" />
-          <Text style={styles.heroEmptyText}>take today's photo</Text>
+          <Text style={[styles.heroEmptyText, { fontFamily: fonts.regular }]}>take today's photo</Text>
         </View>
       )}
 
@@ -63,8 +66,8 @@ function HeroCard({
       <View style={styles.heroOverlay}>
         <View style={styles.heroOverlayTop}>
           <View style={styles.heroOverlayLeft}>
-            <Text style={styles.heroAlbumName}>{albumName}</Text>
-            <Text style={styles.heroStreak}>
+            <Text style={[styles.heroAlbumName, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
+            <Text style={[typography.small, { color: Colors.streak }]}>
               {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
             </Text>
           </View>
@@ -74,6 +77,7 @@ function HeroCard({
           {weekStatus.map((wd) => (
             <View key={wd.date} style={styles.weekDayCol}>
               <View
+                accessibilityLabel={`${wd.date}: ${wd.status}`}
                 style={[
                   styles.weekDot,
                   (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
@@ -85,7 +89,7 @@ function HeroCard({
           ))}
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -96,6 +100,7 @@ function AlbumRow({ album }: { album: Album }) {
   const { totalPhotos, mostRecentPhoto } = usePhotos(album.id);
   const { currentStreak } = useStreak(album.id, album.createdAt);
   const imageUri = mostRecentPhoto?.imageUri ?? null;
+  const { fonts, typography } = useFont();
 
   function handlePress() {
     haptics.tap();
@@ -103,7 +108,12 @@ function AlbumRow({ album }: { album: Album }) {
   }
 
   return (
-    <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={handlePress}>
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+      onPress={handlePress}
+      accessibilityLabel={`${album.name} album`}
+      accessibilityRole="button"
+    >
       <View style={styles.thumbnail}>
         {imageUri ? (
           <Image
@@ -116,13 +126,13 @@ function AlbumRow({ album }: { album: Album }) {
         )}
       </View>
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{album.name}</Text>
-        <Text style={styles.rowMeta}>
+        <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
+        <Text style={[typography.small, { color: Colors.textTertiary }]}>
           {currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
         </Text>
       </View>
       <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -134,6 +144,7 @@ export default function HomeScreen() {
   const { albums, isLoading, addAlbum } = useAppContext();
   const { greeting, dayNumber } = useGreeting();
   const [showNewAlbumModal, setShowNewAlbumModal] = useState(false);
+  const { fonts, typography } = useFont();
 
   useEffect(() => {
     if (!isLoading && albums.length === 0) {
@@ -154,7 +165,23 @@ export default function HomeScreen() {
     haptics.success();
   }
 
-  if (isLoading || albums.length === 0) {
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={[styles.content, { paddingHorizontal: 28 }]}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.skeletonGreeting} />
+              <View style={styles.skeletonDay} />
+            </View>
+          </View>
+          <View style={styles.skeletonHero} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (albums.length === 0) {
     return null;
   }
 
@@ -170,17 +197,18 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{greeting}</Text>
-            <Text style={styles.dayNumber}>day {dayNumber}</Text>
+            <Text style={[styles.greeting, { fontFamily: fonts.regular }]}>{greeting}</Text>
+            <Text style={typography.small}>day {dayNumber}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.gearBtn}
-            activeOpacity={0.7}
+          <Pressable
+            style={({ pressed }) => [styles.gearBtn, pressed && { opacity: 0.7 }]}
             onPress={() => { haptics.tap(); router.push('/(tabs)/profile'); }}
             hitSlop={12}
+            accessibilityLabel="Settings"
+            accessibilityRole="button"
           >
             <GearSix size={22} color={Colors.textSecondary} weight="regular" />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Hero card */}
@@ -203,12 +231,17 @@ export default function HomeScreen() {
         )}
 
         {/* New album button */}
-        <TouchableOpacity style={styles.newAlbumRow} activeOpacity={0.7} onPress={handleCreateAlbum}>
+        <Pressable
+          style={({ pressed }) => [styles.newAlbumRow, pressed && { opacity: 0.7 }]}
+          onPress={handleCreateAlbum}
+          accessibilityLabel="Create new album"
+          accessibilityRole="button"
+        >
           <View style={styles.newAlbumIcon}>
             <Plus size={20} color={Colors.accent} weight="regular" />
           </View>
-          <Text style={styles.newAlbumText}>new album</Text>
-        </TouchableOpacity>
+          <Text style={[styles.newAlbumText, { fontFamily: fonts.regular }]}>new album</Text>
+        </Pressable>
       </ScrollView>
       <TextInputModal
         visible={showNewAlbumModal}
@@ -261,12 +294,6 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     color: Colors.textPrimary,
   },
-  dayNumber: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Colors.textSecondary,
-  },
 
   // Hero card
   heroCard: {
@@ -312,12 +339,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: Colors.textPrimary,
   },
-  heroStreak: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Colors.accent,
-  },
   weekRow: {
     flexDirection: 'row',
     gap: 10,
@@ -335,11 +356,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderPrimary,
   },
   weekDotFilled: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.streak,
+    borderColor: Colors.streak,
   },
   weekDotToday: {
-    borderColor: Colors.accent,
+    borderColor: Colors.streak,
     backgroundColor: 'transparent',
   },
   weekDotDim: {
@@ -378,17 +399,23 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
   },
-  rowName: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.textPrimary,
+
+  // Skeleton
+  skeletonGreeting: {
+    width: 160,
+    height: 28,
+    backgroundColor: Colors.bgCard,
   },
-  rowMeta: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Colors.textTertiary,
+  skeletonDay: {
+    width: 60,
+    height: 12,
+    backgroundColor: Colors.bgCard,
+    marginTop: 4,
+  },
+  skeletonHero: {
+    width: '100%',
+    height: 300,
+    backgroundColor: Colors.bgCard,
   },
 
   // New album button

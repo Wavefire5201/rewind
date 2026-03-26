@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { File, Paths } from 'expo-file-system';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import PillButton from '@/components/ui/PillButton';
 import { haptics } from '@/utils/haptics';
 
@@ -20,6 +21,7 @@ export default function CapturePreview({
   onSave,
   onRetake,
 }: CapturePreviewProps) {
+  const { fonts } = useFont();
   const [caption, setCaption] = useState('');
   const [saving, setSaving] = useState(false);
   const { width } = useWindowDimensions();
@@ -80,9 +82,9 @@ export default function CapturePreview({
         <TextInput
           value={caption}
           onChangeText={(text) => setCaption(text.slice(0, 140))}
-          placeholder="Add a caption..."
+          placeholder="add a caption..."
           placeholderTextColor={Colors.textTertiary}
-          style={styles.captionInput}
+          style={[styles.captionInput, { fontFamily: fonts.regular }]}
           multiline
         />
         <View style={styles.buttonRow}>

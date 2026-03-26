@@ -3,8 +3,9 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CaretLeft } from 'phosphor-react-native';
-import { Colors, Fonts, Typography } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
+import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { haptics } from '@/utils/haptics';
@@ -16,14 +17,21 @@ export default function ProfileScreen() {
   const { settings, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
   const { totalPhotos } = usePhotos();
   const { currentStreak, consistency } = useStreak();
+  const { fonts } = useFont();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        <Pressable onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }} hitSlop={12} style={styles.backBtn}>
+        <Pressable
+          onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+          hitSlop={12}
+          style={styles.backBtn}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
         </Pressable>
-        <Text style={styles.title}>profile</Text>
+        <Text style={[styles.title, { fontFamily: fonts.regular }]}>profile</Text>
         <View style={styles.backBtn} />
       </View>
       <ScrollView

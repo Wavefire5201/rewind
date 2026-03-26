@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, StyleSheet, ViewStyle } from 'react-native';
 import { Typography } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface SectionLabelProps {
   children: string;
@@ -8,7 +9,8 @@ interface SectionLabelProps {
 }
 
 export default function SectionLabel({ children, style }: SectionLabelProps) {
-  return <Text style={[styles.label, style]}>{children.toLowerCase()}</Text>;
+  const { fonts } = useFont();
+  return <Text style={[styles.label, { fontFamily: fonts.regular }, style]}>{children.toLowerCase()}</Text>;
 }
 
 const styles = StyleSheet.create({

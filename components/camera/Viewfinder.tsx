@@ -1,7 +1,8 @@
 import React, { forwardRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Colors, Typography } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 import GridOverlay from '@/components/camera/GridOverlay';
 import GhostOverlay from '@/components/camera/GhostOverlay';
 
@@ -15,6 +16,7 @@ interface ViewfinderProps {
 
 const Viewfinder = forwardRef<CameraView, ViewfinderProps>(
   ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange, isMirrored }, ref) => {
+    const { typography } = useFont();
     const [permission, requestPermission] = useCameraPermissions();
 
     if (!permission) {
@@ -24,11 +26,11 @@ const Viewfinder = forwardRef<CameraView, ViewfinderProps>(
     if (!permission.granted) {
       return (
         <View style={[styles.container, styles.permissionContainer]}>
-          <Text style={[Typography.small, styles.permissionText]}>
+          <Text style={[typography.small, styles.permissionText]}>
             Camera access is required to take photos.
           </Text>
           <Text
-            style={[Typography.small, styles.permissionLink]}
+            style={[typography.small, styles.permissionLink]}
             onPress={requestPermission}
           >
             Grant Permission

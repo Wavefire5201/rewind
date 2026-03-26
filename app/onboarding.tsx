@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
+import { useFont } from '@/context/FontContext';
 import { createAlbum } from '@/utils/albums';
 
 function makeDefaultTime(): Date {
@@ -30,16 +31,22 @@ function dateToTimeString(d: Date): string {
 // ─── Step 1: Welcome ────────────────────────────────────────────────────────
 
 function StepWelcome({ onNext }: { onNext: () => void }) {
+  const { fonts } = useFont();
   return (
     <View style={styles.stepContainer}>
       <View style={styles.centerContent}>
-        <Text style={styles.displayTitle}>rewind</Text>
-        <Text style={styles.subtitle}>capture every day. watch yourself change.</Text>
+        <Text style={[styles.displayTitle, { fontFamily: fonts.light }]}>rewind</Text>
+        <Text style={[styles.subtitle, { fontFamily: fonts.regular }]}>capture every day. watch yourself change.</Text>
       </View>
       <View style={styles.buttonGroup}>
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85} onPress={onNext}>
-          <Text style={styles.primaryButtonText}>get started</Text>
-        </TouchableOpacity>
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
+          onPress={onNext}
+          accessibilityLabel="Get started"
+          accessibilityRole="button"
+        >
+          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>get started</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -48,6 +55,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 // ─── Step 2: Name album ─────────────────────────────────────────────────────
 
 function StepNameAlbum({ onNext }: { onNext: (name: string) => void }) {
+  const { fonts } = useFont();
   const [value, setValue] = useState('');
   const inputRef = useRef<TextInput>(null);
 
@@ -62,10 +70,10 @@ function StepNameAlbum({ onNext }: { onNext: (name: string) => void }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.centerContent}>
-        <Text style={styles.stepTitle}>name your album</Text>
+        <Text style={[styles.stepTitle, { fontFamily: fonts.light }]}>name your album</Text>
         <TextInput
           ref={inputRef}
-          style={styles.textInput}
+          style={[styles.textInput, { fontFamily: fonts.regular }]}
           value={value}
           onChangeText={setValue}
           placeholder="daily selfie"
@@ -75,17 +83,19 @@ function StepNameAlbum({ onNext }: { onNext: (name: string) => void }) {
           autoCorrect={false}
           returnKeyType="done"
           onSubmitEditing={handleContinue}
+          maxLength={50}
         />
-        <Text style={styles.hint}>you can create more albums later</Text>
+        <Text style={[styles.hint, { fontFamily: fonts.regular }]}>you can create more albums later</Text>
       </View>
       <View style={styles.buttonGroup}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.85}
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
           onPress={handleContinue}
+          accessibilityLabel="Continue"
+          accessibilityRole="button"
         >
-          <Text style={styles.primaryButtonText}>continue</Text>
-        </TouchableOpacity>
+          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>continue</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -100,6 +110,7 @@ function StepReminder({
   onEnable: (time: string) => void;
   onSkip: () => void;
 }) {
+  const { fonts } = useFont();
   const [time, setTime] = useState<Date>(makeDefaultTime());
   const [permissionGranted, setPermissionGranted] = useState(false);
 
@@ -120,8 +131,8 @@ function StepReminder({
   return (
     <View style={styles.stepContainer}>
       <View style={styles.centerContent}>
-        <Text style={styles.stepTitle}>daily reminder</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.stepTitle, { fontFamily: fonts.light }]}>daily reminder</Text>
+        <Text style={[styles.subtitle, { fontFamily: fonts.regular }]}>
           {permissionGranted
             ? 'pick a time for your daily nudge'
             : "we'll nudge you to capture each day"}
@@ -141,19 +152,44 @@ function StepReminder({
         )}
       </View>
       <View style={styles.buttonGroup}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.85}
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
           onPress={handleEnablePress}
+          accessibilityLabel={permissionGranted ? 'Set reminder' : 'Enable reminder'}
+          accessibilityRole="button"
         >
-          <Text style={styles.primaryButtonText}>
+          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>
             {permissionGranted ? 'set reminder' : 'enable reminder'}
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.textButton} activeOpacity={0.7} onPress={onSkip}>
-          <Text style={styles.textButtonText}>skip</Text>
-        </TouchableOpacity>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.textButton, pressed && { opacity: 0.7 }]}
+          onPress={onSkip}
+          accessibilityLabel="Skip reminder setup"
+          accessibilityRole="button"
+        >
+          <Text style={[styles.textButtonText, { fontFamily: fonts.regular }]}>skip</Text>
+        </Pressable>
       </View>
+    </View>
+  );
+}
+
+// ─── StepDots ────────────────────────────────────────────────────────────────
+
+function StepDots({ current, total }: { current: number; total: number }) {
+  return (
+    <View style={styles.dotsRow}>
+      {Array.from({ length: total }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.dot,
+            i + 1 === current && styles.dotActive,
+            i + 1 < current && styles.dotDone,
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -179,7 +215,7 @@ export default function OnboardingScreen() {
     const newAlbum = createAlbum(albumNameRef.current, { reminderEnabled, reminderTime });
     addAlbum(newAlbum);
     updateProfile({ joinDate: new Date().toISOString().split('T')[0] });
-    router.replace({ pathname: '/album/[id]', params: { id: newAlbum.id } });
+    router.replace({ pathname: '/(tabs)/camera', params: { albumId: newAlbum.id } });
   }
 
   function handleReminderEnable(time: string) {
@@ -192,6 +228,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <StepDots current={step} total={3} />
       {step === 1 && <StepWelcome onNext={handleWelcomeNext} />}
       {step === 2 && <StepNameAlbum onNext={handleNameNext} />}
       {step === 3 && <StepReminder onEnable={handleReminderEnable} onSkip={handleReminderSkip} />}
@@ -273,6 +310,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: Colors.bgPage,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 16,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.borderPrimary,
+  },
+  dotActive: {
+    backgroundColor: Colors.accent,
+    width: 20,
+  },
+  dotDone: {
+    backgroundColor: Colors.textTertiary,
   },
   textButton: {
     paddingVertical: 12,

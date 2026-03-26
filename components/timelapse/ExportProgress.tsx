@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Modal, Pressable, StyleSheet } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface ExportProgressProps {
   visible: boolean;
@@ -11,6 +12,7 @@ interface ExportProgressProps {
 }
 
 export default function ExportProgress({ visible, label, current, total, onCancel }: ExportProgressProps) {
+  const { fonts } = useFont();
   const percent = total > 0 ? Math.round((current / total) * 100) : 0;
   const fillPercent = total > 0 ? (current / total) * 100 : 0;
 
@@ -18,17 +20,17 @@ export default function ExportProgress({ visible, label, current, total, onCance
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <Text style={styles.label}>{label}</Text>
+          <Text style={[styles.label, { fontFamily: fonts.regular }]}>{label}</Text>
 
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${fillPercent}%` }]} />
           </View>
 
-          <Text style={styles.percent}>{percent}%</Text>
+          <Text style={[styles.percent, { fontFamily: fonts.regular }]}>{percent}%</Text>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={onCancel} activeOpacity={0.7}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+          <Pressable style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]} onPress={onCancel}>
+            <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>Cancel</Text>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -78,6 +80,6 @@ const styles = StyleSheet.create({
   cancelText: {
     fontFamily: Fonts.mono.regular,
     fontSize: 12,
-    color: '#E85D5D',
+    color: Colors.danger,
   },
 });

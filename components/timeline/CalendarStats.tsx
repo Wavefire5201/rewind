@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 interface CalendarStatsProps {
   captured: number;
@@ -8,15 +9,16 @@ interface CalendarStatsProps {
 }
 
 export default function CalendarStats({ captured, missed }: CalendarStatsProps) {
+  const { fonts } = useFont();
   return (
     <View style={styles.row}>
       <View style={styles.stat}>
         <View style={styles.dotWhite} />
-        <Text style={styles.label}>{captured} captured</Text>
+        <Text style={[styles.label, { fontFamily: fonts.regular }]}>{captured} captured</Text>
       </View>
       <View style={styles.stat}>
         <View style={styles.dotGray} />
-        <Text style={styles.label}>{missed} missed</Text>
+        <Text style={[styles.label, { fontFamily: fonts.regular }]}>{missed} missed</Text>
       </View>
     </View>
   );

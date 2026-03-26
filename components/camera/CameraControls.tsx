@@ -24,16 +24,34 @@ export default function CameraControls({
 }: CameraControlsProps) {
   return (
     <View style={styles.row}>
-      <CircleButton onPress={onFlip} size={48} style={styles.buttonNoBorder}>
+      <CircleButton
+        onPress={onFlip}
+        size={48}
+        style={styles.buttonNoBorder}
+        accessibilityLabel="Flip camera"
+        accessibilityRole="button"
+      >
         <ArrowsClockwise size={20} color={Colors.textSecondary} weight="light" />
       </CircleButton>
       <ShutterButton onPress={onCapture} />
       {isFrontCamera ? (
-        <CircleButton onPress={onMirrorToggle} size={48} style={styles.buttonNoBorder}>
+        <CircleButton
+          onPress={onMirrorToggle}
+          size={48}
+          style={styles.buttonNoBorder}
+          accessibilityLabel={isMirrored ? 'Disable mirror' : 'Enable mirror'}
+          accessibilityRole="button"
+        >
           <ArrowsLeftRight size={20} color={isMirrored ? Colors.accent : Colors.textSecondary} weight="light" />
         </CircleButton>
       ) : (
-        <CircleButton onPress={onTimerToggle} size={48} style={styles.buttonNoBorder}>
+        <CircleButton
+          onPress={onTimerToggle}
+          size={48}
+          style={styles.buttonNoBorder}
+          accessibilityLabel="Timer"
+          accessibilityRole="button"
+        >
           <Timer size={20} color={Colors.textSecondary} weight="light" />
         </CircleButton>
       )}

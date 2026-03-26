@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Play, Pause, SkipBack, SkipForward } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
 import { Colors, Fonts } from '@/constants/theme';
+import { useFont } from '@/context/FontContext';
 
 function formatBadgeDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
@@ -25,6 +26,7 @@ interface TimelapsePlayerProps {
 
 const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
   function TimelapsePlayer({ photos, speed, onFrameChange, onPlaybackEnd }, ref) {
+    const { fonts } = useFont();
     const [frameIndex, setFrameIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const frameRef = useRef(0);
@@ -110,7 +112,7 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
           )}
 
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>
+            <Text style={[styles.badgeText, { fontFamily: fonts.regular }]}>
               {current ? formatBadgeDate(current.date) : ''}
             </Text>
           </View>
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 16,
-    backgroundColor: '#1A1A1C99',
+    backgroundColor: Colors.bgPageTranslucent,
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
