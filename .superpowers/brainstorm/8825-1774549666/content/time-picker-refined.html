@@ -1,0 +1,96 @@
+<h2>Time Picker — Refined Scroll Wheels</h2>
+<p class="subtitle">Polished with micro-animations and haptic feedback</p>
+
+<div class="mockup" style="max-width:380px;margin:0 auto;">
+  <div class="mockup-header">Custom Time Picker Sheet</div>
+  <div class="mockup-body" style="padding:0;">
+    <div style="background:#1A1A1C;color:#F5F5F0;font-family:'JetBrains Mono','Courier New',monospace;padding:28px 24px;text-align:center;">
+
+      <!-- Handle -->
+      <div style="margin-bottom:20px;">
+        <div style="width:36px;height:4px;background:#3A3A3E;border-radius:2px;display:inline-block;"></div>
+      </div>
+
+      <!-- Label -->
+      <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:24px;">REMINDER TIME</div>
+
+      <!-- Scroll wheels -->
+      <div style="display:flex;justify-content:center;align-items:center;gap:0;position:relative;">
+
+        <!-- Selection window — spans the center row -->
+        <div style="position:absolute;left:16px;right:16px;height:52px;border-top:1px solid #3A3A3E;border-bottom:1px solid #3A3A3E;pointer-events:none;z-index:1;"></div>
+
+        <!-- Hour column -->
+        <div style="width:72px;overflow:hidden;">
+          <div style="color:#2A2A2C;font-size:22px;padding:12px 0;transition:color 0.2s;">06</div>
+          <div style="color:#3A3A3E;font-size:22px;padding:12px 0;transition:color 0.2s;">07</div>
+          <div style="color:#F5F5F0;font-size:28px;padding:10px 0;font-weight:300;transition:all 0.2s;">08</div>
+          <div style="color:#3A3A3E;font-size:22px;padding:12px 0;transition:color 0.2s;">09</div>
+          <div style="color:#2A2A2C;font-size:22px;padding:12px 0;transition:color 0.2s;">10</div>
+        </div>
+
+        <!-- Colon separator -->
+        <div style="font-size:28px;color:#5A5A5E;padding:0 2px;align-self:center;margin-top:-2px;">:</div>
+
+        <!-- Minute column -->
+        <div style="width:72px;overflow:hidden;">
+          <div style="color:#2A2A2C;font-size:22px;padding:12px 0;">50</div>
+          <div style="color:#3A3A3E;font-size:22px;padding:12px 0;">55</div>
+          <div style="color:#F5F5F0;font-size:28px;padding:10px 0;font-weight:300;">00</div>
+          <div style="color:#3A3A3E;font-size:22px;padding:12px 0;">05</div>
+          <div style="color:#2A2A2C;font-size:22px;padding:12px 0;">10</div>
+        </div>
+
+        <!-- AM/PM column -->
+        <div style="width:48px;margin-left:12px;overflow:hidden;">
+          <div style="padding:12px 0;">&nbsp;</div>
+          <div style="padding:12px 0;">&nbsp;</div>
+          <div style="color:#C4A46C;font-size:14px;padding:10px 0;letter-spacing:1px;">AM</div>
+          <div style="color:#3A3A3E;font-size:14px;padding:12px 0;letter-spacing:1px;">PM</div>
+          <div style="padding:12px 0;">&nbsp;</div>
+        </div>
+      </div>
+
+      <!-- Confirm button -->
+      <div style="margin-top:28px;background:#8FA67A;padding:15px;font-size:12px;color:#1A1A1C;letter-spacing:1px;">set time</div>
+
+      <!-- Cancel -->
+      <div style="margin-top:12px;padding:10px;font-size:11px;color:#5A5A5E;">cancel</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px;">
+  <h3>Micro-Animations & Haptics</h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div>
+      <h4 style="color:#C4A46C;font-size:13px;margin-bottom:8px;">🎯 Scroll Feel</h4>
+      <ul style="font-size:13px;line-height:1.8;color:#aaa;">
+        <li><strong>Snap-to-item</strong> — scroll decelerates and snaps to nearest value with spring physics (damping: 20, stiffness: 150)</li>
+        <li><strong>Scale cascade</strong> — selected item is 28px, ±1 items 22px, ±2 items 22px + dimmed. Size transitions with 150ms ease-out</li>
+        <li><strong>Opacity gradient</strong> — items fade out toward edges: 100% → 50% → 20% opacity based on distance from center</li>
+        <li><strong>Haptic tick</strong> — light haptic on each value snap (haptics.selection), stronger on AM↔PM flip</li>
+      </ul>
+    </div>
+    <div>
+      <h4 style="color:#8FA67A;font-size:13px;margin-bottom:8px;">✨ Sheet & Transitions</h4>
+      <ul style="font-size:13px;line-height:1.8;color:#aaa;">
+        <li><strong>Sheet entrance</strong> — slides up from bottom with spring (damping: 25), backdrop fades in 200ms</li>
+        <li><strong>Initial scroll</strong> — wheels animate from 12:00 to current value on open (staggered: hour first, minute 80ms later, AM/PM 160ms later)</li>
+        <li><strong>Confirm pulse</strong> — button gets a subtle scale pulse (1.0 → 1.02 → 1.0) on press before sheet dismisses</li>
+        <li><strong>AM/PM toggle</strong> — color crossfades between amber (AM) and a slightly cooler amber on change, with a light bounce</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>Implementation Notes</h3>
+  <ul style="font-size:13px;line-height:1.8;color:#aaa;">
+    <li><strong>Built with</strong> — Reanimated scroll handler + FlatList with snap, or a custom PanGesture wheel</li>
+    <li><strong>5-minute increments</strong> — 12 values per minute wheel (00, 05, 10 ... 55)</li>
+    <li><strong>Infinite scroll feel</strong> — wrap the data array 3x and reset scroll position silently at boundaries</li>
+    <li><strong>Also replaces</strong> the native DateTimePicker in onboarding step 3</li>
+  </ul>
+</div>

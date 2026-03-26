@@ -10,23 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import TimePicker from '@/components/ui/TimePicker';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import { createAlbum } from '@/utils/albums';
-
-function makeDefaultTime(): Date {
-  const d = new Date();
-  d.setHours(8, 0, 0, 0);
-  return d;
-}
-
-function dateToTimeString(d: Date): string {
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
 
 // ─── Step 1: Welcome ────────────────────────────────────────────────────────
 
@@ -111,7 +99,7 @@ function StepReminder({
   onSkip: () => void;
 }) {
   const { fonts } = useFont();
-  const [time, setTime] = useState<Date>(makeDefaultTime());
+  const [time, setTime] = useState<string>('08:00');
   const [permissionGranted, setPermissionGranted] = useState(false);
 
   async function handleEnablePress() {
@@ -125,7 +113,7 @@ function StepReminder({
       }
       return;
     }
-    onEnable(dateToTimeString(time));
+    onEnable(time);
   }
 
   return (
@@ -139,14 +127,9 @@ function StepReminder({
         </Text>
         {permissionGranted && (
           <View style={styles.pickerWrapper}>
-            <DateTimePicker
+            <TimePicker
               value={time}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={(_e, selected) => {
-                if (selected) setTime(selected);
-              }}
-              themeVariant="dark"
+              onChange={setTime}
             />
           </View>
         )}

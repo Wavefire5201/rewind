@@ -13,7 +13,6 @@ export function getDefaultSettings(): AppSettings {
     photoQuality: 'high',
     cloudBackupEnabled: false,
     mirrorSelfies: true,
-    fontFamily: 'jetbrains',
     use24hClock: false,
   };
 }

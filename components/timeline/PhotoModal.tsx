@@ -12,13 +12,14 @@ import {
   type ViewToken,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { X, Trash, PencilSimple, Check } from 'phosphor-react-native';
+import { X, Trash, PencilSimple, Check, ShareNetwork, Camera } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   interpolate,
+  Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
 import {
@@ -41,6 +42,7 @@ interface PhotoModalProps {
   onClose: () => void;
   onDelete: (id: string) => void;
   onUpdateCaption: (id: string, caption: string) => void;
+  onRetake?: (albumId: string) => void;
 }
 
 // ─── ZoomableImage ────────────────────────────────────────────────────────────
@@ -140,6 +142,7 @@ export default function PhotoModal({
   onClose,
   onDelete,
   onUpdateCaption,
+  onRetake,
 }: PhotoModalProps) {
   const { fonts, typography } = useFont();
   const insets = useSafeAreaInsets();
@@ -160,7 +163,7 @@ export default function PhotoModal({
       }
     })
     .onEnd((e) => {
-      if (e.translationY > 100) {
+      if (e.translationY > 150 || e.velocityY > 800) {
         translateY.value = withSpring(600, { damping: 20 });
         runOnJS(onClose)();
       } else {
@@ -168,9 +171,15 @@ export default function PhotoModal({
       }
     });
 
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: translateY.value },
+      { scale: interpolate(translateY.value, [0, 300], [1, 0.85], Extrapolation.CLAMP) },
+    ],
+  }));
+
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: interpolate(translateY.value, [0, 400], [1, 0]),
+    backgroundColor: `rgba(0,0,0,${interpolate(translateY.value, [0, 300], [0.75, 0], Extrapolation.CLAMP)})`,
   }));
 
   const flatListRef = useRef<FlatList>(null);
@@ -239,6 +248,28 @@ export default function PhotoModal({
     setEditingCaption(false);
   }
 
+  async function handleShare() {
+    if (!currentPhoto) return;
+    haptics.tap();
+    try {
+      const { shareAsync } = await import('expo-sharing');
+      await shareAsync(currentPhoto.imageUri);
+    } catch {}
+  }
+
+  function handleEdit() {
+    if (!currentPhoto) return;
+    haptics.tap();
+    Alert.alert('Coming Soon', 'Photo editing is not available yet.');
+  }
+
+  function handleRetake() {
+    if (!currentPhoto || !onRetake) return;
+    haptics.tap();
+    onClose();
+    onRetake(currentPhoto.albumId);
+  }
+
   const renderItem = useCallback(
     ({ item }: { item: PhotoEntry }) => (
       <View style={[styles.page, { width: photoWidth }]}>
@@ -264,111 +295,128 @@ export default function PhotoModal({
         {/* Tap-to-dismiss backdrop */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-              <Pressable
-                style={styles.headerBtn}
-                onPress={() => { haptics.tap(); onClose(); }}
-                hitSlop={12}
-                accessibilityLabel="Close"
-                accessibilityRole="button"
-              >
-                <X size={20} color={Colors.textPrimary} weight="light" />
-              </Pressable>
-              <Pressable
-                style={styles.headerBtn}
-                onPress={handleDeletePress}
-                hitSlop={12}
-                accessibilityLabel="Delete photo"
-                accessibilityRole="button"
-              >
-                <Trash size={20} color={Colors.danger} weight="light" />
-              </Pressable>
-            </View>
+        <Animated.View style={[StyleSheet.absoluteFill, backdropAnimatedStyle]}>
+          <GestureDetector gesture={panGesture}>
+            <Animated.View style={[styles.content, contentAnimatedStyle]}>
+              {/* Top safe area spacer */}
+              <View style={{ height: insets.top + 12 }} />
 
-            {/* Pager */}
-            {photos.length > 0 && (
-              <FlatList
-                ref={flatListRef}
-                data={photos}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={safeInitialIndex}
-                getItemLayout={(_, index) => ({
-                  length: photoWidth,
-                  offset: photoWidth * index,
-                  index,
-                })}
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={viewabilityConfig.current}
-                style={styles.pager}
-              />
-            )}
+              {/* Close button */}
+              <View style={styles.closeRow}>
+                <Pressable
+                  onPress={() => { haptics.tap(); onClose(); }}
+                  hitSlop={12}
+                  style={styles.closeBtn}
+                  accessibilityLabel="Close"
+                  accessibilityRole="button"
+                >
+                  <X size={20} color={Colors.textSecondary} weight="light" />
+                </Pressable>
+              </View>
 
-            {/* Metadata + caption */}
-            {currentPhoto && (
-              <View style={styles.meta}>
-                <Text style={[typography.sectionLabel, styles.dateRow]}>
-                  {formatDateLabel(currentPhoto.date)}
-                  {'  ·  '}
-                  {formatTime(currentPhoto.capturedAt)}
-                  {'  ·  DAY '}
-                  {getDayNumber(joinDate, currentPhoto.date)}
-                </Text>
+              {/* Pager */}
+              {photos.length > 0 && (
+                <FlatList
+                  ref={flatListRef}
+                  data={photos}
+                  renderItem={renderItem}
+                  keyExtractor={keyExtractor}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  initialScrollIndex={safeInitialIndex}
+                  getItemLayout={(_, index) => ({
+                    length: photoWidth,
+                    offset: photoWidth * index,
+                    index,
+                  })}
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig.current}
+                  style={styles.pager}
+                />
+              )}
 
-                {editingCaption ? (
-                  <View style={styles.captionEditRow}>
-                    <TextInput
-                      style={[styles.captionInput, { fontFamily: fonts.regular }]}
-                      value={captionDraft}
-                      onChangeText={setCaptionDraft}
-                      placeholder="add a caption..."
-                      placeholderTextColor={Colors.textTertiary}
-                      autoFocus
-                      multiline
-                      returnKeyType="done"
-                      onSubmitEditing={handleCaptionSave}
-                      maxLength={200}
-                    />
+              {/* Metadata + caption */}
+              {currentPhoto && (
+                <View style={styles.meta}>
+                  <Text style={[typography.sectionLabel, styles.dateRow]}>
+                    {formatDateLabel(currentPhoto.date)}
+                    {'  ·  '}
+                    {formatTime(currentPhoto.capturedAt)}
+                    {'  ·  DAY '}
+                    {getDayNumber(joinDate, currentPhoto.date)}
+                  </Text>
+
+                  {editingCaption ? (
+                    <View style={styles.captionEditRow}>
+                      <TextInput
+                        style={[styles.captionInput, { fontFamily: fonts.regular }]}
+                        value={captionDraft}
+                        onChangeText={setCaptionDraft}
+                        placeholder="add a caption..."
+                        placeholderTextColor={Colors.textTertiary}
+                        autoFocus
+                        multiline
+                        returnKeyType="done"
+                        onSubmitEditing={handleCaptionSave}
+                        maxLength={200}
+                      />
+                      <Pressable
+                        onPress={handleCaptionSave}
+                        hitSlop={12}
+                        style={styles.captionAction}
+                        accessibilityLabel="Save caption"
+                        accessibilityRole="button"
+                      >
+                        <Check size={18} color={Colors.accent} weight="bold" />
+                      </Pressable>
+                    </View>
+                  ) : (
                     <Pressable
-                      onPress={handleCaptionSave}
-                      hitSlop={12}
-                      style={styles.captionAction}
-                      accessibilityLabel="Save caption"
+                      onPress={handleCaptionEditPress}
+                      style={styles.captionRow}
+                      accessibilityLabel="Edit caption"
                       accessibilityRole="button"
                     >
-                      <Check size={18} color={Colors.accent} weight="bold" />
+                      <Text style={[typography.caption, styles.captionText]}>
+                        {currentPhoto.caption || 'add a caption...'}
+                      </Text>
+                      <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
                     </Pressable>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={handleCaptionEditPress}
-                    style={styles.captionRow}
-                    accessibilityLabel="Edit caption"
-                    accessibilityRole="button"
-                  >
-                    <Text style={[typography.caption, styles.captionText]}>
-                      {currentPhoto.caption || 'add a caption...'}
-                    </Text>
-                    <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
+                  )}
+
+                  <Text style={[typography.tiny, styles.pageIndicator]}>
+                    {currentIndex + 1} / {photos.length}
+                  </Text>
+                </View>
+              )}
+
+              {/* Action row */}
+              {currentPhoto && (
+                <View style={styles.actionRow}>
+                  <Pressable style={styles.actionBtn} onPress={handleShare} accessibilityLabel="Share photo" accessibilityRole="button">
+                    <ShareNetwork size={22} color={Colors.textPrimary} weight="light" />
+                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>share</Text>
                   </Pressable>
-                )}
+                  <Pressable style={styles.actionBtn} onPress={handleEdit} accessibilityLabel="Edit photo" accessibilityRole="button">
+                    <PencilSimple size={22} color={Colors.textPrimary} weight="light" />
+                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>edit</Text>
+                  </Pressable>
+                  <Pressable style={styles.actionBtn} onPress={handleRetake} accessibilityLabel="Retake photo" accessibilityRole="button">
+                    <Camera size={22} color={Colors.textPrimary} weight="light" />
+                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>retake</Text>
+                  </Pressable>
+                  <Pressable style={styles.actionBtn} onPress={handleDeletePress} accessibilityLabel="Delete photo" accessibilityRole="button">
+                    <Trash size={22} color={Colors.danger} weight="light" />
+                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular, color: Colors.danger }]}>delete</Text>
+                  </Pressable>
+                </View>
+              )}
 
-                <Text style={[typography.tiny, styles.pageIndicator]}>
-                  {currentIndex + 1} / {photos.length}
-                </Text>
-              </View>
-            )}
-
-            {/* Bottom safe area spacer */}
-            <View style={{ height: insets.bottom + 8 }} />
-          </Animated.View>
-        </GestureDetector>
+              <View style={{ height: insets.bottom + 8 }} />
+            </Animated.View>
+          </GestureDetector>
+        </Animated.View>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -378,21 +426,17 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  backdrop: {
+  content: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  closeRow: {
+    alignItems: 'flex-end',
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: Colors.bgSurface,
+  closeBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -449,5 +493,21 @@ const styles = StyleSheet.create({
   pageIndicator: {
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  actionBtn: {
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 60,
+  },
+  actionLabel: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 10,
+    color: Colors.textSecondary,
   },
 });

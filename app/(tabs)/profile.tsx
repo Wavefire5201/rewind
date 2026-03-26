@@ -11,7 +11,7 @@ import SettingsList from '@/components/profile/SettingsList';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { settings, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
+  const { settings, albums, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
   const { fonts } = useFont();
 
   return (
@@ -37,7 +37,7 @@ export default function ProfileScreen() {
           settings={settings}
           updateSettings={updateSettings}
           onClearData={resetAllData}
-          onSeedMock={seedMockPhotos}
+          onSeedMock={() => seedMockPhotos(albums[0]?.id)}
         />
       </ScrollView>
     </SafeAreaView>

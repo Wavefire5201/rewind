@@ -1,0 +1,143 @@
+<h2>Album Detail Page — Header & Actions Layout</h2>
+<p class="subtitle">Where should import, timelapse, and settings live? Currently they're crammed into the header bar.</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;">
+      <div style="background:#1A1A1C;color:#F5F5F0;font-family:monospace;padding:20px 16px;font-size:12px;line-height:1.6;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:16px;">
+          <span style="color:#6E6E72;">‹</span>
+          <span style="font-size:14px;">daily selfie</span>
+          <span style="color:#6E6E72;">⚙</span>
+        </div>
+        <!-- Today -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:40px;height:40px;background:#242426;"></div>
+          <span style="color:#F5F5F0;font-size:11px;">captured today</span>
+        </div>
+        <!-- Stats -->
+        <div style="display:flex;background:#242426;padding:16px 8px;margin-bottom:16px;">
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">4</div><div style="font-size:9px;color:#6E6E72;">photos</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#C4A46C;">1</div><div style="font-size:9px;color:#6E6E72;">streak</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">25%</div><div style="font-size:9px;color:#6E6E72;">consistency</div></div>
+        </div>
+        <!-- Calendar header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:18px;">march 2026</span>
+          <span style="color:#6E6E72;">‹  ›</span>
+        </div>
+        <!-- Calendar placeholder -->
+        <div style="background:#242426;height:100px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#6E6E72;font-size:10px;">calendar grid</div>
+        <!-- Action buttons row -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <div style="flex:1;border:1px solid #3A3A3E;padding:10px;text-align:center;font-size:10px;color:#F5F5F0;">▶ timelapse</div>
+          <div style="flex:1;border:1px solid #3A3A3E;padding:10px;text-align:center;font-size:10px;color:#F5F5F0;">↓ import</div>
+        </div>
+        <!-- FAB -->
+        <div style="position:relative;height:20px;">
+          <div style="position:absolute;right:0;bottom:0;width:48px;height:48px;border-radius:24px;background:#8FA67A;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: Clean Header + Bottom Actions</h3>
+      <p>Header has only back + title + gear (settings sheet). Timelapse & import become button-row below calendar. Clearest separation of content vs actions.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;">
+      <div style="background:#1A1A1C;color:#F5F5F0;font-family:monospace;padding:20px 16px;font-size:12px;line-height:1.6;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:16px;">
+          <span style="color:#6E6E72;">‹</span>
+          <span style="font-size:14px;">daily selfie</span>
+          <div style="display:flex;gap:12px;">
+            <span style="color:#6E6E72;">▶</span>
+            <span style="color:#6E6E72;">⚙</span>
+          </div>
+        </div>
+        <!-- Today -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:40px;height:40px;background:#242426;"></div>
+          <span style="color:#F5F5F0;font-size:11px;">captured today</span>
+        </div>
+        <!-- Stats -->
+        <div style="display:flex;background:#242426;padding:16px 8px;margin-bottom:16px;">
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">4</div><div style="font-size:9px;color:#6E6E72;">photos</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#C4A46C;">1</div><div style="font-size:9px;color:#6E6E72;">streak</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">25%</div><div style="font-size:9px;color:#6E6E72;">consistency</div></div>
+        </div>
+        <!-- Calendar header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:18px;">march 2026</span>
+          <span style="color:#6E6E72;">‹  ›</span>
+        </div>
+        <!-- Calendar placeholder -->
+        <div style="background:#242426;height:100px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#6E6E72;font-size:10px;">calendar grid</div>
+        <!-- No bottom actions — import in settings sheet -->
+        <div style="color:#5A5A5E;font-size:10px;text-align:center;margin-bottom:16px;">reminders, import, delete → in ⚙ settings sheet</div>
+        <!-- FAB -->
+        <div style="position:relative;height:20px;">
+          <div style="position:absolute;right:0;bottom:0;width:48px;height:48px;border-radius:24px;background:#8FA67A;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Minimal Header + Fat Settings Sheet</h3>
+      <p>Header: back + title + timelapse + gear. Import moves INTO settings sheet alongside reminders & delete. Page is pure content — zero action buttons below calendar.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:0;">
+      <div style="background:#1A1A1C;color:#F5F5F0;font-family:monospace;padding:20px 16px;font-size:12px;line-height:1.6;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:4px;">
+          <span style="color:#6E6E72;">‹</span>
+          <span style="font-size:14px;">daily selfie</span>
+          <span style="color:#6E6E72;">⚙</span>
+        </div>
+        <!-- Sub-header action pills -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <div style="border:1px solid #3A3A3E;padding:5px 10px;font-size:9px;color:#6E6E72;letter-spacing:1px;">▶ timelapse</div>
+          <div style="border:1px solid #3A3A3E;padding:5px 10px;font-size:9px;color:#6E6E72;letter-spacing:1px;">↓ import</div>
+        </div>
+        <!-- Today -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:40px;height:40px;background:#242426;"></div>
+          <span style="color:#F5F5F0;font-size:11px;">captured today</span>
+        </div>
+        <!-- Stats -->
+        <div style="display:flex;background:#242426;padding:16px 8px;margin-bottom:16px;">
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">4</div><div style="font-size:9px;color:#6E6E72;">photos</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#C4A46C;">1</div><div style="font-size:9px;color:#6E6E72;">streak</div></div>
+          <div style="flex:1;text-align:center;"><div style="font-size:22px;color:#F5F5F0;">25%</div><div style="font-size:9px;color:#6E6E72;">consistency</div></div>
+        </div>
+        <!-- Calendar header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:18px;">march 2026</span>
+          <span style="color:#6E6E72;">‹  ›</span>
+        </div>
+        <!-- Calendar placeholder -->
+        <div style="background:#242426;height:100px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#6E6E72;font-size:10px;">calendar grid</div>
+        <!-- FAB -->
+        <div style="position:relative;height:20px;">
+          <div style="position:absolute;right:0;bottom:0;width:48px;height:48px;border-radius:24px;background:#8FA67A;display:flex;align-items:center;justify-content:center;font-size:18px;">📷</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C: Header + Action Pills Below</h3>
+      <p>Header: back + title + gear. Timelapse & import as small pills directly under the header. Quick access without cluttering the header icons. Settings sheet handles reminders, rename, delete.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px;">All options: ⚙ gear opens a bottom sheet with rename, reminders, delete. The question is where timelapse & import live.</p>

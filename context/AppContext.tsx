@@ -259,13 +259,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    // Update joinDate to earliest mock photo if needed, using functional updater
+    // Update joinDate and album createdAt to earliest mock photo
     const earliest = mockPhotos[mockPhotos.length - 1].date;
     setProfile(prev => {
       if (!prev.joinDate || earliest < prev.joinDate) {
         const next = { ...prev, joinDate: earliest };
         saveProfile(next);
         return next;
+      }
+      return prev;
+    });
+
+    // Backdate the album's createdAt so calendar shows the mock days
+    setAlbums(prev => {
+      const earliestISO = new Date(earliest + 'T00:00:00').toISOString();
+      const updated = prev.map(a => {
+        if (a.id === resolvedAlbumId && a.createdAt > earliestISO) {
+          return { ...a, createdAt: earliestISO };
+        }
+        return a;
+      });
+      if (JSON.stringify(updated) !== JSON.stringify(prev)) {
+        saveAlbums(updated);
+        return updated;
       }
       return prev;
     });

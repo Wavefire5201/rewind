@@ -17,6 +17,8 @@ import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
 import { haptics } from '@/utils/haptics';
+import { pickPhotosFromLibrary } from '@/utils/import';
+import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
@@ -40,6 +42,8 @@ export default function AlbumDetailScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showImportSheet, setShowImportSheet] = useState(false);
+  const [importTargetDate, setImportTargetDate] = useState<string | null>(null);
 
   // Animated month picker expand/collapse
   const MONTH_PICKER_HEIGHT = 224;
@@ -101,6 +105,37 @@ export default function AlbumDetailScreen() {
       setSelectedPhotoIndex(index);
       setModalVisible(true);
     }
+  }
+
+  function handleEmptyDayPress(date: string) {
+    haptics.tap();
+    setImportTargetDate(date);
+    setShowImportSheet(true);
+  }
+
+  async function handleImportSource(source: ImportSource) {
+    setShowImportSheet(false);
+    if (source === 'camera-roll') {
+      try {
+        const picked = await pickPhotosFromLibrary();
+        if (picked.length === 0) return;
+        // Use the first picked photo for the target date
+        const { createPhotoEntry } = await import('@/utils/import');
+        const entry = createPhotoEntry(picked[0].uri, importTargetDate ?? picked[0].date ?? '', '', id);
+        addPhoto(entry);
+        haptics.success();
+      } catch {
+        haptics.error();
+      }
+    } else if (source === 'backup') {
+      // Redirect to album settings for full backup import
+      router.push({ pathname: '/album/settings', params: { albumId: id } });
+    }
+    setImportTargetDate(null);
+  }
+
+  function handleRetake(albumId: string) {
+    router.push({ pathname: '/(tabs)/camera', params: { albumId } });
   }
 
   const albumName = album?.name ?? id ?? 'album';
@@ -177,6 +212,7 @@ export default function AlbumDetailScreen() {
           photos={photos}
           joinDate={album?.createdAt ? album.createdAt.split('T')[0] : profile.joinDate}
           onDayPress={handleDayPress}
+          onEmptyDayPress={handleEmptyDayPress}
         />
       </ScrollView>
 
@@ -212,6 +248,13 @@ export default function AlbumDetailScreen() {
         onClose={() => setModalVisible(false)}
         onDelete={(id) => { deletePhoto(id); if (monthPhotos.length <= 1) setModalVisible(false); }}
         onUpdateCaption={(id, caption) => updatePhoto(id, { caption })}
+        onRetake={handleRetake}
+      />
+
+      <ImportSheet
+        visible={showImportSheet}
+        onSelect={handleImportSource}
+        onClose={() => { setShowImportSheet(false); setImportTargetDate(null); }}
       />
     </SafeAreaView>
   );

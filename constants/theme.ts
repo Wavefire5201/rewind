@@ -18,9 +18,9 @@ export const Colors = {
 
 export const Fonts = {
   mono: {
-    light: 'JetBrainsMono_300Light',
-    regular: 'JetBrainsMono_400Regular',
-    medium: 'JetBrainsMono_500Medium',
+    light: 'CommitMono_Light',
+    regular: 'CommitMono_Regular',
+    medium: 'CommitMono_Medium',
   },
 } as const;
 

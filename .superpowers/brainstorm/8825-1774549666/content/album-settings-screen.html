@@ -1,0 +1,210 @@
+<h2>Album Settings — Dedicated Screen</h2>
+<p class="subtitle">Full screen instead of bottom sheet. Time picker expands inline — no nested modals.</p>
+
+<div class="split">
+
+  <!-- Left: Settings screen — reminder off -->
+  <div class="mockup">
+    <div class="mockup-header">Settings Screen (reminder off)</div>
+    <div class="mockup-body" style="padding:0;">
+      <div style="background:#1A1A1C;color:#F5F5F0;font-family:'JetBrains Mono','Courier New',monospace;padding:20px 16px;font-size:12px;line-height:1.6;">
+
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:24px;">
+          <span style="color:#6E6E72;font-size:16px;">‹</span>
+          <span style="font-size:14px;">album settings</span>
+          <div style="width:20px;"></div>
+        </div>
+
+        <!-- Album name display -->
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">ALBUM</div>
+
+        <!-- Settings card -->
+        <div style="background:#242426;margin-bottom:24px;">
+          <!-- Rename -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">✎</span>
+              <span>rename</span>
+            </div>
+            <span style="color:#5A5A5E;font-size:11px;">daily selfie ›</span>
+          </div>
+        </div>
+
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">REMINDERS</div>
+
+        <div style="background:#242426;margin-bottom:24px;">
+          <!-- Reminder toggle -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#5A5A5E;">🔔</span>
+              <span>daily reminder</span>
+            </div>
+            <span style="color:#5A5A5E;font-size:11px;">off</span>
+          </div>
+        </div>
+
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">DATA</div>
+
+        <div style="background:#242426;margin-bottom:24px;">
+          <!-- Export -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1A1A1C;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">↗</span>
+              <span>export album</span>
+            </div>
+            <span style="color:#5A5A5E;">›</span>
+          </div>
+          <!-- Import -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">↓</span>
+              <span>import photos</span>
+            </div>
+            <span style="color:#5A5A5E;">›</span>
+          </div>
+        </div>
+
+        <!-- Danger zone -->
+        <div style="background:#242426;">
+          <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;">
+            <span style="color:#E85D5D;">🗑</span>
+            <span style="color:#E85D5D;">delete album</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Settings screen — reminder on, time picker expanded -->
+  <div class="mockup">
+    <div class="mockup-header">Settings Screen (reminder on, picker open)</div>
+    <div class="mockup-body" style="padding:0;">
+      <div style="background:#1A1A1C;color:#F5F5F0;font-family:'JetBrains Mono','Courier New',monospace;padding:20px 16px;font-size:12px;line-height:1.6;">
+
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:24px;">
+          <span style="color:#6E6E72;font-size:16px;">‹</span>
+          <span style="font-size:14px;">album settings</span>
+          <div style="width:20px;"></div>
+        </div>
+
+        <!-- Album name -->
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">ALBUM</div>
+
+        <div style="background:#242426;margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">✎</span>
+              <span>rename</span>
+            </div>
+            <span style="color:#5A5A5E;font-size:11px;">daily selfie ›</span>
+          </div>
+        </div>
+
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">REMINDERS</div>
+
+        <div style="background:#242426;margin-bottom:24px;">
+          <!-- Reminder — ON -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1A1A1C;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#C4A46C;">🔔</span>
+              <span>daily reminder</span>
+            </div>
+            <span style="color:#C4A46C;font-size:11px;">on</span>
+          </div>
+
+          <!-- Time row — tappable to expand/collapse picker -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #1A1A1C;">
+            <span style="color:#6E6E72;font-size:11px;">reminder time</span>
+            <span style="color:#C4A46C;font-size:11px;">8:00 am</span>
+          </div>
+
+          <!-- Inline time picker (expanded) -->
+          <div style="padding:20px 16px;text-align:center;">
+            <div style="display:flex;justify-content:center;align-items:center;gap:0;position:relative;">
+              <!-- Selection band -->
+              <div style="position:absolute;left:8px;right:8px;height:44px;border-top:1px solid #3A3A3E;border-bottom:1px solid #3A3A3E;pointer-events:none;"></div>
+              <!-- Hour -->
+              <div style="width:60px;">
+                <div style="color:#2A2A2C;font-size:18px;padding:10px 0;">06</div>
+                <div style="color:#3A3A3E;font-size:18px;padding:10px 0;">07</div>
+                <div style="color:#F5F5F0;font-size:24px;padding:8px 0;">08</div>
+                <div style="color:#3A3A3E;font-size:18px;padding:10px 0;">09</div>
+                <div style="color:#2A2A2C;font-size:18px;padding:10px 0;">10</div>
+              </div>
+              <div style="font-size:24px;color:#5A5A5E;padding:0 2px;">:</div>
+              <!-- Minute -->
+              <div style="width:60px;">
+                <div style="color:#2A2A2C;font-size:18px;padding:10px 0;">50</div>
+                <div style="color:#3A3A3E;font-size:18px;padding:10px 0;">55</div>
+                <div style="color:#F5F5F0;font-size:24px;padding:8px 0;">00</div>
+                <div style="color:#3A3A3E;font-size:18px;padding:10px 0;">05</div>
+                <div style="color:#2A2A2C;font-size:18px;padding:10px 0;">10</div>
+              </div>
+              <!-- AM/PM -->
+              <div style="width:40px;margin-left:10px;">
+                <div style="padding:10px 0;">&nbsp;</div>
+                <div style="padding:10px 0;">&nbsp;</div>
+                <div style="color:#C4A46C;font-size:12px;padding:8px 0;letter-spacing:1px;">AM</div>
+                <div style="color:#3A3A3E;font-size:12px;padding:10px 0;letter-spacing:1px;">PM</div>
+                <div style="padding:10px 0;">&nbsp;</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:9px;letter-spacing:2px;color:#6E6E72;margin-bottom:8px;">DATA</div>
+
+        <div style="background:#242426;margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1A1A1C;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">↗</span>
+              <span>export album</span>
+            </div>
+            <span style="color:#5A5A5E;">›</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#6E6E72;">↓</span>
+              <span>import photos</span>
+            </div>
+            <span style="color:#5A5A5E;">›</span>
+          </div>
+        </div>
+
+        <div style="background:#242426;">
+          <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;">
+            <span style="color:#E85D5D;">🗑</span>
+            <span style="color:#E85D5D;">delete album</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>How It Works</h3>
+  <ul style="font-size:13px;line-height:1.8;color:#aaa;">
+    <li><strong>Full screen</strong> — navigates via <code>router.push('/album/settings')</code>, not a bottom sheet</li>
+    <li><strong>Back button</strong> returns to album detail, changes auto-save</li>
+    <li><strong>Sections</strong> — ALBUM (rename), REMINDERS (toggle + inline picker), DATA (export + import), danger zone (delete)</li>
+    <li><strong>Time picker</strong> — expands inline below the time row when tapped, collapses on second tap. Animated height with <code>layout</code> animation.</li>
+    <li><strong>Import moved here</strong> — import pill removed from album page, lives in DATA section alongside export</li>
+    <li><strong>Timelapse pill stays</strong> on the album page (it's a primary action, not a setting)</li>
+  </ul>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>Revised Album Page Header</h3>
+  <ul style="font-size:13px;line-height:1.8;color:#aaa;">
+    <li><strong>Header:</strong> ‹ back &nbsp;|&nbsp; album name &nbsp;|&nbsp; ⚙ gear</li>
+    <li><strong>Below header:</strong> single <code>▶ timelapse</code> pill (accent border, prominent)</li>
+    <li><strong>No import pill</strong> — moved to settings screen under DATA</li>
+    <li><strong>Page flow:</strong> header → timelapse pill → today → stats → calendar → FAB</li>
+  </ul>
+</div>

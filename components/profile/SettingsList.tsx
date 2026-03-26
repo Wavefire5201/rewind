@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Cloud, CaretRight, Trash, Database, TextAa, Clock } from 'phosphor-react-native';
+import { HardDrive, Image, Cloud, CaretRight, Trash, Database, Clock } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
@@ -143,25 +143,6 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
               </View>
             </Pressable>
 
-            <View style={styles.divider} />
-
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-              onPress={() => {
-                haptics.tap();
-                updateSettings({
-                  fontFamily: settings.fontFamily === 'jetbrains' ? 'commitmono' : 'jetbrains',
-                });
-              }}
-            >
-              <View style={styles.left}>
-                <TextAa size={20} color={Colors.textSecondary} weight="light" />
-                <Text style={typography.body}>font family</Text>
-              </View>
-              <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>
-                {settings.fontFamily === 'commitmono' ? 'commit mono' : 'jetbrains mono'}
-              </Text>
-            </Pressable>
           </View>
         </>
       )}

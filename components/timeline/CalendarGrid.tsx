@@ -13,12 +13,13 @@ interface CalendarGridProps {
   photos: PhotoEntry[];
   joinDate: string;
   onDayPress: (date: string) => void;
+  onEmptyDayPress?: (date: string) => void;
 }
 
 const DAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // Cell size is dynamic — use flex instead of fixed width
 
-export default function CalendarGrid({ year, month, photos, joinDate, onDayPress }: CalendarGridProps) {
+export default function CalendarGrid({ year, month, photos, joinDate, onDayPress, onEmptyDayPress }: CalendarGridProps) {
   const { fonts } = useFont();
   const weeks = getCalendarMonth(year, month);
   const today = getToday();
@@ -105,6 +106,19 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
             }
 
             // Past day, no photo (missed)
+            if (onEmptyDayPress) {
+              return (
+                <Pressable
+                  key={di}
+                  style={({ pressed }) => [styles.cell, pressed && { opacity: 0.5 }]}
+                  onPress={() => onEmptyDayPress(date)}
+                >
+                  <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
+                    {parseInt(date.split('-')[2], 10)}
+                  </Text>
+                </Pressable>
+              );
+            }
             return (
               <View key={di} style={styles.cell}>
                 <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
