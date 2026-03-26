@@ -196,8 +196,8 @@ const styles = StyleSheet.create({
   },
   selectionBand: {
     position: 'absolute',
-    left: 24,
-    right: 24,
+    left: 0,
+    right: 0,
     top: 12 + ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
     height: ITEM_HEIGHT,
     borderTopWidth: 1,

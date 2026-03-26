@@ -18,9 +18,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  interpolate,
-  Extrapolation,
-  runOnJS,
 } from 'react-native-reanimated';
 import {
   GestureDetector,
@@ -152,46 +149,15 @@ export default function PhotoModal({
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState('');
 
-  const translateY = useSharedValue(0);
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetY(10)
-    .failOffsetX([-20, 20])
-    .onUpdate((e) => {
-      if (e.translationY > 0) {
-        translateY.value = e.translationY;
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationY > 150 || e.velocityY > 800) {
-        translateY.value = withSpring(600, { damping: 20 });
-        runOnJS(onClose)();
-      } else {
-        translateY.value = withSpring(0);
-      }
-    });
-
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { scale: interpolate(translateY.value, [0, 300], [1, 0.85], Extrapolation.CLAMP) },
-    ],
-  }));
-
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(0,0,0,${interpolate(translateY.value, [0, 300], [0.75, 0], Extrapolation.CLAMP)})`,
-  }));
 
   const flatListRef = useRef<FlatList>(null);
 
   const photoWidth = screenWidth;
-  const photoHeight = Math.min(screenWidth * (4 / 3), screenHeight * 0.55);
+  const photoHeight = Math.min(screenWidth * (4 / 3), screenHeight * 0.5);
 
   const safeInitialIndex = Math.max(0, Math.min(initialIndex, photos.length - 1));
 
-  // Sync index when modal opens with a (possibly new) initialIndex
   const handleVisible = useCallback(() => {
-    translateY.value = 0;
     const safeIdx = Math.max(0, Math.min(initialIndex, photos.length - 1));
     setCurrentIndex(safeIdx);
     setEditingCaption(false);
@@ -292,51 +258,50 @@ export default function PhotoModal({
       onShow={handleVisible}
     >
       <GestureHandlerRootView style={styles.root}>
-        {/* Tap-to-dismiss backdrop */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        {/* Backdrop */}
+        <View style={[StyleSheet.absoluteFill, styles.backdrop]} pointerEvents="none" />
 
-        <Animated.View style={[StyleSheet.absoluteFill, backdropAnimatedStyle]}>
-          <GestureDetector gesture={panGesture}>
-            <Animated.View style={[styles.content, contentAnimatedStyle]}>
-              {/* Top safe area spacer */}
-              <View style={{ height: insets.top + 12 }} />
+        {/* Tap-to-dismiss: fills the whole screen behind the content */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => { haptics.tap(); onClose(); }} />
 
-              {/* Close button */}
-              <View style={styles.closeRow}>
-                <Pressable
-                  onPress={() => { haptics.tap(); onClose(); }}
-                  hitSlop={12}
-                  style={styles.closeBtn}
-                  accessibilityLabel="Close"
-                  accessibilityRole="button"
-                >
-                  <X size={20} color={Colors.textSecondary} weight="light" />
-                </Pressable>
-              </View>
+        {/* Content */}
+        <View style={styles.content} pointerEvents="box-none">
+          {/* Close button */}
+          <View style={[styles.closeRow, { paddingTop: insets.top + 8 }]}>
+            <Pressable
+              onPress={() => { haptics.tap(); onClose(); }}
+              hitSlop={12}
+              style={styles.closeBtn}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+            >
+              <X size={20} color={Colors.textSecondary} weight="light" />
+            </Pressable>
+          </View>
 
-              {/* Pager */}
-              {photos.length > 0 && (
-                <FlatList
-                  ref={flatListRef}
-                  data={photos}
-                  renderItem={renderItem}
-                  keyExtractor={keyExtractor}
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  initialScrollIndex={safeInitialIndex}
-                  getItemLayout={(_, index) => ({
-                    length: photoWidth,
-                    offset: photoWidth * index,
-                    index,
-                  })}
-                  onViewableItemsChanged={onViewableItemsChanged}
-                  viewabilityConfig={viewabilityConfig.current}
-                  style={styles.pager}
-                />
-              )}
+          {/* Pager */}
+          {photos.length > 0 && (
+            <FlatList
+              ref={flatListRef}
+              data={photos}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={safeInitialIndex}
+              getItemLayout={(_, index) => ({
+                length: photoWidth,
+                offset: photoWidth * index,
+                index,
+              })}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={viewabilityConfig.current}
+              style={styles.pager}
+            />
+          )}
 
-              {/* Metadata + caption */}
+          {/* Metadata + caption */}
               {currentPhoto && (
                 <View style={styles.meta}>
                   <Text style={[typography.sectionLabel, styles.dateRow]}>
@@ -391,9 +356,9 @@ export default function PhotoModal({
                 </View>
               )}
 
-              {/* Action row */}
+              {/* Action toolbar */}
               {currentPhoto && (
-                <View style={styles.actionRow}>
+                <View style={[styles.actionRow, { paddingBottom: insets.bottom + 12 }]}>
                   <Pressable style={styles.actionBtn} onPress={handleShare} accessibilityLabel="Share photo" accessibilityRole="button">
                     <ShareNetwork size={22} color={Colors.textPrimary} weight="light" />
                     <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>share</Text>
@@ -412,11 +377,7 @@ export default function PhotoModal({
                   </Pressable>
                 </View>
               )}
-
-              <View style={{ height: insets.bottom + 8 }} />
-            </Animated.View>
-          </GestureDetector>
-        </Animated.View>
+        </View>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -426,17 +387,24 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  backdrop: {
+    backgroundColor: 'rgba(0,0,0,0.85)',
+  },
   content: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
   closeRow: {
-    alignItems: 'flex-end',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 10,
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -452,9 +420,9 @@ const styles = StyleSheet.create({
   },
   meta: {
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 16,
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   dateRow: {
     color: Colors.textSecondary,
@@ -492,7 +460,6 @@ const styles = StyleSheet.create({
   },
   pageIndicator: {
     color: Colors.textSecondary,
-    marginTop: 4,
   },
   actionRow: {
     flexDirection: 'row',
