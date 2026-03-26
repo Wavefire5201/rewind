@@ -6,17 +6,12 @@ import { CaretLeft } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
-import { usePhotos } from '@/hooks/usePhotos';
-import { useStreak } from '@/hooks/useStreak';
 import { haptics } from '@/utils/haptics';
-import LifetimeStats from '@/components/profile/LifetimeStats';
 import SettingsList from '@/components/profile/SettingsList';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { settings, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
-  const { totalPhotos } = usePhotos();
-  const { currentStreak, consistency } = useStreak();
   const { fonts } = useFont();
 
   return (
@@ -38,12 +33,6 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <LifetimeStats
-          totalPhotos={totalPhotos}
-          currentStreak={currentStreak}
-          consistency={consistency}
-        />
-
         <SettingsList
           settings={settings}
           updateSettings={updateSettings}

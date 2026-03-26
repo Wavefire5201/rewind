@@ -61,7 +61,7 @@ export function useStreak(albumId?: string, albumCreatedAt?: string) {
     return best;
   }, [filteredPhotos]);
 
-  const referenceDate = albumCreatedAt ?? profile.joinDate;
+  const referenceDate = (albumCreatedAt?.split('T')[0]) ?? profile.joinDate;
 
   const consistency = useMemo(() => {
     if (!referenceDate || filteredPhotos.length === 0) return 0;

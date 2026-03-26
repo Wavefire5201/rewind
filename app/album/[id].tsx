@@ -28,7 +28,7 @@ export default function AlbumDetailScreen() {
   const { photos, todayPhoto, mostRecentPhoto, getPhotosByMonth } = usePhotos(id);
   const { profile, albums, addPhoto, updatePhoto, deletePhoto, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === id);
-  useStreak(id, album?.createdAt);
+  const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
   const { fonts, typography } = useFont();
 
@@ -241,6 +241,22 @@ export default function AlbumDetailScreen() {
           <Text style={[styles.todayPrompt, { fontFamily: fonts.regular }]}>you haven't captured today</Text>
         )}
 
+        {/* Album stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
+            <Text style={typography.small}>photos</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>
+            <Text style={typography.small}>day streak</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{consistency}%</Text>
+            <Text style={typography.small}>consistency</Text>
+          </View>
+        </View>
+
         <MonthHeader
           year={currentMonth.year}
           month={currentMonth.month}
@@ -446,6 +462,24 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.mono.regular,
     fontSize: 13,
     color: Colors.streak,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.bgCard,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  statValue: {
+    fontFamily: Fonts.mono.light,
+    fontSize: 28,
+    lineHeight: 36,
+    letterSpacing: -1,
+    color: Colors.textPrimary,
   },
   fab: {
     position: 'absolute',
