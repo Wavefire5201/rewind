@@ -19,6 +19,7 @@ export interface AppSettings {
   cloudBackupEnabled: boolean;
   mirrorSelfies: boolean;
   fontFamily: 'jetbrains' | 'commitmono';
+  use24hClock: boolean;
 }
 
 export interface Album {

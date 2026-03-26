@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Export } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
@@ -18,7 +17,7 @@ export default function TimelapseScreen() {
   const { photos: allPhotos } = usePhotos();
   const photos = allPhotos.filter(p => p.albumId === selectedAlbumId);
 
-  const timelapse = useTimelapse({ photos, exportName: 'Rewind' });
+  const timelapse = useTimelapse({ photos });
 
   if (timelapse.filteredPhotos.length < 2) {
     const message = timelapse.hasDateFilter
@@ -48,15 +47,6 @@ export default function TimelapseScreen() {
       {/* Header row */}
       <View style={styles.headerRow}>
         <Text style={typography.displayTitle}>timelapse</Text>
-        <Pressable
-          style={({ pressed }) => [styles.exportButton, pressed && { opacity: 0.7 }]}
-          onPress={timelapse.handleExport}
-          accessibilityLabel="Export timelapse"
-          accessibilityRole="button"
-        >
-          <Export size={16} color={Colors.textPrimary} weight="light" />
-          <Text style={[styles.exportLabel, { fontFamily: fonts.regular }]}>export</Text>
-        </Pressable>
       </View>
 
       {/* Album selector */}
@@ -110,21 +100,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     paddingTop: 16,
-  },
-  exportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderPrimary,
-  },
-  exportLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Colors.textPrimary,
   },
   albumSelectorScroll: {
     marginBottom: 8,

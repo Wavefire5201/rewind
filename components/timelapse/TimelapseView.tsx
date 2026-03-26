@@ -9,8 +9,6 @@ import Scrubber from '@/components/timelapse/Scrubber';
 import Filmstrip from '@/components/timelapse/Filmstrip';
 import SpeedSelector from '@/components/timelapse/SpeedSelector';
 import DateRangeSheet from '@/components/timelapse/DateRangeSheet';
-import ExportSheet from '@/components/timelapse/ExportSheet';
-import ExportProgress from '@/components/timelapse/ExportProgress';
 import { formatMMDD, useTimelapse } from '@/hooks/useTimelapse';
 
 interface TimelapseViewProps {
@@ -35,19 +33,11 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
     hasDateFilter,
     showDateRange,
     setShowDateRange,
-    showExportSheet,
-    setShowExportSheet,
-    exporting,
-    exportLabel,
-    exportCurrent,
-    exportTotal,
     handleFrameChange,
     handlePlaybackEnd,
     handleSeek,
     handleFilmstripSelect,
     handleSpeedSelect,
-    handleExportFormat,
-    handleCancelExport,
     handleDateRangeApply,
   } = timelapse;
 
@@ -109,20 +99,6 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
         endDate={rangeEnd}
         onApply={handleDateRangeApply}
         onClose={() => setShowDateRange(false)}
-      />
-
-      <ExportSheet
-        visible={showExportSheet}
-        onSelect={handleExportFormat}
-        onClose={() => setShowExportSheet(false)}
-      />
-
-      <ExportProgress
-        visible={exporting}
-        label={exportLabel}
-        current={exportCurrent}
-        total={exportTotal}
-        onCancel={handleCancelExport}
       />
     </>
   );

@@ -14,6 +14,7 @@ export function getDefaultSettings(): AppSettings {
     cloudBackupEnabled: false,
     mirrorSelfies: true,
     fontFamily: 'jetbrains',
+    use24hClock: false,
   };
 }
 

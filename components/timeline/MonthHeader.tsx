@@ -12,9 +12,11 @@ interface MonthHeaderProps {
   onPrev: () => void;
   onNext: () => void;
   onTitlePress?: () => void;
+  disablePrev?: boolean;
+  disableNext?: boolean;
 }
 
-export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress }: MonthHeaderProps) {
+export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress, disablePrev, disableNext }: MonthHeaderProps) {
   const { typography } = useFont();
   return (
     <View style={styles.row}>
@@ -22,11 +24,19 @@ export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress 
         <Text style={typography.displayTitle}>{formatMonthYear(year, month)}</Text>
       </Pressable>
       <View style={styles.navRow}>
-        <Pressable style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]} onPress={() => { haptics.tap(); onPrev(); }}>
-          <CaretLeft size={16} color={Colors.textSecondary} weight="light" />
+        <Pressable
+          style={({ pressed }) => [styles.navButton, pressed && !disablePrev && { opacity: 0.7 }]}
+          onPress={() => { if (!disablePrev) { haptics.tap(); onPrev(); } }}
+          disabled={disablePrev}
+        >
+          <CaretLeft size={18} color={disablePrev ? Colors.textTertiary : Colors.textPrimary} weight="regular" />
         </Pressable>
-        <Pressable style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]} onPress={() => { haptics.tap(); onNext(); }}>
-          <CaretRight size={16} color={Colors.textSecondary} weight="light" />
+        <Pressable
+          style={({ pressed }) => [styles.navButton, pressed && !disableNext && { opacity: 0.7 }]}
+          onPress={() => { if (!disableNext) { haptics.tap(); onNext(); } }}
+          disabled={disableNext}
+        >
+          <CaretRight size={18} color={disableNext ? Colors.textTertiary : Colors.textPrimary} weight="regular" />
         </Pressable>
       </View>
     </View>

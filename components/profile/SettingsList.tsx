@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Cloud, CaretRight, Trash, Database, TextAa } from 'phosphor-react-native';
+import { HardDrive, Image, Cloud, CaretRight, Trash, Database, TextAa, Clock } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
@@ -80,6 +80,20 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
             <Text style={typography.body}>photo quality</Text>
           </View>
           <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{capitalize(settings.photoQuality)}</Text>
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        {/* Row: 24h Clock */}
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          onPress={() => { haptics.tap(); updateSettings({ use24hClock: !settings.use24hClock }); }}
+        >
+          <View style={styles.left}>
+            <Clock size={20} color={Colors.textSecondary} weight="light" />
+            <Text style={typography.body}>24-hour clock</Text>
+          </View>
+          <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{settings.use24hClock ? 'on' : 'off'}</Text>
         </Pressable>
 
         <View style={styles.divider} />

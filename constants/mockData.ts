@@ -81,4 +81,5 @@ export const MOCK_SETTINGS: AppSettings = {
   cloudBackupEnabled: false,
   mirrorSelfies: true,
   fontFamily: 'jetbrains',
+  use24hClock: false,
 };
