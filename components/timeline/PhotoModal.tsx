@@ -220,7 +220,9 @@ export default function PhotoModal({
     try {
       const { shareAsync } = await import('expo-sharing');
       await shareAsync(currentPhoto.imageUri);
-    } catch {}
+    } catch (e) {
+      console.warn('Share failed:', e);
+    }
   }
 
   function handleEdit() {
@@ -262,7 +264,7 @@ export default function PhotoModal({
         <View style={[StyleSheet.absoluteFill, styles.backdrop]} pointerEvents="none" />
 
         {/* Tap-to-dismiss: fills the whole screen behind the content */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => { haptics.tap(); onClose(); }} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => { haptics.tap(); onClose(); }} accessibilityLabel="Close photo viewer" accessibilityRole="button" />
 
         {/* Content */}
         <View style={styles.content} pointerEvents="box-none">
@@ -279,104 +281,101 @@ export default function PhotoModal({
             </Pressable>
           </View>
 
-          {/* Pager */}
+          {/* Pager — vertically centered via justifyContent */}
           {photos.length > 0 && (
-            <FlatList
-              ref={flatListRef}
-              data={photos}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              initialScrollIndex={safeInitialIndex}
-              getItemLayout={(_, index) => ({
-                length: photoWidth,
-                offset: photoWidth * index,
-                index,
-              })}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig.current}
-              style={styles.pager}
-            />
-          )}
+              <FlatList
+                ref={flatListRef}
+                data={photos}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={safeInitialIndex}
+                getItemLayout={(_, index) => ({
+                  length: photoWidth,
+                  offset: photoWidth * index,
+                  index,
+                })}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig.current}
+                style={styles.pager}
+              />
+            )}
 
-          {/* Metadata + caption */}
-              {currentPhoto && (
-                <View style={styles.meta}>
-                  <Text style={[typography.sectionLabel, styles.dateRow]}>
-                    {formatDateLabel(currentPhoto.date)}
-                    {'  ·  '}
-                    {formatTime(currentPhoto.capturedAt)}
-                    {'  ·  DAY '}
-                    {getDayNumber(joinDate, currentPhoto.date)}
-                  </Text>
+            {/* Metadata + caption */}
+            {currentPhoto && (
+              <View style={styles.meta}>
+                <Text style={[typography.sectionLabel, styles.dateRow]}>
+                  {formatDateLabel(currentPhoto.date)}
+                  {'  ·  '}
+                  {formatTime(currentPhoto.capturedAt)}
+                  {'  ·  DAY '}
+                  {getDayNumber(joinDate, currentPhoto.date)}
+                </Text>
 
-                  {editingCaption ? (
-                    <View style={styles.captionEditRow}>
-                      <TextInput
-                        style={[styles.captionInput, { fontFamily: fonts.regular }]}
-                        value={captionDraft}
-                        onChangeText={setCaptionDraft}
-                        placeholder="add a caption..."
-                        placeholderTextColor={Colors.textTertiary}
-                        autoFocus
-                        multiline
-                        returnKeyType="done"
-                        onSubmitEditing={handleCaptionSave}
-                        maxLength={200}
-                      />
-                      <Pressable
-                        onPress={handleCaptionSave}
-                        hitSlop={12}
-                        style={styles.captionAction}
-                        accessibilityLabel="Save caption"
-                        accessibilityRole="button"
-                      >
-                        <Check size={18} color={Colors.accent} weight="bold" />
-                      </Pressable>
-                    </View>
-                  ) : (
+                {editingCaption ? (
+                  <View style={styles.captionEditRow}>
+                    <TextInput
+                      style={[styles.captionInput, { fontFamily: fonts.regular }]}
+                      value={captionDraft}
+                      onChangeText={setCaptionDraft}
+                      placeholder="add a caption..."
+                      placeholderTextColor={Colors.textTertiary}
+                      autoFocus
+                      multiline
+                      returnKeyType="done"
+                      onSubmitEditing={handleCaptionSave}
+                      maxLength={200}
+                    />
                     <Pressable
-                      onPress={handleCaptionEditPress}
-                      style={styles.captionRow}
-                      accessibilityLabel="Edit caption"
+                      onPress={handleCaptionSave}
+                      hitSlop={12}
+                      style={styles.captionAction}
+                      accessibilityLabel="Save caption"
                       accessibilityRole="button"
                     >
-                      <Text style={[typography.caption, styles.captionText]}>
-                        {currentPhoto.caption || 'add a caption...'}
-                      </Text>
-                      <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
+                      <Check size={18} color={Colors.accent} weight="bold" />
                     </Pressable>
-                  )}
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handleCaptionEditPress}
+                    style={styles.captionRow}
+                    accessibilityLabel="Edit caption"
+                    accessibilityRole="button"
+                  >
+                    <Text style={[typography.caption, styles.captionText]}>
+                      {currentPhoto.caption || 'add a caption...'}
+                    </Text>
+                    <PencilSimple size={14} color={Colors.textSecondary} weight="light" />
+                  </Pressable>
+                )}
 
-                  <Text style={[typography.tiny, styles.pageIndicator]}>
-                    {currentIndex + 1} / {photos.length}
-                  </Text>
-                </View>
-              )}
+              </View>
+            )}
 
-              {/* Action toolbar */}
-              {currentPhoto && (
-                <View style={[styles.actionRow, { paddingBottom: insets.bottom + 12 }]}>
-                  <Pressable style={styles.actionBtn} onPress={handleShare} accessibilityLabel="Share photo" accessibilityRole="button">
-                    <ShareNetwork size={22} color={Colors.textPrimary} weight="light" />
-                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>share</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionBtn} onPress={handleEdit} accessibilityLabel="Edit photo" accessibilityRole="button">
-                    <PencilSimple size={22} color={Colors.textPrimary} weight="light" />
-                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>edit</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionBtn} onPress={handleRetake} accessibilityLabel="Retake photo" accessibilityRole="button">
-                    <Camera size={22} color={Colors.textPrimary} weight="light" />
-                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>retake</Text>
-                  </Pressable>
-                  <Pressable style={styles.actionBtn} onPress={handleDeletePress} accessibilityLabel="Delete photo" accessibilityRole="button">
-                    <Trash size={22} color={Colors.danger} weight="light" />
-                    <Text style={[styles.actionLabel, { fontFamily: fonts.regular, color: Colors.danger }]}>delete</Text>
-                  </Pressable>
-                </View>
-              )}
+          {/* Action toolbar — pinned to bottom */}
+          {currentPhoto && (
+            <View style={[styles.actionRow, { bottom: insets.bottom + 12 }]}>
+              <Pressable style={styles.actionBtn} onPress={handleShare} accessibilityLabel="Share photo" accessibilityRole="button">
+                <ShareNetwork size={22} color={Colors.textPrimary} weight="light" />
+                <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>share</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={handleEdit} accessibilityLabel="Edit photo" accessibilityRole="button">
+                <PencilSimple size={22} color={Colors.textPrimary} weight="light" />
+                <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>edit</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={handleRetake} accessibilityLabel="Retake photo" accessibilityRole="button">
+                <Camera size={22} color={Colors.textPrimary} weight="light" />
+                <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>retake</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={handleDeletePress} accessibilityLabel="Delete photo" accessibilityRole="button">
+                <Trash size={22} color={Colors.danger} weight="light" />
+                <Text style={[styles.actionLabel, { fontFamily: fonts.regular, color: Colors.danger }]}>delete</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -392,7 +391,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   closeRow: {
     position: 'absolute',
@@ -458,14 +457,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pageIndicator: {
-    color: Colors.textSecondary,
-  },
   actionRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 24,
-    paddingTop: 20,
   },
   actionBtn: {
     alignItems: 'center',

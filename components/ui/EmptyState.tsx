@@ -26,6 +26,7 @@ export default function EmptyState({ icon, message, subtitle, ctaLabel, onCta }:
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.7 }]}
           onPress={() => { haptics.tap(); onCta(); }}
           accessibilityRole="button"
+          accessibilityLabel={ctaLabel}
         >
           <Text style={[styles.ctaText, { fontFamily: fonts.regular }]}>{ctaLabel}</Text>
         </Pressable>

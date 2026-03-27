@@ -119,7 +119,7 @@ export function TimelapseEmpty({
       <Camera size={48} color={Colors.textTertiary} weight="light" />
       <Text style={[styles.emptyText, { fontFamily: fonts.regular }]}>{message}</Text>
       {hasDateFilter && (
-        <Pressable onPress={onAdjustRange} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        <Pressable onPress={onAdjustRange} style={({ pressed }) => [pressed && { opacity: 0.7 }]} accessibilityLabel="Adjust date range" accessibilityRole="button">
           <Text style={[styles.emptyLink, { fontFamily: fonts.regular }]}>adjust range</Text>
         </Pressable>
       )}

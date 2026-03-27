@@ -1,11 +1,11 @@
 import React from 'react';
-import { Text, StyleSheet, ViewStyle } from 'react-native';
+import { Text, StyleSheet, TextStyle } from 'react-native';
 import { Typography } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 
 interface SectionLabelProps {
   children: string;
-  style?: ViewStyle;
+  style?: TextStyle;
 }
 
 export default function SectionLabel({ children, style }: SectionLabelProps) {
@@ -16,5 +16,5 @@ export default function SectionLabel({ children, style }: SectionLabelProps) {
 const styles = StyleSheet.create({
   label: {
     ...Typography.sectionLabel,
-  } as any,
+  },
 });
