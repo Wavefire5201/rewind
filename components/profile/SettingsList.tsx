@@ -107,7 +107,7 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
             <Cloud size={20} color={Colors.textSecondary} weight="light" />
             <Text style={typography.body}>cloud backup</Text>
           </View>
-          <CaretRight size={16} color={Colors.textTertiary} weight="light" />
+          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
         </Pressable>
       </View>
 

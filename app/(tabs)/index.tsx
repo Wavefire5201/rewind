@@ -207,7 +207,7 @@ export default function HomeScreen() {
             accessibilityLabel="Settings"
             accessibilityRole="button"
           >
-            <GearSix size={22} color={Colors.textSecondary} weight="regular" />
+            <GearSix size={20} color={Colors.textPrimary} weight="regular" />
           </Pressable>
         </View>
 
