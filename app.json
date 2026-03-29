@@ -66,7 +66,13 @@
           "savePhotosPermission": "Allow Rewind to save photos and timelapses to your library."
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Rewind uses Face ID to protect locked albums."
+        }
+      ]
     ]
   }
 }

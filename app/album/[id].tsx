@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { CaretLeft, Camera, Play, GearSix } from 'phosphor-react-native';
+import { CaretLeft, Camera, Play, GearSix, LockSimple } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,11 +11,13 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import MonthPicker from '@/components/ui/MonthPicker';
+import PinModal from '@/components/ui/PinModal';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
+import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
 import { pickPhotosFromLibrary } from '@/utils/import';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
@@ -34,6 +36,10 @@ export default function AlbumDetailScreen() {
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
   const { fonts, typography } = useFont();
+
+  const { isAlbumLocked, unlockAlbum } = useAlbumLock();
+  const locked = isAlbumLocked(id);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -139,6 +145,45 @@ export default function AlbumDetailScreen() {
   }
 
   const albumName = album?.name ?? id ?? 'album';
+
+  if (locked) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage }, animation: 'slide_from_right' }} />
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+          </Pressable>
+          <Text style={[styles.title, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <LockSimple size={48} color={Colors.textTertiary} weight="light" />
+          <Text style={[typography.body, { color: Colors.textTertiary }]}>this album is locked</Text>
+          <Pressable
+            style={({ pressed }) => [{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: Colors.accent }, pressed && { opacity: 0.85 }]}
+            onPress={() => setShowPinModal(true)}
+            accessibilityLabel="Unlock album"
+            accessibilityRole="button"
+          >
+            <Text style={[typography.body, { color: Colors.bgPage, fontFamily: fonts.medium }]}>unlock</Text>
+          </Pressable>
+        </View>
+        <PinModal
+          visible={showPinModal}
+          mode="verify"
+          onSuccess={() => { setShowPinModal(false); unlockAlbum(id); }}
+          onCancel={() => { setShowPinModal(false); router.canGoBack() ? router.back() : router.replace('/'); }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

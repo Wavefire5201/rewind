@@ -7,6 +7,7 @@ export function createAlbum(name: string, overrides?: Partial<Album>): Album {
     createdAt: new Date().toISOString(),
     reminderEnabled: false,
     reminderTime: '08:00',
+    isLocked: false,
     ...overrides,
   };
 }

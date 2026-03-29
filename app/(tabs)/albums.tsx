@@ -1,15 +1,17 @@
 import React, { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
+import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Plus, CaretRight, Camera, PencilSimple } from 'phosphor-react-native';
+import { Plus, CaretRight, Camera, PencilSimple, LockSimple } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
 import { Colors, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import EmptyState from '@/components/ui/EmptyState';
+import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { createAlbum } from '@/utils/albums';
 import type { Album } from '@/types';
 
@@ -18,9 +20,27 @@ export default function AlbumsScreen() {
   const { photos, albums, addAlbum, updateAlbum } = useAppContext();
   const { fonts, typography } = useFont();
 
+  const { isAlbumLocked, unlockAlbum } = useAlbumLock();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const renameTargetRef = useRef<Album | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [unlockTargetId, setUnlockTargetId] = useState<string | null>(null);
+
+  function handleUnlockRequest(albumId: string) {
+    setUnlockTargetId(albumId);
+    setShowPinModal(true);
+  }
+
+  function handlePinSuccess() {
+    setShowPinModal(false);
+    if (unlockTargetId) {
+      unlockAlbum(unlockTargetId);
+      router.push({ pathname: '/album/[id]', params: { id: unlockTargetId } });
+      setUnlockTargetId(null);
+    }
+  }
 
   // Derive a global mostRecentPhoto for the empty-state check
   const mostRecentPhoto = photos.length > 0
@@ -100,18 +120,32 @@ export default function AlbumsScreen() {
               ? [...albumPhotos].sort((a, b) => b.date.localeCompare(a.date))[0]
               : null;
             const imageUri = albumMostRecent?.imageUri ?? null;
+            const locked = isAlbumLocked(album.id);
+
+            function handlePress() {
+              haptics.tap();
+              if (locked) {
+                handleUnlockRequest(album.id);
+                return;
+              }
+              router.push({ pathname: '/album/[id]', params: { id: album.id } });
+            }
 
             return (
               <React.Fragment key={album.id}>
                 {index > 0 && <View style={styles.divider} />}
                 <Pressable
                   style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-                  onPress={() => { haptics.tap(); router.push({ pathname: '/album/[id]', params: { id: album.id } }); }}
-                  accessibilityLabel={`${album.name}, ${photoCount} photos`}
+                  onPress={handlePress}
+                  accessibilityLabel={`${album.name}, ${locked ? 'locked' : `${photoCount} photos`}`}
                   accessibilityRole="button"
                 >
                   <View style={styles.thumbnail}>
-                    {imageUri ? (
+                    {locked ? (
+                      <View style={[styles.thumbnailPlaceholder, { alignItems: 'center', justifyContent: 'center' }]}>
+                        <LockSimple size={20} color={Colors.textTertiary} weight="light" />
+                      </View>
+                    ) : imageUri ? (
                       <Image
                         source={{ uri: imageUri }}
                         style={styles.thumbnailImage}
@@ -124,27 +158,31 @@ export default function AlbumsScreen() {
                   <View style={styles.info}>
                     <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
                     <Text style={[typography.small, { color: Colors.textTertiary }]}>
-                      {photoCount} photos
+                      {locked ? 'locked' : `${photoCount} photos`}
                     </Text>
                   </View>
-                  <Pressable
-                    onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: album.id } }); }}
-                    hitSlop={12}
-                    style={({ pressed }) => [styles.cameraBtn, pressed && { opacity: 0.7 }]}
-                    accessibilityLabel={`Take photo for ${album.name}`}
-                    accessibilityRole="button"
-                  >
-                    <Camera size={16} color={Colors.textTertiary} weight="regular" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => handleRenameAlbum(album)}
-                    hitSlop={12}
-                    style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
-                    accessibilityLabel={`Rename ${album.name}`}
-                    accessibilityRole="button"
-                  >
-                    <PencilSimple size={14} color={Colors.textTertiary} weight="regular" />
-                  </Pressable>
+                  {!locked && (
+                    <Pressable
+                      onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: album.id } }); }}
+                      hitSlop={12}
+                      style={({ pressed }) => [styles.cameraBtn, pressed && { opacity: 0.7 }]}
+                      accessibilityLabel={`Take photo for ${album.name}`}
+                      accessibilityRole="button"
+                    >
+                      <Camera size={16} color={Colors.textTertiary} weight="regular" />
+                    </Pressable>
+                  )}
+                  {!locked && (
+                    <Pressable
+                      onPress={() => handleRenameAlbum(album)}
+                      hitSlop={12}
+                      style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
+                      accessibilityLabel={`Rename ${album.name}`}
+                      accessibilityRole="button"
+                    >
+                      <PencilSimple size={14} color={Colors.textTertiary} weight="regular" />
+                    </Pressable>
+                  )}
                   <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
                 </Pressable>
               </React.Fragment>
@@ -171,6 +209,12 @@ export default function AlbumsScreen() {
         confirmLabel="Rename"
         onConfirm={handleConfirmRename}
         onCancel={() => setShowRenameModal(false)}
+      />
+      <PinModal
+        visible={showPinModal}
+        mode="verify"
+        onSuccess={handlePinSuccess}
+        onCancel={() => { setShowPinModal(false); setUnlockTargetId(null); }}
       />
     </SafeAreaView>
   );

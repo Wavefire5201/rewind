@@ -23,6 +23,8 @@ interface AppContextValue {
   deleteAlbum: (id: string) => void;
   resetAllData: () => Promise<void>;
   seedMockPhotos: (albumId?: string) => void;
+  unlockedAlbumIds: Set<string>;
+  unlockAlbum: (id: string) => void;
 }
 
 const defaultProfile: UserProfile = { name: 'You', avatarUri: null, joinDate: new Date().toISOString().split('T')[0] };
@@ -35,6 +37,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(getDefaultSettings());
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
   const [isLoading, setIsLoading] = useState(true);
+  const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
+
+  const unlockAlbum = useCallback((id: string) => {
+    setUnlockedAlbumIds(prev => new Set(prev).add(id));
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -86,6 +93,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             createdAt: a.createdAt,
             reminderEnabled: a.reminderEnabled ?? false,
             reminderTime: a.reminderTime ?? '08:00',
+            isLocked: a.isLocked ?? false,
           }));
           if (needsAlbumMigration) {
             await saveAlbums(migratedAlbums);
@@ -100,6 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             createdAt: earliestDate ? new Date(earliestDate).toISOString() : new Date().toISOString(),
             reminderEnabled: false,
             reminderTime: '08:00',
+            isLocked: false,
           };
           setAlbums([mockAlbum]);
           await saveAlbums([mockAlbum]);
@@ -305,6 +314,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteAlbum,
         resetAllData,
         seedMockPhotos,
+        unlockedAlbumIds,
+        unlockAlbum,
       }}
     >
       {children}

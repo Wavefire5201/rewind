@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Cloud, CaretRight, Trash, Database, Clock } from 'phosphor-react-native';
+import { HardDrive, Image, Cloud, CaretRight, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
+import PinModal from '@/components/ui/PinModal';
+import { hasPin } from '@/utils/pin';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
@@ -29,6 +31,41 @@ function cyclePhotoQuality(current: AppSettings['photoQuality']): AppSettings['p
 export default function SettingsList({ settings, updateSettings, onClearData, onSeedMock }: SettingsListProps) {
   const { fonts, typography } = useFont();
   const [storageSize, setStorageSize] = useState('—');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinMode, setPinMode] = useState<'setup' | 'verify'>('setup');
+  const [pinStep, setPinStep] = useState<'verify-old' | 'set-new' | null>(null);
+
+  async function handleChangePasscode() {
+    haptics.tap();
+    const exists = await hasPin();
+    if (exists) {
+      // Verify old PIN first, then set new
+      setPinStep('verify-old');
+      setPinMode('verify');
+      setShowPinModal(true);
+    } else {
+      // No PIN yet, just set one
+      setPinStep('set-new');
+      setPinMode('setup');
+      setShowPinModal(true);
+    }
+  }
+
+  function handlePinSuccess() {
+    if (pinStep === 'verify-old') {
+      // Old PIN verified, now set new one
+      setShowPinModal(false);
+      setTimeout(() => {
+        setPinStep('set-new');
+        setPinMode('setup');
+        setShowPinModal(true);
+      }, 300);
+    } else {
+      setShowPinModal(false);
+      setPinStep(null);
+      haptics.success();
+    }
+  }
 
   useEffect(() => {
     async function calcStorage() {
@@ -98,6 +135,20 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
 
         <View style={styles.divider} />
 
+        {/* Row: Change Passcode */}
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          onPress={handleChangePasscode}
+        >
+          <View style={styles.left}>
+            <LockSimple size={20} color={Colors.textSecondary} weight="light" />
+            <Text style={typography.body}>change passcode</Text>
+          </View>
+          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+        </Pressable>
+
+        <View style={styles.divider} />
+
         {/* Row 4: Cloud Backup */}
         <Pressable
           style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
@@ -146,6 +197,12 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
           </View>
         </>
       )}
+      <PinModal
+        visible={showPinModal}
+        mode={pinMode}
+        onSuccess={handlePinSuccess}
+        onCancel={() => { setShowPinModal(false); setPinStep(null); }}
+      />
     </View>
   );
 }

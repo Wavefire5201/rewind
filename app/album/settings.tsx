@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
+import PinModal from '@/components/ui/PinModal';
+import { hasPin } from '@/utils/pin';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { CaretLeft, PencilSimple, BellSimple, Export, DownloadSimple, Trash } from 'phosphor-react-native';
+import { CaretLeft, PencilSimple, LockSimple, BellSimple, Export, DownloadSimple, Trash } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
@@ -36,6 +38,9 @@ export default function AlbumSettingsScreen() {
 
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinMode, setPinMode] = useState<'setup' | 'verify'>('verify');
+  const [pendingLockAction, setPendingLockAction] = useState<'lock' | 'unlock' | null>(null);
 
   // Animated time picker expand/collapse
   const PICKER_HEIGHT = 225;
@@ -224,6 +229,17 @@ export default function AlbumSettingsScreen() {
     Alert.alert('Import Complete', `${entries.length} photo${entries.length !== 1 ? 's' : ''} added to this album.`);
   }
 
+  // --- PIN / Lock ---
+  function handlePinSuccess() {
+    setShowPinModal(false);
+    if (pendingLockAction === 'lock') {
+      updateAlbum(albumId, { isLocked: true });
+    } else if (pendingLockAction === 'unlock') {
+      updateAlbum(albumId, { isLocked: false });
+    }
+    setPendingLockAction(null);
+  }
+
   // --- Delete ---
   function handleDelete() {
     haptics.tap();
@@ -285,6 +301,41 @@ export default function AlbumSettingsScreen() {
               <Text style={[typography.body, { fontFamily: fonts.regular }]}>rename</Text>
             </View>
             <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{albumName} ›</Text>
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+            onPress={async () => {
+              haptics.tap();
+              if (album.isLocked) {
+                setPendingLockAction('unlock');
+                setPinMode('verify');
+                setShowPinModal(true);
+              } else {
+                const pinExists = await hasPin();
+                if (pinExists) {
+                  updateAlbum(albumId, { isLocked: true });
+                } else {
+                  setPendingLockAction('lock');
+                  setPinMode('setup');
+                  setShowPinModal(true);
+                }
+              }
+            }}
+            accessibilityLabel={album.isLocked ? 'Unlock album' : 'Lock album'}
+            accessibilityRole="button"
+          >
+            <View style={styles.rowLeft}>
+              <LockSimple
+                size={20}
+                color={album.isLocked ? Colors.streak : Colors.textSecondary}
+                weight="light"
+              />
+              <Text style={[typography.body, { fontFamily: fonts.regular }]}>lock album</Text>
+            </View>
+            <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: album.isLocked ? Colors.streak : Colors.textTertiary }]}>
+              {album.isLocked ? 'on' : 'off'}
+            </Text>
           </Pressable>
         </View>
 
@@ -429,6 +480,13 @@ export default function AlbumSettingsScreen() {
         visible={showImportSheet}
         onSelect={handleImportSource}
         onClose={() => setShowImportSheet(false)}
+      />
+
+      <PinModal
+        visible={showPinModal}
+        mode={pinMode}
+        onSuccess={handlePinSuccess}
+        onCancel={() => { setShowPinModal(false); setPendingLockAction(null); }}
       />
     </SafeAreaView>
   );

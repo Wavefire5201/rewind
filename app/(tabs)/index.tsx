@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
+import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Plus, CaretRight, Camera, GearSix } from 'phosphor-react-native';
+import { Plus, CaretRight, Camera, GearSix, LockSimple } from 'phosphor-react-native';
 import { Colors, Fonts, Sizes, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useStreak } from '@/hooks/useStreak';
 import { useGreeting } from '@/hooks/useGreeting';
+import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
 import { getImageSource } from '@/utils/imageSource';
 import { createAlbum } from '@/utils/albums';
@@ -23,18 +25,26 @@ function HeroCard({
   albumId,
   albumName,
   albumCreatedAt,
+  onUnlockRequest,
 }: {
   albumId: string;
   albumName: string;
   albumCreatedAt: string;
+  onUnlockRequest?: (albumId: string) => void;
 }) {
   const router = useRouter();
   const { todayPhoto } = usePhotos(albumId);
   const { currentStreak, weekStatus } = useStreak(albumId, albumCreatedAt);
   const { fonts, typography } = useFont();
+  const { isAlbumLocked } = useAlbumLock();
+  const locked = isAlbumLocked(albumId);
 
   function handlePress() {
     haptics.tap();
+    if (locked) {
+      onUnlockRequest?.(albumId);
+      return;
+    }
     router.push({ pathname: '/album/[id]', params: { id: albumId } });
   }
 
@@ -45,7 +55,12 @@ function HeroCard({
       accessibilityLabel={`${albumName} album`}
       accessibilityRole="button"
     >
-      {todayPhoto ? (
+      {locked ? (
+        <View style={[StyleSheet.absoluteFill, styles.heroEmpty]}>
+          <LockSimple size={36} color={Colors.textTertiary} weight="light" />
+          <Text style={[styles.heroEmptyText, { fontFamily: fonts.regular }]}>locked</Text>
+        </View>
+      ) : todayPhoto ? (
         <Image
           source={getImageSource(todayPhoto.imageUri)}
           style={StyleSheet.absoluteFill}
@@ -67,27 +82,31 @@ function HeroCard({
         <View style={styles.heroOverlayTop}>
           <View style={styles.heroOverlayLeft}>
             <Text style={[styles.heroAlbumName, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
-            <Text style={[typography.small, { color: Colors.streak }]}>
-              {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
-            </Text>
+            {!locked && (
+              <Text style={[typography.small, { color: Colors.streak }]}>
+                {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
+              </Text>
+            )}
           </View>
           <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
         </View>
-        <View style={styles.weekRow}>
-          {weekStatus.map((wd) => (
-            <View key={wd.date} style={styles.weekDayCol}>
-              <View
-                accessibilityLabel={`${wd.date}: ${wd.status}`}
-                style={[
-                  styles.weekDot,
-                  (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
-                  wd.status === 'today-pending' && styles.weekDotToday,
-                  (wd.status === 'disabled' || wd.status === 'upcoming') && styles.weekDotDim,
-                ]}
-              />
-            </View>
-          ))}
-        </View>
+        {!locked && (
+          <View style={styles.weekRow}>
+            {weekStatus.map((wd) => (
+              <View key={wd.date} style={styles.weekDayCol}>
+                <View
+                  accessibilityLabel={`${wd.date}: ${wd.status}`}
+                  style={[
+                    styles.weekDot,
+                    (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
+                    wd.status === 'today-pending' && styles.weekDotToday,
+                    (wd.status === 'disabled' || wd.status === 'upcoming') && styles.weekDotDim,
+                  ]}
+                />
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -95,15 +114,21 @@ function HeroCard({
 
 // ─── AlbumRow ────────────────────────────────────────────────────────────────
 
-function AlbumRow({ album }: { album: Album }) {
+function AlbumRow({ album, onUnlockRequest }: { album: Album; onUnlockRequest?: (albumId: string) => void }) {
   const router = useRouter();
   const { totalPhotos, mostRecentPhoto } = usePhotos(album.id);
   const { currentStreak } = useStreak(album.id, album.createdAt);
   const imageUri = mostRecentPhoto?.imageUri ?? null;
   const { fonts, typography } = useFont();
+  const { isAlbumLocked } = useAlbumLock();
+  const locked = isAlbumLocked(album.id);
 
   function handlePress() {
     haptics.tap();
+    if (locked) {
+      onUnlockRequest?.(album.id);
+      return;
+    }
     router.push({ pathname: '/album/[id]', params: { id: album.id } });
   }
 
@@ -115,7 +140,11 @@ function AlbumRow({ album }: { album: Album }) {
       accessibilityRole="button"
     >
       <View style={styles.thumbnail}>
-        {imageUri ? (
+        {locked ? (
+          <View style={[styles.thumbnailPlaceholder, { alignItems: 'center', justifyContent: 'center' }]}>
+            <LockSimple size={20} color={Colors.textTertiary} weight="light" />
+          </View>
+        ) : imageUri ? (
           <Image
             source={getImageSource(imageUri)}
             style={styles.thumbnailImage}
@@ -128,7 +157,7 @@ function AlbumRow({ album }: { album: Album }) {
       <View style={styles.rowInfo}>
         <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
         <Text style={[typography.small, { color: Colors.textTertiary }]}>
-          {currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
+          {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
         </Text>
       </View>
       <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
@@ -144,7 +173,24 @@ export default function HomeScreen() {
   const { albums, isLoading, addAlbum } = useAppContext();
   const { greeting, dayNumber } = useGreeting();
   const [showNewAlbumModal, setShowNewAlbumModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [unlockTargetId, setUnlockTargetId] = useState<string | null>(null);
   const { fonts, typography } = useFont();
+  const { unlockAlbum } = useAlbumLock();
+
+  function handleUnlockRequest(albumId: string) {
+    setUnlockTargetId(albumId);
+    setShowPinModal(true);
+  }
+
+  function handlePinSuccess() {
+    setShowPinModal(false);
+    if (unlockTargetId) {
+      unlockAlbum(unlockTargetId);
+      router.push({ pathname: '/album/[id]', params: { id: unlockTargetId } });
+      setUnlockTargetId(null);
+    }
+  }
 
   useEffect(() => {
     if (!isLoading && albums.length === 0) {
@@ -216,6 +262,7 @@ export default function HomeScreen() {
           albumId={heroAlbum.id}
           albumName={heroAlbum.name}
           albumCreatedAt={heroAlbum.createdAt}
+          onUnlockRequest={handleUnlockRequest}
         />
 
         {/* Album list */}
@@ -224,7 +271,7 @@ export default function HomeScreen() {
             {restAlbums.map((album, index) => (
               <React.Fragment key={album.id}>
                 {index > 0 && <View style={styles.divider} />}
-                <AlbumRow album={album} />
+                <AlbumRow album={album} onUnlockRequest={handleUnlockRequest} />
               </React.Fragment>
             ))}
           </View>
@@ -251,6 +298,12 @@ export default function HomeScreen() {
         confirmLabel="Create"
         onConfirm={handleConfirmNewAlbum}
         onCancel={() => setShowNewAlbumModal(false)}
+      />
+      <PinModal
+        visible={showPinModal}
+        mode="verify"
+        onSuccess={handlePinSuccess}
+        onCancel={() => { setShowPinModal(false); setUnlockTargetId(null); }}
       />
     </SafeAreaView>
   );

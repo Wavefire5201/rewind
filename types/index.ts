@@ -27,6 +27,7 @@ export interface Album {
   createdAt: string;
   reminderEnabled: boolean;
   reminderTime: string; // HH:MM
+  isLocked: boolean;
 }
 
 export interface AppState {
