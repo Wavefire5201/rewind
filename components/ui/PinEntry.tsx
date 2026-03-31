@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Backspace } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
@@ -11,11 +11,16 @@ interface PinEntryProps {
   onComplete: (pin: string) => void;
   onCancel: () => void;
   error?: string;
+  resetKey?: number;
 }
 
-export default function PinEntry({ title, subtitle, onComplete, onCancel, error }: PinEntryProps) {
+export default function PinEntry({ title, subtitle, onComplete, onCancel, error, resetKey }: PinEntryProps) {
   const { fonts } = useFont();
   const [pin, setPin] = useState('');
+
+  useEffect(() => {
+    setPin('');
+  }, [resetKey]);
 
   const handleDigit = useCallback((digit: string) => {
     haptics.tap();
@@ -110,7 +115,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bgPage,
     justifyContent: 'space-between',
-    paddingTop: 80,
+    paddingTop: 32,
     paddingBottom: 40,
   },
   top: {

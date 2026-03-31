@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
 import PinEntry from '@/components/ui/PinEntry';
 import { hasPin, savePin, verifyPin } from '@/utils/pin';
 import { haptics } from '@/utils/haptics';
@@ -27,21 +28,32 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
       }
     }
   }, [visible, requestedMode]);
+
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
   const [firstPin, setFirstPin] = useState('');
   const [error, setError] = useState('');
+  const [resetKey, setResetKey] = useState(0);
 
   const handleReset = useCallback(() => {
     setStep('enter');
     setFirstPin('');
     setError('');
+    setResetKey(k => k + 1);
   }, []);
+
+  // Reset all state when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      handleReset();
+    }
+  }, [visible]);
 
   const handleSetupComplete = useCallback(async (pin: string) => {
     if (step === 'enter') {
       setFirstPin(pin);
       setStep('confirm');
       setError('');
+      setResetKey(k => k + 1);
     } else {
       if (pin === firstPin) {
         await savePin(pin);
@@ -53,19 +65,26 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
         setError("passcodes don't match");
         setStep('enter');
         setFirstPin('');
+        setResetKey(k => k + 1);
       }
     }
   }, [step, firstPin, onSuccess, handleReset]);
 
   const handleVerifyComplete = useCallback(async (pin: string) => {
-    const correct = await verifyPin(pin);
-    if (correct) {
+    const result = await verifyPin(pin);
+    if (result.success) {
       haptics.success();
       handleReset();
       onSuccess();
+    } else if (result.locked) {
+      haptics.error();
+      setError('too many attempts, try again later');
+      setResetKey(k => k + 1);
     } else {
       haptics.error();
-      setError('wrong passcode, try again');
+      const remaining = result.remainingAttempts ?? 0;
+      setError(`wrong passcode (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`);
+      setResetKey(k => k + 1);
     }
   }, [onSuccess, handleReset]);
 
@@ -84,15 +103,18 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <PinEntry
-          title={title}
-          subtitle={subtitle}
-          error={error}
-          onComplete={mode === 'setup' ? handleSetupComplete : handleVerifyComplete}
-          onCancel={handleCancel}
-        />
-      </SafeAreaView>
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPage }} edges={['top', 'bottom']}>
+          <PinEntry
+            title={title}
+            subtitle={subtitle}
+            error={error}
+            onComplete={mode === 'setup' ? handleSetupComplete : handleVerifyComplete}
+            onCancel={handleCancel}
+            resetKey={resetKey}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

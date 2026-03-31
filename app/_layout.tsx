@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from '@/context/AppContext';
 import { FontProvider } from '@/context/FontContext';
 import { Colors } from '@/constants/theme';
@@ -27,20 +28,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppProvider>
-        <FontProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: Colors.bgPage },
-              animation: 'fade_from_bottom',
-              gestureEnabled: true,
-              navigationBarColor: Colors.bgPage,
-            }}
-          />
-        </FontProvider>
-      </AppProvider>
+      <SafeAreaProvider>
+        <AppProvider>
+          <FontProvider>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: Colors.bgPage },
+                animation: 'fade_from_bottom',
+                gestureEnabled: true,
+                navigationBarColor: Colors.bgPage,
+              }}
+            />
+          </FontProvider>
+        </AppProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
