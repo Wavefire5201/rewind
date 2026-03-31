@@ -1,7 +1,7 @@
 # Face Detection Core Features — Design Spec
 
 **Date:** 2026-03-31
-**Status:** Approved
+**Status:** Approved + CEO Review (Scope Expansion)
 
 ## Overview
 
@@ -52,6 +52,8 @@ camera frame → frame processor worklet → MLKit face detection → face landm
 
 Landmarks flow into React via Reanimated shared values for 60fps overlay updates without bridge overhead.
 
+**Critical:** Extract only the minimal landmark data (6 values: 2 eyes, nose, bounds, angles) inside the worklet. Do NOT pass the full MLKit response across the JS bridge — that's ~5KB per frame at 30fps = frame drops.
+
 ### Face landmark data model
 
 ```ts
@@ -76,6 +78,7 @@ interface FaceLandmarks {
 - Shared values updated every frame with latest face position
 - Components (FaceGuide, GhostOverlay) read shared values for smooth animations
 - No face detected → shared values set to null, components fall back to static behavior
+- Multiple faces detected → use largest face (by bounding box area). Ignore others.
 
 ## 3. FaceGuide Enhancement
 
@@ -146,25 +149,98 @@ Produce stabilized timelapse videos where the face stays locked in position fram
 - Does not change the timelapse preview/playback UI
 - Produces a second "stabilized" export option alongside the raw export
 
+## 6. Accepted Expansions (CEO Review)
+
+### 6a. Auto-Capture at Alignment Threshold
+When face detection determines the user's face matches the previous day's landmarks within a configurable threshold:
+- Require 10+ consecutive aligned frames (~333ms at 30fps) before firing — prevents surprise/blurry captures
+- Visual feedback: green ring fills around the FaceGuide oval as stability builds. User can cancel by moving.
+- On ring complete: fire shutter with success haptic
+- Mutual exclusion with timer countdown — if timer is active, auto-capture is disabled
+- Debounce: minimum 2 seconds between auto-capture attempts
+- Toggle in album settings (default: off)
+
+### 6b. Alignment Haptics + Visual Feedback
+As user moves toward target position:
+- Graduated haptic feedback (light taps getting faster as alignment improves, "lock" vibration at perfect alignment)
+- FaceGuide oval color shifts from default subtle to accent green as alignment improves
+- Debounce haptics to prevent buzz from rapid face movement
+- Cancel haptic sequence if face leaves frame
+- Disable alignment haptics at >30° yaw angle (extreme head turn)
+
+### 6c. Batch Landmark Backfill
+Process existing photos in the background to detect and store face landmarks:
+- Run on background thread with low priority (avoid blocking UI)
+- Show progress indicator in settings or album view
+- Resume from last processed photo if app is killed mid-backfill
+- Skip photos where file is missing/corrupt, log warning
+- Enables stabilized export for entire photo history, not just new photos
+
+### 6d. Adaptive Ghost Opacity
+Ghost overlay opacity responds dynamically to alignment quality:
+- When alignment improves (face approaching target), ghost becomes more transparent (less guidance needed)
+- When alignment drifts, ghost becomes more opaque (more guidance needed)
+- Smooth animation via Reanimated
+- Manual opacity slider still available as override
+- Falls back to static opacity when no face detected in either ghost or live feed
+
+### 6e. Auto Color/Exposure Normalization
+Post-capture normalization (NOT real-time in viewfinder):
+- After capture, compare brightness, white balance, and contrast to previous photo in album
+- If difference exceeds threshold, apply subtle normalization filter before saving
+- Skip normalization for first photo in album (no reference)
+- Apply a threshold to avoid normalizing dramatic intentional changes
+- Toggle in album settings (default: on)
+- Handle OOM gracefully: skip normalization, save raw photo, log warning
+
+## 7. Error Handling
+
+All error paths must have explicit rescue actions. No silent failures.
+
+| Error | Rescue Action | User Sees |
+|-------|--------------|-----------|
+| Camera permission revoked mid-session | Detect via app state listener, show re-prompt | "Camera access needed" overlay |
+| Camera in use by other app | Catch init error, show message | "Camera is in use by another app" |
+| MLKit model fails to load | Fallback to static face guide, show indicator | Small "face detection unavailable" badge |
+| Multiple faces detected | Use largest face by bounding box area | Normal tracking (largest face) |
+| Timer + auto-capture conflict | Timer takes priority, auto-capture disabled during countdown | Normal timer behavior |
+| Duplicate auto-capture trigger | Debounce with 2-second minimum interval | Single capture |
+| Storage full on capture | Pre-check available storage before capture | Alert: "Not enough storage" |
+| Color normalization OOM | Skip normalization, save raw photo | Raw photo saved (no visual difference) |
+
+## 8. Code Organization
+
+Split Viewfinder complexity into focused hooks:
+- `Viewfinder.tsx` — camera setup, permissions, photo capture (<100 lines)
+- `hooks/useFaceDetection.ts` — frame processor + shared values + landmark extraction
+- `hooks/useAutoCapture.ts` — alignment threshold + stability counter + ring fill + trigger
+- `hooks/useColorNormalization.ts` — post-capture color comparison + normalization
+- `utils/landmarks.ts` — pure functions for alignment score, affine transform computation
+
 ## Architecture Summary
 
 ```
 Camera Frame
     │
     ▼
-Frame Processor (worklet)
+Frame Processor (worklet) ──► Extract minimal landmarks only
     │
     ▼
 MLKit Face Detection
     │
     ├──► Shared Values (Reanimated)
     │       │
-    │       ├──► FaceGuide (live oval tracking)
-    │       └──► GhostOverlay (live alignment transform)
+    │       ├──► FaceGuide (live oval tracking + ring fill)
+    │       ├──► GhostOverlay (live alignment transform + adaptive opacity)
+    │       ├──► Alignment Haptics (graduated feedback)
+    │       └──► Auto-Capture Controller (stability counter → trigger)
     │
-    └──► On Capture: store FaceLandmarks in PhotoEntry
-                │
-                └──► Export: auto face centering per frame
+    └──► On Capture:
+            ├──► Color Normalization (compare to previous photo)
+            ├──► Store FaceLandmarks in PhotoEntry
+            └──► Export: auto face centering per frame
+
+Background: Batch Backfill (process existing photos → store landmarks)
 ```
 
 ## Build Order
@@ -174,6 +250,11 @@ MLKit Face Detection
 3. **FaceGuide fix + enhancement** — move inside Viewfinder, add live face tracking
 4. **Smart ghost overlay** — face-aligned ghost transform
 5. **Landmark storage** — save landmarks per photo on capture
-6. **Export centering** — stabilized face export option
+6. **Alignment haptics** — graduated feedback as face approaches target
+7. **Auto-capture** — ring fill animation + stability threshold + shutter trigger
+8. **Batch landmark backfill** — background processing of existing photos
+9. **Adaptive ghost opacity** — alignment-responsive ghost transparency
+10. **Color normalization** — post-capture brightness/WB matching
+11. **Export centering** — stabilized face export option
 
 Each step is independently testable and shippable.
