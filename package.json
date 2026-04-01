@@ -7,7 +7,8 @@
     "start:mock": "EXPO_PUBLIC_MOCK_DATA=1 expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "./scripts/patch-expo-worklets.sh"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -39,12 +40,13 @@
     "react-native": "0.83.2",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-pager-view": "^8.0.0",
-    "react-native-reanimated": "3",
+    "react-native-reanimated": "4",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-svg": "15.15.3",
     "react-native-vision-camera": "^4.7.3",
     "react-native-vision-camera-face-detector": "^1.10.2",
+    "react-native-worklets": "0.8",
     "react-native-worklets-core": "1"
   },
   "devDependencies": {
