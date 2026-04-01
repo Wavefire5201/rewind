@@ -1,7 +1,7 @@
 # Face Detection Core Features — Design Spec
 
 **Date:** 2026-03-31
-**Status:** Approved + CEO Review (Scope Expansion)
+**Status:** Approved + CEO Review (Scope Expansion) + Eng Review
 
 ## Overview
 
@@ -217,7 +217,33 @@ Split Viewfinder complexity into focused hooks:
 - `hooks/useColorNormalization.ts` — post-capture color comparison + normalization
 - `utils/landmarks.ts` — pure functions for alignment score, affine transform computation
 
-## Architecture Summary
+## 9. Testing Strategy
+
+### Test infrastructure
+- Add `vitest` as dev dependency
+- Create `tests/` directory at project root
+
+### Unit tests for utils/landmarks.ts
+Pure function tests — the most critical code in the feature:
+
+**computeAlignmentScore():**
+- Perfect alignment (identical landmarks) → returns 1.0
+- No previous landmarks → returns 0
+- Extreme angle (>30° yaw) → returns 0
+- Moderate offset → returns proportional score (0-1)
+
+**computeAffineTransform():**
+- Known input landmarks → correct scale + translate + rotate output
+- Identity case (landmarks already at canonical position) → identity transform
+- Very small face → bounded scale (no extreme zoom)
+- Very large face → bounded scale
+
+**computeColorDelta():**
+- Same lighting → delta below threshold
+- Different lighting → delta above threshold
+- First photo (null reference) → returns null (skip)
+
+## 10. Architecture Summary
 
 ```
 Camera Frame
@@ -245,6 +271,7 @@ Background: Batch Backfill (process existing photos → store landmarks)
 
 ## Build Order
 
+0. **Install spike** — install vision-camera + worklets-core, verify basic capture works with Expo SDK 55 New Architecture
 1. **Camera migration** — swap expo-camera for vision-camera, get basic capture working
 2. **Frame processor setup** — add MLKit face detection, verify landmarks in console
 3. **FaceGuide fix + enhancement** — move inside Viewfinder, add live face tracking
@@ -256,5 +283,7 @@ Background: Batch Backfill (process existing photos → store landmarks)
 9. **Adaptive ghost opacity** — alignment-responsive ghost transparency
 10. **Color normalization** — post-capture brightness/WB matching
 11. **Export centering** — stabilized face export option
+12. **Test infrastructure** — add vitest, unit tests for utils/landmarks.ts (alignment score, affine transform, color delta)
+13. **SQLite migration** — migrate photo/landmark storage from AsyncStorage to expo-sqlite for performance at scale
 
-Each step is independently testable and shippable.
+Steps 0-2 are sequential (foundation). After step 2, steps 3-4, 5-8, 6-7, and 10-12 can be parallelized across worktrees. Step 13 can be done anytime after step 5.
