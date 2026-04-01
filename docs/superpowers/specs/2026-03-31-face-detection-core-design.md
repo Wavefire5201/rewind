@@ -1,7 +1,7 @@
 # Face Detection Core Features — Design Spec
 
 **Date:** 2026-03-31
-**Status:** Approved + CEO Review (Scope Expansion) + Eng Review
+**Status:** Approved + CEO Review (Scope Expansion) + Eng Review + Design Review
 
 ## Overview
 
@@ -243,7 +243,62 @@ Pure function tests — the most critical code in the feature:
 - Different lighting → delta above threshold
 - First photo (null reference) → returns null (skip)
 
-## 10. Architecture Summary
+## 10. Design Specifications
+
+### Visual Style
+All new elements follow the existing dark/minimal aesthetic:
+- Ring fill: `Colors.accent` (#8FA67A), 2px stroke, no fill, easeInOut timing curve
+- Face detection badge: top-left of viewfinder, `Colors.textTertiary` text, `Colors.bgPageTranslucent` background, CommitMono 10px
+- FaceGuide oval: scales at 0.57 ratio of viewfinder width across all device sizes
+
+### Ring Fill Animation
+- Duration: ~333ms (10 frames at 30fps) for full fill when aligned
+- On alignment break: hold current progress for 500ms, then smooth fade back over 300ms
+- On completion: brief scale pulse (1.0 → 1.05 → 1.0 over 150ms) + success haptic
+- Cooldown indicator: ring shows briefly in `Colors.textTertiary` (gray) during 2s cooldown, then disappears
+- Stroke: 2px, no fill, positioned just outside the FaceGuide oval
+
+### Haptic Pattern
+Three intensity levels mapped to alignment quality:
+- Far (score < 0.3): light tap every 400ms
+- Close (score 0.3-0.7): medium tap every 200ms
+- Aligned (score > 0.7): continuous light vibration → heavy impact on lock
+- Platform abstraction: use existing `haptics.ts` utility (already handles iOS/Android differences)
+
+### Adaptive Ghost Opacity
+- Range: 0.15 (well-aligned, ghost nearly invisible) to 0.45 (drifting, ghost more visible)
+- Easing: linear interpolation with smoothing factor 0.3 (responsive but not jittery)
+- Manual opacity slider overrides dynamic behavior when user adjusts it
+- Falls back to static manual value when no face detected
+
+### Ghost Alignment Smoothing
+- Lerp factor: 0.3 per frame (ghost position follows face with slight lag, prevents jitter)
+- First detection: subtle scale-in animation (0.95 → 1.0 over 100ms) when ghost first aligns to face
+
+### Batch Backfill Progress
+- Location: toast-style banner at bottom of album view
+- Style: `Colors.bgCard` background, CommitMono 11px, shows "{N} of {M} photos processed"
+- On completion: "Done" text, auto-dismisses after 2 seconds
+- On error: "Some photos skipped" with count, tap to dismiss
+
+### Interaction State Table
+
+| Feature | Loading | No Face | Error | Success | Partial |
+|---------|---------|---------|-------|---------|---------|
+| Face Guide | Static oval | Static oval | Static + "unavailable" badge | Tracking oval, accent green | Partial face: tracks but no haptics |
+| Ring Fill | Hidden | Hidden | Hidden | Fills ~333ms, fires on complete | Hold 500ms then fade smoothly |
+| Ghost Align | Static full-frame | Static full-frame | Static full-frame | Tracks face, smooth transform | Aligned but smoothed (lerp 0.3) |
+| Adaptive Opacity | Manual slider value | Manual slider value | Manual slider value | Dynamic 0.15-0.45 | Slower transitions |
+| Haptics | None | None | None | Graduated 3-level taps | Single light tap on face detect |
+| Batch Backfill | "Processing..." indeterminate | "No photos" | "Some skipped" + count | "Done" auto-dismiss 2s | "{N} of {M}" progress |
+| Color Norm | Processing indicator | Skip (1st photo) | Skip + save raw | Normalized in preview | Save raw + log warning |
+
+### Accessibility
+- Auto-capture fires: announce "Photo captured" via `AccessibilityInfo.announceForAccessibility()`
+- Ring fill progress: exposed to screen readers as percentage via `accessibilityValue`
+- Face detection status: "Face detected" / "No face detected" announced on state change (debounced 1s)
+
+## 11. Architecture Summary
 
 ```
 Camera Frame
@@ -269,7 +324,7 @@ MLKit Face Detection
 Background: Batch Backfill (process existing photos → store landmarks)
 ```
 
-## Build Order
+## 12. Build Order
 
 0. **Install spike** — install vision-camera + worklets-core, verify basic capture works with Expo SDK 55 New Architecture
 1. **Camera migration** — swap expo-camera for vision-camera, get basic capture working
