@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { Colors } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
@@ -29,7 +29,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
     const cameraRef = useRef<Camera>(null);
-    const { detectFaces, handleDetectedFaces, getCurrentLandmarks, sharedValues } = useFaceDetection();
+    const { detectFaces, handleDetectedFaces, getCurrentLandmarks, isAvailable: faceDetectionAvailable, sharedValues } = useFaceDetection();
 
     const frameProcessor = useFrameProcessor(
       (frame) => {
@@ -83,7 +83,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           device={device}
           isActive={true}
           photo={true}
-          frameProcessor={frameProcessor}
+          frameProcessor={faceDetectionAvailable ? frameProcessor : undefined}
         />
         {ghostImageUri ? (
           <GhostOverlay

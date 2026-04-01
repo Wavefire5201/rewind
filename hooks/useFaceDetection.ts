@@ -1,37 +1,41 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
-import {
-  useFaceDetector,
-  type FrameFaceDetectionOptions,
-} from 'react-native-vision-camera-face-detector';
 import type { Frame } from 'react-native-vision-camera';
 import type { FaceLandmarks } from '@/types';
 
-const DETECTION_OPTIONS: FrameFaceDetectionOptions = {
-  performanceMode: 'fast',
-  landmarkMode: 'all',
-  classificationMode: 'none',
-  contourMode: 'none',
-  minFaceSize: 0.15,
-  trackingEnabled: true,
-};
+// MLKit face detection is only available on physical devices (not simulator)
+let useFaceDetectorImpl: any = null;
+let detectionOptions: any = null;
+
+try {
+  const faceDetectorModule = require('react-native-vision-camera-face-detector');
+  useFaceDetectorImpl = faceDetectorModule.useFaceDetector;
+  detectionOptions = {
+    performanceMode: 'fast',
+    landmarkMode: 'all',
+    classificationMode: 'none',
+    contourMode: 'none',
+    minFaceSize: 0.15,
+    trackingEnabled: true,
+  };
+} catch {
+  // Face detector not available (simulator or missing native module)
+}
 
 export interface FaceDetectionResult {
-  /** Current face landmarks in view coordinates, or null if no face */
   landmarks: FaceLandmarks | null;
-  /** Whether face detection is available */
   isAvailable: boolean;
 }
 
 /**
  * Hook that provides face detection via MLKit frame processor.
  * Returns shared values for smooth 60fps UI updates and a frame processor callback.
+ * Gracefully degrades on simulator where MLKit is unavailable.
  */
 export function useFaceDetection() {
-  const { detectFaces } = useFaceDetector(DETECTION_OPTIONS);
-  const isAvailableRef = useRef(true);
+  const faceDetector = useFaceDetectorImpl ? useFaceDetectorImpl(detectionOptions) : null;
+  const isAvailable = faceDetector !== null;
 
-  // Shared values for smooth UI updates (read by FaceGuide, GhostOverlay, etc.)
   const faceX = useSharedValue(0);
   const faceY = useSharedValue(0);
   const faceWidth = useSharedValue(0);
@@ -47,7 +51,7 @@ export function useFaceDetection() {
   const hasFace = useSharedValue(false);
 
   const handleDetectedFaces = useCallback(
-    (faces: any[], frame: Frame) => {
+    (faces: any[], _frame: Frame) => {
       'worklet';
       if (!faces || faces.length === 0) {
         hasFace.value = false;
@@ -71,13 +75,11 @@ export function useFaceDetection() {
         return;
       }
 
-      // Update shared values with minimal data
       faceX.value = bounds.x;
       faceY.value = bounds.y;
       faceWidth.value = bounds.width;
       faceHeight.value = bounds.height;
 
-      // Extract landmark positions (MLKit landmark indices)
       const leftEye = largest.landmarks?.LEFT_EYE;
       const rightEye = largest.landmarks?.RIGHT_EYE;
       const nose = largest.landmarks?.NOSE_BASE;
@@ -102,7 +104,6 @@ export function useFaceDetection() {
     [],
   );
 
-  /** Extract current landmarks as a plain object (for storing with photos) */
   const getCurrentLandmarks = useCallback((): FaceLandmarks | null => {
     if (!hasFace.value) return null;
     return {
@@ -120,25 +121,18 @@ export function useFaceDetection() {
     };
   }, []);
 
+  // No-op detectFaces for when MLKit is unavailable
+  const noopDetect = useCallback((_frame: any) => [], []);
+
   return {
-    detectFaces,
+    detectFaces: faceDetector?.detectFaces ?? noopDetect,
     handleDetectedFaces,
     getCurrentLandmarks,
-    isAvailable: isAvailableRef.current,
+    isAvailable,
     sharedValues: {
-      faceX,
-      faceY,
-      faceWidth,
-      faceHeight,
-      leftEyeX,
-      leftEyeY,
-      rightEyeX,
-      rightEyeY,
-      noseX,
-      noseY,
-      rollAngle,
-      yawAngle,
-      hasFace,
+      faceX, faceY, faceWidth, faceHeight,
+      leftEyeX, leftEyeY, rightEyeX, rightEyeY,
+      noseX, noseY, rollAngle, yawAngle, hasFace,
     },
   };
 }
