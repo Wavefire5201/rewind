@@ -29,7 +29,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
     const cameraRef = useRef<Camera>(null);
-    const { detectFaces, handleDetectedFaces, getCurrentLandmarks } = useFaceDetection();
+    const { detectFaces, handleDetectedFaces, getCurrentLandmarks, sharedValues } = useFaceDetection();
 
     const frameProcessor = useFrameProcessor(
       (frame) => {
@@ -93,7 +93,15 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           />
         ) : null}
         <GridOverlay />
-        {showFaceGuide ? <FaceGuide /> : null}
+        {showFaceGuide ? (
+          <FaceGuide
+            faceX={sharedValues.faceX}
+            faceY={sharedValues.faceY}
+            faceWidth={sharedValues.faceWidth}
+            faceHeight={sharedValues.faceHeight}
+            hasFace={sharedValues.hasFace}
+          />
+        ) : null}
       </View>
     );
   }
