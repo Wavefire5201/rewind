@@ -1,11 +1,13 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { Colors } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
+import { useFaceDetection } from '@/hooks/useFaceDetection';
 import GridOverlay from '@/components/camera/GridOverlay';
 import GhostOverlay from '@/components/camera/GhostOverlay';
 import FaceGuide from '@/components/camera/FaceGuide';
+import type { FaceLandmarks } from '@/types';
 
 interface ViewfinderProps {
   ghostImageUri: string | null;
@@ -18,6 +20,7 @@ interface ViewfinderProps {
 
 export interface ViewfinderRef {
   takePhoto: () => Promise<{ uri: string } | undefined>;
+  getCurrentLandmarks: () => FaceLandmarks | null;
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
@@ -26,6 +29,16 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
     const cameraRef = useRef<Camera>(null);
+    const { detectFaces, handleDetectedFaces, getCurrentLandmarks } = useFaceDetection();
+
+    const frameProcessor = useFrameProcessor(
+      (frame) => {
+        'worklet';
+        const faces = detectFaces(frame);
+        handleDetectedFaces(faces, frame);
+      },
+      [detectFaces, handleDetectedFaces],
+    );
 
     useImperativeHandle(ref, () => ({
       takePhoto: async () => {
@@ -33,6 +46,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
         const photo = await cameraRef.current.takePhoto();
         return { uri: `file://${photo.path}` };
       },
+      getCurrentLandmarks,
     }));
 
     if (!hasPermission) {
@@ -69,6 +83,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           device={device}
           isActive={true}
           photo={true}
+          frameProcessor={frameProcessor}
         />
         {ghostImageUri ? (
           <GhostOverlay

@@ -6,6 +6,7 @@ export interface PhotoEntry {
   caption: string;
   capturedAt: string; // ISO timestamp
   cameraDirection: 'front' | 'back';
+  faceLandmarks?: FaceLandmarks;
 }
 
 export interface UserProfile {
@@ -35,6 +36,15 @@ export interface AppState {
   profile: UserProfile;
   settings: AppSettings;
   isLoading: boolean;
+}
+
+export interface FaceLandmarks {
+  leftEye: { x: number; y: number };
+  rightEye: { x: number; y: number };
+  noseTip: { x: number; y: number };
+  faceBounds: { x: number; y: number; width: number; height: number };
+  rollAngle: number;
+  yawAngle: number;
 }
 
 export type DayStatus = 'captured' | 'missed' | 'upcoming' | 'today-done' | 'today-pending' | 'disabled';

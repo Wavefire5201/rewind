@@ -16,7 +16,7 @@ import TimerSelector from '@/components/camera/TimerSelector';
 import CapturePreview from '@/components/camera/CapturePreview';
 import type { ViewfinderRef } from '@/components/camera/Viewfinder';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
-import type { PhotoEntry } from '@/types';
+import type { PhotoEntry, FaceLandmarks } from '@/types';
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
@@ -41,11 +41,14 @@ export default function CameraScreen() {
   const [capturedUri, setCapturedUri] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFaceGuide, setShowFaceGuide] = useState(false);
+  const [capturedLandmarks, setCapturedLandmarks] = useState<FaceLandmarks | null>(null);
 
   const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = async () => {
+    // Grab face landmarks before capture (frame processor is still running)
+    const landmarks = cameraRef.current?.getCurrentLandmarks() ?? null;
     const photo = await cameraRef.current?.takePhoto();
     if (photo?.uri) {
       let uri = photo.uri;
@@ -61,6 +64,7 @@ export default function CameraScreen() {
         }
       }
       setCapturedUri(uri);
+      setCapturedLandmarks(landmarks);
       setShowPreview(true);
     }
   };
@@ -118,6 +122,7 @@ export default function CameraScreen() {
         caption,
         capturedAt: new Date().toISOString(),
         cameraDirection: facing,
+        ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
       };
       addPhoto(newPhoto);
       setShowPreview(false);
@@ -142,6 +147,7 @@ export default function CameraScreen() {
   const handleRetake = () => {
     setShowPreview(false);
     setCapturedUri('');
+    setCapturedLandmarks(null);
   };
 
   return (
