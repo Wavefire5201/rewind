@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CameraView } from 'expo-camera';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Colors, Fonts } from '@/constants/theme';
@@ -15,11 +14,9 @@ import Viewfinder from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
 import TimerSelector from '@/components/camera/TimerSelector';
 import CapturePreview from '@/components/camera/CapturePreview';
-import FaceGuide from '@/components/camera/FaceGuide';
+import type { ViewfinderRef } from '@/components/camera/Viewfinder';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
 import type { PhotoEntry } from '@/types';
-
-const QUALITY_MAP: Record<string, number> = { low: 0.5, medium: 0.7, high: 1.0 };
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
@@ -33,7 +30,7 @@ export default function CameraScreen() {
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
   const { fonts, typography } = useFont();
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<ViewfinderRef>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isMirrored, setIsMirrored] = useState(settings.mirrorSelfies);
@@ -49,8 +46,7 @@ export default function CameraScreen() {
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = async () => {
-    const quality = QUALITY_MAP[settings.photoQuality] ?? 0.8;
-    const photo = await cameraRef.current?.takePictureAsync({ quality });
+    const photo = await cameraRef.current?.takePhoto();
     if (photo?.uri) {
       let uri = photo.uri;
       if (facing === 'front' && !isMirrored) {
@@ -157,9 +153,8 @@ export default function CameraScreen() {
         ghostOpacity={ghostOpacity}
         onGhostOpacityChange={handleGhostOpacity}
         isMirrored={isMirrored}
+        showFaceGuide={showFaceGuide}
       />
-
-      {showFaceGuide ? <FaceGuide /> : null}
 
       <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.topRow}>
