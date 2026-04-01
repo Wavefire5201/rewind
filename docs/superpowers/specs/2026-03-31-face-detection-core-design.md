@@ -79,6 +79,7 @@ interface FaceLandmarks {
 - Components (FaceGuide, GhostOverlay) read shared values for smooth animations
 - No face detected → shared values set to null, components fall back to static behavior
 - Multiple faces detected → use largest face (by bounding box area). Ignore others.
+- Coordinate mapping: MLKit returns landmarks in camera-frame coordinates (image pixel space). These must be transformed to view coordinates for FaceGuide and GhostOverlay rendering. The transform accounts for: camera resolution vs preview view size (scale), preview content mode (aspect fill/fit), and front-camera horizontal mirroring. Compute this transform once per frame in the worklet alongside landmark extraction.
 
 ## 3. FaceGuide Enhancement
 
@@ -111,8 +112,8 @@ interface FaceLandmarks {
   1. Ghost photo has stored `FaceLandmarks` (from when it was captured)
   2. Live camera feed has a detected face
 - Compute alignment transform:
-  - Calculate scale factor from ghost eye distance vs live eye distance
-  - Calculate translation to align ghost eye midpoint to live eye midpoint
+  - Calculate scale factor from ghost inter-pupillary distance (IPD, Euclidean distance between left and right eye centers) vs live IPD
+  - Calculate translation to align ghost eye midpoint (center point between left and right eye) to live eye midpoint
   - Apply transform to ghost image
 - Result: ghost image tracks your face, making it easy to match your previous position
 
@@ -148,6 +149,14 @@ Produce stabilized timelapse videos where the face stays locked in position fram
 ### This is export-time only
 - Does not change the timelapse preview/playback UI
 - Produces a second "stabilized" export option alongside the raw export
+
+### Prerequisite: Video export pipeline
+Video export (MP4) is currently marked `comingSoon` in ExportSheet.tsx. This section depends on a working video export pipeline. Implementation options:
+- Build video export as part of this feature set (adds scope)
+- Defer this entire section until video export ships separately
+- Implement the affine transform math in utils/landmarks.ts now (testable independently), wire it into the export pipeline later when video export ships
+
+The transform math should be built regardless — it's pure functions, independently testable, and needed for both video export and potential future features (stabilized photo grid view, comparison slider).
 
 ## 6. Accepted Expansions (CEO Review)
 
@@ -326,7 +335,7 @@ Background: Batch Backfill (process existing photos → store landmarks)
 
 ## 12. Build Order
 
-0. **Install spike** — install vision-camera + worklets-core, verify basic capture works with Expo SDK 55 New Architecture
+0. **Install spike** — add `expo-dev-client`, run `bunx expo prebuild`, install vision-camera + worklets-core, create custom dev build (Expo Go will no longer work), verify basic capture works
 1. **Camera migration** — swap expo-camera for vision-camera, get basic capture working
 2. **Frame processor setup** — add MLKit face detection, verify landmarks in console
 3. **FaceGuide fix + enhancement** — move inside Viewfinder, add live face tracking
