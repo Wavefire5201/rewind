@@ -22,13 +22,14 @@ try {
     performanceMode: 'fast',
     landmarkMode: 'all',
     classificationMode: 'none',
-    contourMode: 'none',
+    contourMode: 'all',
     minFaceSize: 0.15,
     trackingEnabled: true,
   };
   FACE_DETECTION_AVAILABLE = true;
-} catch {
-  // JS module or native plugin unavailable (simulator, missing MLKit)
+  console.log('[FaceDetection] ✅ MLKit plugin available');
+} catch (e) {
+  console.log('[FaceDetection] ⚠️ MLKit plugin unavailable:', (e as Error).message);
 }
 
 export interface FaceDetectionResult {
@@ -62,6 +63,10 @@ export function useFaceDetection() {
   const rightEyeY = useSharedValue(0);
   const noseX = useSharedValue(0);
   const noseY = useSharedValue(0);
+  const mouthLeftX = useSharedValue(0);
+  const mouthLeftY = useSharedValue(0);
+  const mouthRightX = useSharedValue(0);
+  const mouthRightY = useSharedValue(0);
   const rollAngle = useSharedValue(0);
   const yawAngle = useSharedValue(0);
   const hasFace = useSharedValue(false);
@@ -91,28 +96,42 @@ export function useFaceDetection() {
         return;
       }
 
-      faceX.value = bounds.x;
-      faceY.value = bounds.y;
-      faceWidth.value = bounds.width;
-      faceHeight.value = bounds.height;
+      // Normalize coordinates to 0-1 using frame dimensions.
+      // NOTE: camera frame is rotated 90° relative to portrait view, so frame.width/height
+      // are swapped relative to what you'd expect. Frame width = device height in portrait.
+      const frameW = _frame.width || 1;
+      const frameH = _frame.height || 1;
+
+      faceX.value = bounds.x / frameW;
+      faceY.value = bounds.y / frameH;
+      faceWidth.value = bounds.width / frameW;
+      faceHeight.value = bounds.height / frameH;
 
       const leftEye = largest.landmarks?.LEFT_EYE;
       const rightEye = largest.landmarks?.RIGHT_EYE;
       const nose = largest.landmarks?.NOSE_BASE;
-
+      const mouthLeft = largest.landmarks?.MOUTH_LEFT;
+      const mouthRight = largest.landmarks?.MOUTH_RIGHT;
       if (leftEye) {
-        leftEyeX.value = leftEye.x;
-        leftEyeY.value = leftEye.y;
+        leftEyeX.value = leftEye.x / frameW;
+        leftEyeY.value = leftEye.y / frameH;
       }
       if (rightEye) {
-        rightEyeX.value = rightEye.x;
-        rightEyeY.value = rightEye.y;
+        rightEyeX.value = rightEye.x / frameW;
+        rightEyeY.value = rightEye.y / frameH;
       }
       if (nose) {
-        noseX.value = nose.x;
-        noseY.value = nose.y;
+        noseX.value = nose.x / frameW;
+        noseY.value = nose.y / frameH;
       }
-
+      if (mouthLeft) {
+        mouthLeftX.value = mouthLeft.x / frameW;
+        mouthLeftY.value = mouthLeft.y / frameH;
+      }
+      if (mouthRight) {
+        mouthRightX.value = mouthRight.x / frameW;
+        mouthRightY.value = mouthRight.y / frameH;
+      }
       rollAngle.value = largest.rollAngle ?? 0;
       yawAngle.value = largest.yawAngle ?? 0;
       hasFace.value = true;
@@ -146,6 +165,7 @@ export function useFaceDetection() {
       faceX, faceY, faceWidth, faceHeight,
       leftEyeX, leftEyeY, rightEyeX, rightEyeY,
       noseX, noseY, rollAngle, yawAngle, hasFace,
+      mouthLeftX, mouthLeftY, mouthRightX, mouthRightY,
     },
   };
 }
