@@ -42,4 +42,5 @@ yarn-error.*
 
 .omc/
 .superpowers/build/
+build/
 dist/
