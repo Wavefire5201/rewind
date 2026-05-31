@@ -12,9 +12,13 @@ interface PinEntryProps {
   onCancel: () => void;
   error?: string;
   resetKey?: number;
+  /** When true, digit keys and backspace are non-interactive (e.g. during lockout). */
+  disableKeypad?: boolean;
+  /** Override the label on the cancel button (default: "cancel"). */
+  cancelLabel?: string;
 }
 
-export default function PinEntry({ title, subtitle, onComplete, onCancel, error, resetKey }: PinEntryProps) {
+export default function PinEntry({ title, subtitle, onComplete, onCancel, error, resetKey, disableKeypad, cancelLabel }: PinEntryProps) {
   const { fonts } = useFont();
   const [pin, setPin] = useState('');
 
@@ -23,6 +27,7 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
   }, [resetKey]);
 
   const handleDigit = useCallback((digit: string) => {
+    if (disableKeypad) return;
     haptics.tap();
     setPin(prev => {
       const next = prev + digit;
@@ -31,12 +36,13 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
       }
       return next.length <= 4 ? next : prev;
     });
-  }, [onComplete]);
+  }, [onComplete, disableKeypad]);
 
   const handleBackspace = useCallback(() => {
+    if (disableKeypad) return;
     haptics.tap();
     setPin(prev => prev.slice(0, -1));
-  }, []);
+  }, [disableKeypad]);
 
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'];
 
@@ -63,7 +69,7 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
       </View>
 
       {/* Number pad */}
-      <View style={styles.pad}>
+      <View style={[styles.pad, disableKeypad && { opacity: 0.3 }]}>
         {digits.map((d, i) => {
           if (d === '') {
             return <View key={i} style={styles.padBtn} />;
@@ -72,7 +78,7 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
             return (
               <Pressable
                 key={i}
-                style={({ pressed }) => [styles.padBtn, pressed && { opacity: 0.5 }]}
+                style={({ pressed }) => [styles.padBtn, pressed && !disableKeypad && { opacity: 0.5 }]}
                 onPress={handleBackspace}
                 accessibilityLabel="Delete"
                 accessibilityRole="button"
@@ -84,7 +90,7 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
           return (
             <Pressable
               key={i}
-              style={({ pressed }) => [styles.padBtn, pressed && { opacity: 0.5 }]}
+              style={({ pressed }) => [styles.padBtn, pressed && !disableKeypad && { opacity: 0.5 }]}
               onPress={() => handleDigit(d)}
               accessibilityLabel={d}
               accessibilityRole="button"
@@ -95,14 +101,14 @@ export default function PinEntry({ title, subtitle, onComplete, onCancel, error,
         })}
       </View>
 
-      {/* Cancel */}
+      {/* Cancel / action */}
       <Pressable
         style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
         onPress={onCancel}
-        accessibilityLabel="Cancel"
+        accessibilityLabel={cancelLabel ?? 'Cancel'}
         accessibilityRole="button"
       >
-        <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>cancel</Text>
+        <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>{cancelLabel ?? 'cancel'}</Text>
       </Pressable>
     </View>
   );

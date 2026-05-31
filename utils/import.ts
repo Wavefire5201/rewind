@@ -28,7 +28,16 @@ export async function pickPhotosFromLibrary(): Promise<{ uri: string; date: stri
   }));
 }
 
-export async function importFromBackup(albumId: string = 'daily-selfie'): Promise<PhotoEntry[]> {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDate(s: unknown): s is string {
+  return typeof s === 'string' && DATE_RE.test(s);
+}
+
+export async function importFromBackup(
+  albumId: string = 'daily-selfie',
+  onProgress?: (current: number, total: number) => void,
+): Promise<PhotoEntry[]> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',
     copyToCacheDirectory: true,
@@ -40,45 +49,64 @@ export async function importFromBackup(albumId: string = 'daily-selfie'): Promis
   const manifestFile = zip.file('manifest.json');
   if (!manifestFile) throw new Error('Invalid backup: no manifest.json found');
   const manifest = JSON.parse(await manifestFile.async('string'));
+
+  // I1: validate manifest shape
+  if (!manifest || !Array.isArray(manifest.photos)) {
+    throw new Error('Invalid backup format: manifest.photos is missing or not an array');
+  }
+
   const photos: PhotoEntry[] = [];
-  for (const entry of manifest.photos) {
+  const total = manifest.photos.length;
+  for (let i = 0; i < total; i++) {
+    const entry = manifest.photos[i];
+
+    // I1: validate each entry's date
+    const entryDate: string = isValidDate(entry.date) ? entry.date : getToday();
+
     const imageFile = zip.file(entry.imageFile);
     if (!imageFile) continue;
     const imageBase64 = await imageFile.async('base64');
-    const filename = `rewind_import_${Date.now()}_${entry.date}.jpg`;
+
+    // I1: append loop index to avoid same-millisecond filename collisions
+    const filename = `rewind_import_${Date.now()}_${i}_${entryDate}.jpg`;
     const destFile = new File(Paths.document, filename);
-    destFile.write(imageBase64, { encoding: 'base64' });
+
+    // I2: treat a failed write as a hard failure for this entry (skip it)
+    try {
+      destFile.write(imageBase64, { encoding: 'base64' });
+    } catch {
+      if (onProgress) onProgress(i + 1, total);
+      continue;
+    }
+
     photos.push({
-      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entry.date}`,
+      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
       albumId,
-      date: entry.date,
+      date: entryDate,
       imageUri: destFile.uri,
       caption: entry.caption || '',
       capturedAt: new Date().toISOString(),
       cameraDirection: 'front',
     });
+
+    // I1: surface progress after each photo is processed
+    if (onProgress) onProgress(i + 1, total);
   }
   return photos;
 }
 
+// I2: createPhotoEntry treats a failed copy as a HARD failure - throws instead of
+// persisting the volatile picker-cache URI which will be evicted later.
 export function createPhotoEntry(uri: string, date: string, caption: string = '', albumId: string = 'daily-selfie'): PhotoEntry {
   const filename = `rewind_import_${Date.now()}.jpg`;
-  try {
-    const src = new File(uri);
-    const dest = new File(Paths.document, filename);
-    src.copy(dest);
-    return {
-      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
-      albumId, date, imageUri: dest.uri, caption,
-      capturedAt: new Date().toISOString(),
-      cameraDirection: 'front',
-    };
-  } catch {
-    return {
-      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
-      albumId, date, imageUri: uri, caption,
-      capturedAt: new Date().toISOString(),
-      cameraDirection: 'front',
-    };
-  }
+  const src = new File(uri);
+  const dest = new File(Paths.document, filename);
+  // Intentionally not catching: callers must handle this exception and skip/count as failed
+  src.copy(dest);
+  return {
+    id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
+    albumId, date, imageUri: dest.uri, caption,
+    capturedAt: new Date().toISOString(),
+    cameraDirection: 'front',
+  };
 }

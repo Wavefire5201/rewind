@@ -3,18 +3,20 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
 import { HardDrive, Image, CaretRight, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
 import PinModal from '@/components/ui/PinModal';
-import { hasPin } from '@/utils/pin';
+import { hasPin, clearPin } from '@/utils/pin';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import SectionLabel from '@/components/ui/SectionLabel';
 import { haptics } from '@/utils/haptics';
-import type { AppSettings } from '@/types';
+import type { AppSettings, Album } from '@/types';
 
 interface SettingsListProps {
   settings: AppSettings;
   updateSettings: (updates: Partial<AppSettings>) => void;
   onClearData: () => void;
   onSeedMock: () => void;
+  albums: Album[];
+  onUnlockAllAlbums: (albumIds: string[]) => void;
 }
 
 function capitalize(str: string): string {
@@ -28,41 +30,77 @@ function cyclePhotoQuality(current: AppSettings['photoQuality']): AppSettings['p
 }
 
 
-export default function SettingsList({ settings, updateSettings, onClearData, onSeedMock }: SettingsListProps) {
+export default function SettingsList({ settings, updateSettings, onClearData, onSeedMock, albums, onUnlockAllAlbums }: SettingsListProps) {
   const { fonts, typography } = useFont();
   const [storageSize, setStorageSize] = useState('—');
   const [showPinModal, setShowPinModal] = useState(false);
-  const [pinMode, setPinMode] = useState<'setup' | 'verify'>('setup');
-  const [pinStep, setPinStep] = useState<'verify-old' | 'set-new' | null>(null);
+  const [pinIntent, setPinIntent] = useState<'unlock' | 'set' | 'change'>('set');
+  const [pinStep, setPinStep] = useState<'change' | 'set-new' | 'remove' | null>(null);
+  const [pinExists, setPinExists] = useState(false);
+
+  useEffect(() => {
+    hasPin().then(setPinExists);
+  }, []);
 
   async function handleChangePasscode() {
     haptics.tap();
     const exists = await hasPin();
     if (exists) {
-      // Verify old PIN first, then set new
-      setPinStep('verify-old');
-      setPinMode('verify');
+      setPinStep('change');
+      setPinIntent('change');
       setShowPinModal(true);
     } else {
-      // No PIN yet, just set one
+      // No PIN yet — go straight to set
       setPinStep('set-new');
-      setPinMode('setup');
+      setPinIntent('set');
+      setShowPinModal(true);
+    }
+  }
+
+  async function handleRemovePasscode() {
+    haptics.tap();
+    const lockedAlbumIds = albums.filter(a => a.isLocked).map(a => a.id);
+    if (lockedAlbumIds.length > 0) {
+      Alert.alert(
+        'Remove Passcode',
+        `${lockedAlbumIds.length} album${lockedAlbumIds.length === 1 ? '' : 's'} ${lockedAlbumIds.length === 1 ? 'is' : 'are'} currently locked. Removing the passcode will unlock ${lockedAlbumIds.length === 1 ? 'it' : 'them'}. Continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove & Unlock',
+            style: 'destructive',
+            onPress: () => {
+              setPinStep('remove');
+              setPinIntent('unlock');
+              setShowPinModal(true);
+            },
+          },
+        ],
+      );
+    } else {
+      setPinStep('remove');
+      setPinIntent('unlock');
       setShowPinModal(true);
     }
   }
 
   function handlePinSuccess() {
-    if (pinStep === 'verify-old') {
-      // Old PIN verified, now set new one
-      setShowPinModal(false);
-      setTimeout(() => {
-        setPinStep('set-new');
-        setPinMode('setup');
-        setShowPinModal(true);
-      }, 300);
-    } else {
+    if (pinStep === 'remove') {
+      // PIN verified — clear it and unlock any locked albums
+      const lockedAlbumIds = albums.filter(a => a.isLocked).map(a => a.id);
+      clearPin();
+      if (lockedAlbumIds.length > 0) {
+        onUnlockAllAlbums(lockedAlbumIds);
+      }
       setShowPinModal(false);
       setPinStep(null);
+      setPinExists(false);
+      haptics.success();
+    } else {
+      // 'change' or 'set-new' — new PIN was saved by PinModal internally
+      setShowPinModal(false);
+      setPinStep(null);
+      setPinExists(true);
       haptics.success();
     }
   }
@@ -147,6 +185,22 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
           <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
         </Pressable>
 
+        {pinExists && (
+          <>
+            <View style={styles.divider} />
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              onPress={handleRemovePasscode}
+            >
+              <View style={styles.left}>
+                <LockSimple size={20} color={Colors.danger} weight="light" />
+                <Text style={[typography.body, { color: Colors.danger }]}>remove passcode</Text>
+              </View>
+              <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+            </Pressable>
+          </>
+        )}
+
       </View>
 
       {__DEV__ && (
@@ -186,7 +240,7 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
       )}
       <PinModal
         visible={showPinModal}
-        mode={pinMode}
+        intent={pinIntent}
         onSuccess={handlePinSuccess}
         onCancel={() => { setShowPinModal(false); setPinStep(null); }}
       />

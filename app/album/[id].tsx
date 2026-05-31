@@ -25,6 +25,7 @@ import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
 import PhotoModal from '@/components/timeline/PhotoModal';
+import EmptyState from '@/components/ui/EmptyState';
 
 export default function AlbumDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -71,14 +72,22 @@ export default function AlbumDetailScreen() {
   }));
 
   const monthPhotos = getPhotosByMonth(currentMonth.year, currentMonth.month);
-  const captured = monthPhotos.length;
+  // A2: captured = distinct dates within [albumJoinDate, today]
+  const captured = new Set(monthPhotos.map(p => p.date)).size;
   const today = new Date();
   const daysInMonth = new Date(currentMonth.year, currentMonth.month, 0).getDate();
-  const daysPassed = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1
-    ? today.getDate()
-    : currentMonth.year < today.getFullYear() || (currentMonth.year === today.getFullYear() && currentMonth.month < today.getMonth() + 1)
-      ? daysInMonth
-      : 0;
+  // A2: daysPassed starts from the later of (first-of-month, album join date)
+  const albumJoinDate = album?.createdAt ? new Date(album.createdAt) : null;
+  const albumJoinYear = albumJoinDate ? albumJoinDate.getFullYear() : 0;
+  const albumJoinMonth = albumJoinDate ? albumJoinDate.getMonth() + 1 : 0;
+  const albumJoinDay = albumJoinDate ? albumJoinDate.getDate() : 1;
+  const isCurrentMonth = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1;
+  const isPastMonth = currentMonth.year < today.getFullYear() || (currentMonth.year === today.getFullYear() && currentMonth.month < today.getMonth() + 1);
+  const rawDaysPassed = isCurrentMonth ? today.getDate() : isPastMonth ? daysInMonth : 0;
+  // If the album joined mid-month, clamp the start of counting to the join day
+  const isAlbumJoinMonth = albumJoinYear === currentMonth.year && albumJoinMonth === currentMonth.month;
+  const startDay = isAlbumJoinMonth ? albumJoinDay : 1;
+  const daysPassed = Math.max(0, rawDaysPassed - (startDay - 1));
   const missed = Math.max(0, daysPassed - captured);
 
   const now = new Date();
@@ -177,9 +186,14 @@ export default function AlbumDetailScreen() {
         </View>
         <PinModal
           visible={showPinModal}
-          mode="verify"
+          intent="unlock"
           onSuccess={() => { setShowPinModal(false); unlockAlbum(id); }}
           onCancel={() => { setShowPinModal(false); router.canGoBack() ? router.back() : router.replace('/'); }}
+          onNoPinFound={() => {
+            // PIN data gone — auto-clear the lock so the user is not permanently locked out
+            updateAlbum(id, { isLocked: false });
+            setShowPinModal(false);
+          }}
         />
       </SafeAreaView>
     );
@@ -210,56 +224,68 @@ export default function AlbumDetailScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Album stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
-            <Text style={typography.small}>photos</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>
-            <Text style={typography.small}>day streak</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{consistency}%</Text>
-            <Text style={typography.small}>consistency</Text>
-          </View>
+      {photos.length === 0 ? (
+        <View style={{ flex: 1 }}>
+          <EmptyState
+            icon={<Camera size={40} color={Colors.textTertiary} weight="light" />}
+            message="no photos yet"
+            subtitle="capture your first photo to start your streak"
+            ctaLabel="take a photo"
+            onCta={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: id } }); }}
+          />
         </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Album stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
+              <Text style={typography.small}>photos</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>
+              <Text style={typography.small}>day streak</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{consistency}%</Text>
+              <Text style={typography.small}>consistency</Text>
+            </View>
+          </View>
 
-        <MonthHeader
-          year={currentMonth.year}
-          month={currentMonth.month}
-          onPrev={handlePrevMonth}
-          onNext={handleNextMonth}
-          onTitlePress={toggleMonthPicker}
-          disableNext={currentMonth.year * 12 + currentMonth.month >= now.getFullYear() * 12 + (now.getMonth() + 1)}
-          disablePrev={currentMonth.year * 12 + currentMonth.month <= joinYear * 12 + joinMonth}
-        />
-        <Animated.View style={monthPickerAnimatedStyle}>
-          <MonthPicker
+          <MonthHeader
             year={currentMonth.year}
             month={currentMonth.month}
-            onChange={(year, month) => setCurrentMonth({ year, month })}
-            minYear={joinYear}
-            minMonth={joinMonth}
-            maxYear={now.getFullYear()}
-            maxMonth={now.getMonth() + 1}
+            onPrev={handlePrevMonth}
+            onNext={handleNextMonth}
+            onTitlePress={toggleMonthPicker}
+            disableNext={currentMonth.year * 12 + currentMonth.month >= now.getFullYear() * 12 + (now.getMonth() + 1)}
+            disablePrev={currentMonth.year * 12 + currentMonth.month <= joinYear * 12 + joinMonth}
           />
-        </Animated.View>
-        <CalendarStats captured={captured} missed={missed} />
-        <CalendarGrid
-          year={currentMonth.year}
-          month={currentMonth.month}
-          photos={photos}
-          joinDate={album?.createdAt ? album.createdAt.split('T')[0] : profile.joinDate}
-          onDayPress={handleDayPress}
-          onEmptyDayPress={handleEmptyDayPress}
-        />
-      </ScrollView>
+          <Animated.View style={monthPickerAnimatedStyle}>
+            <MonthPicker
+              year={currentMonth.year}
+              month={currentMonth.month}
+              onChange={(year, month) => setCurrentMonth({ year, month })}
+              minYear={joinYear}
+              minMonth={joinMonth}
+              maxYear={now.getFullYear()}
+              maxMonth={now.getMonth() + 1}
+            />
+          </Animated.View>
+          <CalendarStats captured={captured} missed={missed} />
+          <CalendarGrid
+            year={currentMonth.year}
+            month={currentMonth.month}
+            photos={photos}
+            joinDate={album?.createdAt ? album.createdAt.split('T')[0] : profile.joinDate}
+            onDayPress={handleDayPress}
+            onEmptyDayPress={handleEmptyDayPress}
+          />
+        </ScrollView>
+      )}
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>

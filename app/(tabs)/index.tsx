@@ -301,9 +301,18 @@ export default function HomeScreen() {
       />
       <PinModal
         visible={showPinModal}
-        mode="verify"
+        intent="unlock"
         onSuccess={handlePinSuccess}
         onCancel={() => { setShowPinModal(false); setUnlockTargetId(null); }}
+        onNoPinFound={() => {
+          // PIN data gone — auto-clear the lock and navigate in
+          if (unlockTargetId) {
+            unlockAlbum(unlockTargetId);
+            router.push({ pathname: '/album/[id]', params: { id: unlockTargetId } });
+            setUnlockTargetId(null);
+          }
+          setShowPinModal(false);
+        }}
       />
     </SafeAreaView>
   );

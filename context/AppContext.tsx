@@ -22,6 +22,7 @@ interface AppContextValue {
   albums: Album[];
   isLoading: boolean;
   addPhoto: (entry: PhotoEntry) => void;
+  addPhotos: (entries: PhotoEntry[]) => { added: number; skipped: number };
   updatePhoto: (id: string, updates: Partial<PhotoEntry>) => void;
   deletePhoto: (id: string) => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -142,6 +143,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       fireAndSave(savePhotos(next));
       return next;
     });
+  }, []);
+
+  // Batch import: merges, deduplicates, sorts once, single awaited save.
+  // Returns how many entries were actually added vs skipped (date+album collision).
+  const addPhotos = useCallback((entries: PhotoEntry[]): { added: number; skipped: number } => {
+    let added = 0;
+    let skipped = 0;
+    setPhotos(prev => {
+      const existing = new Set(prev.map(p => `${p.albumId}:${p.date}`));
+      const toAdd: PhotoEntry[] = [];
+      for (const entry of entries) {
+        const key = `${entry.albumId}:${entry.date}`;
+        if (existing.has(key)) {
+          skipped++;
+        } else {
+          existing.add(key);
+          toAdd.push(entry);
+          added++;
+        }
+      }
+      if (toAdd.length === 0) return prev;
+      const next = [...prev, ...toAdd].sort((a, b) => a.date.localeCompare(b.date));
+      fireAndSave(savePhotos(next));
+      return next;
+    });
+    return { added, skipped };
   }, []);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
@@ -317,6 +344,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         albums,
         isLoading,
         addPhoto,
+        addPhotos,
         updatePhoto,
         deletePhoto,
         updateProfile: handleUpdateProfile,

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
-import PinModal from '@/components/ui/PinModal';
+import PinModal, { PinIntent } from '@/components/ui/PinModal';
 import { hasPin } from '@/utils/pin';
 import Animated, {
   useSharedValue,
@@ -32,14 +32,14 @@ export default function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { fonts, typography } = useFont();
-  const { profile, albums, photos, settings, addPhoto, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
+  const { profile, albums, photos, settings, addPhotos, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
 
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
-  const [pinMode, setPinMode] = useState<'setup' | 'verify'>('verify');
+  const [pinIntent, setPinIntent] = useState<PinIntent>('unlock');
   const [pendingLockAction, setPendingLockAction] = useState<'lock' | 'unlock' | null>(null);
 
   // Animated time picker expand/collapse
@@ -67,6 +67,10 @@ export default function AlbumSettingsScreen() {
   const [importPhotos, setImportPhotos] = useState<{ uri: string; suggestedDate: string }[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showImportSheet, setShowImportSheet] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importCurrent, setImportCurrent] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
+  const importCancelRef = useRef({ cancelled: false });
 
   if (!album) return null;
 
@@ -196,17 +200,26 @@ export default function AlbumSettingsScreen() {
         Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
       }
     } else if (source === 'backup') {
+      importCancelRef.current = { cancelled: false };
+      setImportCurrent(0);
+      setImportTotal(0);
+      setImporting(true);
       try {
-        const entries = await importFromBackup(albumId);
+        const entries = await importFromBackup(albumId, (current, total) => {
+          setImportCurrent(current);
+          setImportTotal(total);
+        });
+        setImporting(false);
         if (entries.length === 0) return;
-        for (const entry of entries) {
-          const existing = albumPhotos.find(p => p.date === entry.date);
-          if (existing) continue;
-          addPhoto(entry);
-        }
+        // I3/I4: single batch merge+dedup+sort, honest counts
+        const { added, skipped } = addPhotos(entries);
         haptics.success();
-        Alert.alert('Import Complete', `${entries.length} photos restored from backup.`);
+        const msg = skipped > 0
+          ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`
+          : `${added} photo${added !== 1 ? 's' : ''} restored from backup.`;
+        Alert.alert('Import Complete', msg);
       } catch (e: unknown) {
+        setImporting(false);
         haptics.error();
         Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
       }
@@ -214,19 +227,37 @@ export default function AlbumSettingsScreen() {
   }
 
   function handleImportSave(entries: { uri: string; date: string; caption: string }[]) {
-    let earliestDate = profile.joinDate;
+    // I2: createPhotoEntry now throws on copy failure; collect only successful entries
+    const photoEntries = [];
+    let copyFailed = 0;
     for (const entry of entries) {
-      const existing = albumPhotos.find(p => p.date === entry.date);
-      if (existing) continue;
-      const photoEntry = createPhotoEntry(entry.uri, entry.date, entry.caption, albumId);
-      addPhoto(photoEntry);
-      if (entry.date < earliestDate) earliestDate = entry.date;
+      try {
+        photoEntries.push(createPhotoEntry(entry.uri, entry.date, entry.caption, albumId));
+      } catch {
+        copyFailed++;
+      }
+    }
+
+    // I3/I4: batch add with single save; addPhotos owns dedup (no stale pre-check here)
+    const { added, skipped } = addPhotos(photoEntries);
+
+    // Update joinDate to earliest successfully imported date
+    let earliestDate = profile.joinDate;
+    for (const e of photoEntries) {
+      if (e.date < earliestDate) earliestDate = e.date;
     }
     if (earliestDate < profile.joinDate) updateProfile({ joinDate: earliestDate });
+
     setShowImportModal(false);
     setImportPhotos([]);
     haptics.success();
-    Alert.alert('Import Complete', `${entries.length} photo${entries.length !== 1 ? 's' : ''} added to this album.`);
+
+    // I4: honest counts
+    const parts: string[] = [];
+    if (added > 0) parts.push(`${added} photo${added !== 1 ? 's' : ''} added`);
+    if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
+    if (copyFailed > 0) parts.push(`${copyFailed} failed to copy`);
+    Alert.alert('Import Complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
   }
 
   // --- PIN / Lock ---
@@ -309,7 +340,7 @@ export default function AlbumSettingsScreen() {
               haptics.tap();
               if (album.isLocked) {
                 setPendingLockAction('unlock');
-                setPinMode('verify');
+                setPinIntent('unlock');
                 setShowPinModal(true);
               } else {
                 const pinExists = await hasPin();
@@ -317,7 +348,7 @@ export default function AlbumSettingsScreen() {
                   updateAlbum(albumId, { isLocked: true });
                 } else {
                   setPendingLockAction('lock');
-                  setPinMode('setup');
+                  setPinIntent('set');
                   setShowPinModal(true);
                 }
               }
@@ -469,6 +500,14 @@ export default function AlbumSettingsScreen() {
         onCancel={() => { cancelRef.current.cancelled = true; haptics.tap(); }}
       />
 
+      <ExportProgress
+        visible={importing}
+        label="restoring from backup..."
+        current={importCurrent}
+        total={importTotal}
+        onCancel={() => { importCancelRef.current.cancelled = true; haptics.tap(); }}
+      />
+
       <ImportPhotoModal
         visible={showImportModal}
         photos={importPhotos}
@@ -484,7 +523,7 @@ export default function AlbumSettingsScreen() {
 
       <PinModal
         visible={showPinModal}
-        mode={pinMode}
+        intent={pinIntent}
         onSuccess={handlePinSuccess}
         onCancel={() => { setShowPinModal(false); setPendingLockAction(null); }}
       />

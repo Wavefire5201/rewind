@@ -11,7 +11,7 @@ import SettingsList from '@/components/profile/SettingsList';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { settings, albums, updateSettings, resetAllData, seedMockPhotos } = useAppContext();
+  const { settings, albums, updateSettings, updateAlbum, resetAllData, seedMockPhotos } = useAppContext();
   const { fonts } = useFont();
 
   return (
@@ -38,6 +38,8 @@ export default function ProfileScreen() {
           updateSettings={updateSettings}
           onClearData={resetAllData}
           onSeedMock={() => seedMockPhotos(albums[0]?.id)}
+          albums={albums}
+          onUnlockAllAlbums={(albumIds) => albumIds.forEach(aid => updateAlbum(aid, { isLocked: false }))}
         />
       </ScrollView>
     </SafeAreaView>

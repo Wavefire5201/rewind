@@ -1,60 +1,101 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Modal } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import PinEntry from '@/components/ui/PinEntry';
-import { hasPin, savePin, verifyPin } from '@/utils/pin';
+import { hasPin, savePin, verifyPin, getAttemptInfo } from '@/utils/pin';
 import { haptics } from '@/utils/haptics';
 
-type PinMode = 'setup' | 'verify';
+/**
+ * intent controls what the modal does:
+ *   'unlock'  — verify the existing PIN to unlock something; if no PIN data exists, auto-clear
+ *               isLocked on the caller's side (onNoPinFound) rather than silently switching to setup
+ *   'set'     — set a brand-new PIN (no prior verify step)
+ *   'change'  — verify old PIN, then set new PIN (two-phase)
+ */
+export type PinIntent = 'unlock' | 'set' | 'change';
 
 interface PinModalProps {
   visible: boolean;
-  mode: PinMode;
+  intent: PinIntent;
   onSuccess: () => void;
   onCancel: () => void;
+  /** Called when intent==='unlock' but no PIN data exists in storage. */
+  onNoPinFound?: () => void;
 }
 
-export default function PinModal({ visible, mode: requestedMode, onSuccess, onCancel }: PinModalProps) {
-  // Auto-detect: if verify requested but no PIN exists, switch to setup
-  const [mode, setMode] = useState<PinMode>(requestedMode);
+type InternalStep = 'verify' | 'enter-new' | 'confirm-new' | 'no-pin';
 
-  useEffect(() => {
-    if (visible) {
-      if (requestedMode === 'verify') {
-        hasPin().then(exists => setMode(exists ? 'verify' : 'setup'));
-      } else {
-        setMode(requestedMode);
-      }
-    }
-  }, [visible, requestedMode]);
-
-  const [step, setStep] = useState<'enter' | 'confirm'>('enter');
+export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPinFound }: PinModalProps) {
+  const [step, setStep] = useState<InternalStep>('verify');
   const [firstPin, setFirstPin] = useState('');
   const [error, setError] = useState('');
   const [resetKey, setResetKey] = useState(0);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function clearTimer() {
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
 
   const handleReset = useCallback(() => {
-    setStep('enter');
+    setStep(intent === 'set' ? 'enter-new' : 'verify');
     setFirstPin('');
     setError('');
     setResetKey(k => k + 1);
-  }, []);
+    setLockoutSeconds(0);
+    clearTimer();
+  }, [intent]);
 
-  // Reset all state when modal becomes visible
+  // When modal becomes visible, initialise step and check for missing PIN on unlock
   useEffect(() => {
-    if (visible) {
-      handleReset();
+    if (!visible) {
+      clearTimer();
+      return;
     }
-  }, [visible]);
+
+    handleReset();
+
+    if (intent === 'unlock') {
+      hasPin().then(exists => {
+        if (!exists) {
+          // No PIN data — show notice instead of silently prompting setup
+          setStep('no-pin');
+        }
+      });
+    }
+  }, [visible, intent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lockout countdown
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    timerRef.current = setInterval(() => {
+      setLockoutSeconds(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          clearTimer();
+          setError('');
+          setResetKey(k => k + 1);
+          return 0;
+        }
+        setError(`too many attempts — try again in ${next}s`);
+        return next;
+      });
+    }, 1000);
+    return clearTimer;
+  }, [lockoutSeconds]);
 
   const handleSetupComplete = useCallback(async (pin: string) => {
-    if (step === 'enter') {
+    if (step === 'enter-new') {
       setFirstPin(pin);
-      setStep('confirm');
+      setStep('confirm-new');
       setError('');
       setResetKey(k => k + 1);
     } else {
+      // confirm-new
       if (pin === firstPin) {
         await savePin(pin);
         haptics.success();
@@ -63,7 +104,7 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
       } else {
         haptics.error();
         setError("passcodes don't match");
-        setStep('enter');
+        setStep('enter-new');
         setFirstPin('');
         setResetKey(k => k + 1);
       }
@@ -74,11 +115,24 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
     const result = await verifyPin(pin);
     if (result.success) {
       haptics.success();
-      handleReset();
-      onSuccess();
+      if (intent === 'change') {
+        // Advance to new-PIN entry
+        setStep('enter-new');
+        setError('');
+        setResetKey(k => k + 1);
+      } else {
+        handleReset();
+        onSuccess();
+      }
     } else if (result.locked) {
       haptics.error();
-      setError('too many attempts, try again later');
+      // Surface the countdown
+      const info = await getAttemptInfo();
+      const secsRemaining = info.lockoutUntil
+        ? Math.max(0, Math.ceil((info.lockoutUntil - Date.now()) / 1000))
+        : 30;
+      setError(`too many attempts — try again in ${secsRemaining}s`);
+      setLockoutSeconds(secsRemaining);
       setResetKey(k => k + 1);
     } else {
       haptics.error();
@@ -86,20 +140,53 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
       setError(`wrong passcode (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`);
       setResetKey(k => k + 1);
     }
-  }, [onSuccess, handleReset]);
+  }, [intent, onSuccess, handleReset]);
 
   const handleCancel = useCallback(() => {
     handleReset();
     onCancel();
   }, [onCancel, handleReset]);
 
-  const title = mode === 'setup'
-    ? (step === 'enter' ? 'set passcode' : 'confirm passcode')
-    : 'enter passcode';
+  // "no-pin" screen — shown when unlock is attempted but PIN data is gone
+  if (step === 'no-pin') {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+        <SafeAreaProvider style={{ flex: 1 }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPage }} edges={['top', 'bottom']}>
+            <PinEntry
+              title="passcode unavailable"
+              subtitle="The passcode data was cleared. This album will be unlocked."
+              error=""
+              onComplete={() => {
+                // This shouldn't be called in no-pin state, but guard anyway
+              }}
+              onCancel={() => {
+                handleReset();
+                onNoPinFound?.();
+                onCancel();
+              }}
+              resetKey={resetKey}
+              disableKeypad
+              cancelLabel="continue"
+            />
+          </SafeAreaView>
+        </SafeAreaProvider>
+      </Modal>
+    );
+  }
 
-  const subtitle = mode === 'setup' && step === 'enter'
-    ? 'choose a 4-digit passcode'
-    : undefined;
+  const isSetupStep = step === 'enter-new' || step === 'confirm-new';
+
+  let title: string;
+  if (step === 'verify') {
+    title = intent === 'change' ? 'enter current passcode' : 'enter passcode';
+  } else if (step === 'enter-new') {
+    title = 'set new passcode';
+  } else {
+    title = 'confirm passcode';
+  }
+
+  const subtitle = step === 'enter-new' ? 'choose a 4-digit passcode' : undefined;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
@@ -109,9 +196,10 @@ export default function PinModal({ visible, mode: requestedMode, onSuccess, onCa
             title={title}
             subtitle={subtitle}
             error={error}
-            onComplete={mode === 'setup' ? handleSetupComplete : handleVerifyComplete}
+            onComplete={isSetupStep ? handleSetupComplete : handleVerifyComplete}
             onCancel={handleCancel}
             resetKey={resetKey}
+            disableKeypad={lockoutSeconds > 0}
           />
         </SafeAreaView>
       </SafeAreaProvider>

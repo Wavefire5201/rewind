@@ -145,11 +145,14 @@ export default function ImportPhotoModal({
         >
           {/* Photo */}
           <View style={styles.photoContainer}>
-            <Image
-              source={{ uri: current.uri }}
-              style={[styles.photo, { width: screenWidth - 48, height: photoHeight }]}
-              contentFit="cover"
-            />
+            <View style={[styles.photoPlaceholder, { width: screenWidth - 48, height: photoHeight }]}>
+              <Image
+                source={{ uri: current.uri }}
+                style={[styles.photo, { width: screenWidth - 48, height: photoHeight }]}
+                contentFit="cover"
+                onError={() => {}}
+              />
+            </View>
           </View>
 
           {/* Fields */}
@@ -243,6 +246,10 @@ const styles = StyleSheet.create({
   photoContainer: {
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  photoPlaceholder: {
+    backgroundColor: Colors.bgSurface,
+    overflow: 'hidden',
   },
   photo: {},
   fields: {
