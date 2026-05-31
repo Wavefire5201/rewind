@@ -15,6 +15,7 @@ import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import { createAlbum } from '@/utils/albums';
+import { scheduleAlbumReminder } from '@/utils/notifications';
 
 // ─── Step 1: Welcome ────────────────────────────────────────────────────────
 
@@ -194,10 +195,17 @@ export default function OnboardingScreen() {
     setStep(3);
   }
 
-  function finalize(reminderEnabled: boolean, reminderTime: string) {
+  async function finalize(reminderEnabled: boolean, reminderTime: string) {
     const newAlbum = createAlbum(albumNameRef.current, { reminderEnabled, reminderTime });
     addAlbum(newAlbum);
     updateProfile({ joinDate: new Date().toISOString().split('T')[0] });
+    if (reminderEnabled) {
+      try {
+        await scheduleAlbumReminder(newAlbum);
+      } catch {
+        // scheduling failure must not block onboarding completion
+      }
+    }
     router.replace({ pathname: '/(tabs)/camera', params: { albumId: newAlbum.id } });
   }
 
