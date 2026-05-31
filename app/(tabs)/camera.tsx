@@ -10,11 +10,12 @@ import { useGreeting } from '@/hooks/useGreeting';
 import { useAppContext } from '@/context/AppContext';
 import { getToday, formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
-import Viewfinder from '@/components/camera/Viewfinder';
+import Viewfinder, { type FaceState } from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
 import TimerSelector from '@/components/camera/TimerSelector';
 import CapturePreview from '@/components/camera/CapturePreview';
 import type { ViewfinderRef } from '@/components/camera/Viewfinder';
+import { useAutoCapture } from '@/hooks/useAutoCapture';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
 import type { PhotoEntry, FaceLandmarks } from '@/types';
 
@@ -32,6 +33,9 @@ export default function CameraScreen() {
   const { fonts, typography } = useFont();
   const cameraRef = useRef<ViewfinderRef>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isCapturingRef = useRef(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [faceDetectionAvailable, setFaceDetectionAvailable] = useState(true);
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isMirrored, setIsMirrored] = useState(settings.mirrorSelfies);
   const [ghostOpacity, setGhostOpacity] = useState(0.3);
@@ -42,30 +46,47 @@ export default function CameraScreen() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFaceGuide, setShowFaceGuide] = useState(false);
   const [capturedLandmarks, setCapturedLandmarks] = useState<FaceLandmarks | null>(null);
+  const [faceState, setFaceState] = useState<FaceState>({ hasFace: false, faceX: 0, faceY: 0, faceWidth: 0, faceHeight: 0, yawAngle: 0, rollAngle: 0 });
+  const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+
+  // Reference target: captured from live video so we can bootstrap
+  // auto-capture even when no photo has faceLandmarks yet.
+  const [referenceTarget, setReferenceTarget] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = async () => {
-    // Grab face landmarks before capture (frame processor is still running)
-    const landmarks = cameraRef.current?.getCurrentLandmarks() ?? null;
-    const photo = await cameraRef.current?.takePhoto();
-    if (photo?.uri) {
-      let uri = photo.uri;
-      if (facing === 'front' && !isMirrored) {
-        try {
-          const imageRef = await ImageManipulator.manipulate(uri)
-            .flip(FlipType.Horizontal)
-            .renderAsync();
-          const saved = await imageRef.saveAsync();
-          uri = saved.uri;
-        } catch (e) {
-          console.warn('Image flip failed, using original:', e);
+    if (isCapturingRef.current) return;
+    isCapturingRef.current = true;
+    setIsCapturing(true);
+    try {
+      // Grab face landmarks before capture (frame processor is still running)
+      const landmarks = cameraRef.current?.getCurrentLandmarks() ?? null;
+      const photo = await cameraRef.current?.takePhoto();
+      if (photo?.uri) {
+        let uri = photo.uri;
+        if (facing === 'front' && !isMirrored) {
+          try {
+            const imageRef = await ImageManipulator.manipulate(uri)
+              .flip(FlipType.Horizontal)
+              .renderAsync();
+            const saved = await imageRef.saveAsync();
+            uri = saved.uri;
+          } catch (e) {
+            console.warn('Image flip failed, using original:', e);
+          }
         }
+        setCapturedUri(uri);
+        setCapturedLandmarks(landmarks);
+        setShowPreview(true);
       }
-      setCapturedUri(uri);
-      setCapturedLandmarks(landmarks);
-      setShowPreview(true);
+    } catch (e) {
+      haptics.error();
+      Alert.alert('Capture Failed', 'Could not take photo. Please try again.');
+    } finally {
+      isCapturingRef.current = false;
+      setIsCapturing(false);
     }
   };
 
@@ -90,7 +111,7 @@ export default function CameraScreen() {
           clearInterval(intervalRef.current!);
           intervalRef.current = null;
           setCountdown(null);
-          doCapture();
+          doCapture().catch(() => {});
         } else {
           setCountdown(remaining);
         }
@@ -106,7 +127,98 @@ export default function CameraScreen() {
   };
   const handleMirrorToggle = () => setIsMirrored(prev => !prev);
   const handleTimerToggle = () => setShowTimer(prev => !prev);
-  const handleFaceGuideToggle = () => setShowFaceGuide(prev => !prev);
+  const handleFaceGuideToggle = () => {
+    if (!faceDetectionAvailable) return;
+    setShowFaceGuide(prev => !prev);
+  };
+  const handleAvailabilityChange = useCallback((available: boolean) => {
+    setFaceDetectionAvailable(available);
+    if (!available) setShowFaceGuide(false);
+  }, []);
+
+  const handleFaceState = useCallback((state: FaceState) => {
+    setFaceState(state);
+  }, []);
+
+  const handleDebugToggle = useCallback(() => {
+    setShowDebugOverlay(prev => !prev);
+    haptics.tap();
+  }, []);
+
+  // Auto-capture alignment target priority:
+  // 1. Reference target (user manually set via long-press)
+  // 2. Most recent photo's face landmarks
+  // 3. Default center position (for bootstrapping)
+  const alignmentTarget = referenceTarget ?? mostRecentPhoto?.faceLandmarks?.faceBounds ?? null;
+  const hasAlignmentTarget = alignmentTarget !== null;
+
+  function computeAlignmentScore(face: FaceState): number {
+    if (!face.hasFace) return 0;
+
+    let targetCX = 0.5;
+    let targetCY = 0.5;
+    let targetW = 0.3;
+    let targetH = 0.4;
+
+    if (alignmentTarget) {
+      targetCX = alignmentTarget.x + alignmentTarget.width / 2;
+      targetCY = alignmentTarget.y + alignmentTarget.height / 2;
+      targetW = alignmentTarget.width;
+      targetH = alignmentTarget.height;
+    }
+
+    const cx = face.faceX + face.faceWidth / 2;
+    const cy = face.faceY + face.faceHeight / 2;
+
+    const dx = cx - targetCX;
+    const dy = cy - targetCY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const positionScore = Math.max(0, 1 - dist * 4);
+
+    // Gate: face must be reasonably close to target position before other
+    // factors (size, yaw, roll) can contribute to the score.
+    if (positionScore < 0.1) return 0;
+
+    const area = face.faceWidth * face.faceHeight;
+    const targetArea = targetW * targetH;
+    const areaRatio = targetArea > 0 ? Math.min(area / targetArea, targetArea / area) : 0;
+    const sizeScore = areaRatio;
+
+    const yawScore = Math.max(0, 1 - Math.abs(face.yawAngle) / 45);
+    const rollScore = Math.max(0, 1 - Math.abs(face.rollAngle) / 30);
+
+    return positionScore * 0.45 + sizeScore * 0.20 + yawScore * 0.20 + rollScore * 0.15;
+  }
+
+  const alignmentScore = computeAlignmentScore(faceState);
+
+  // Lower threshold when bootstrapping (no target yet) so first capture is easier
+  const alignmentThreshold = hasAlignmentTarget ? 0.75 : 0.65;
+
+  const { progress: autoCaptureProgress, isInCooldown: autoCaptureCooldown } = useAutoCapture({
+    enabled: showFaceGuide && faceState.hasFace,
+    alignmentScore,
+    alignmentThreshold,
+    requiredFrames: hasAlignmentTarget ? 15 : 10,
+    cooldownMs: 3000,
+    onCapture: handleCapture,
+  });
+
+  // Long-press shutter to capture current face position as a reference target
+  // (doesn't take a photo — just remembers where your face is for alignment)
+  const handleCaptureReference = useCallback(() => {
+    if (!faceState.hasFace) {
+      haptics.error();
+      return;
+    }
+    setReferenceTarget({
+      x: faceState.faceX,
+      y: faceState.faceY,
+      width: faceState.faceWidth,
+      height: faceState.faceHeight,
+    });
+    haptics.success();
+  }, [faceState]);
 
   const handleGhostOpacity = useCallback((value: number) => {
     setGhostOpacity(value);
@@ -160,6 +272,9 @@ export default function CameraScreen() {
         onGhostOpacityChange={handleGhostOpacity}
         isMirrored={isMirrored}
         showFaceGuide={showFaceGuide}
+        onFaceState={handleFaceState}
+        onAvailabilityChange={handleAvailabilityChange}
+        showDebug={showDebugOverlay}
       />
 
       <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
@@ -176,14 +291,16 @@ export default function CameraScreen() {
           <Text style={[styles.albumLabel, { fontFamily: fonts.regular }]}>{albumName}</Text>
           <Pressable
             onPress={handleFaceGuideToggle}
-            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+            onLongPress={handleDebugToggle}
+            style={({ pressed }) => [styles.backBtn, pressed && faceDetectionAvailable && { opacity: 0.7 }, !faceDetectionAvailable && { opacity: 0.4 }]}
             hitSlop={12}
-            accessibilityLabel={showFaceGuide ? 'Hide face guide' : 'Show face guide'}
+            accessibilityLabel={!faceDetectionAvailable ? 'Face guide unavailable' : showFaceGuide ? 'Hide face guide' : 'Show face guide'}
             accessibilityRole="button"
+            disabled={!faceDetectionAvailable}
           >
             <UserFocus
               size={20}
-              color={showFaceGuide ? Colors.accent : Colors.textSecondary}
+              color={showFaceGuide && faceDetectionAvailable ? Colors.accent : Colors.textSecondary}
               weight="light"
             />
           </Pressable>
@@ -202,11 +319,16 @@ export default function CameraScreen() {
 
         <CameraControls
           onCapture={handleCapture}
+          onCaptureReference={handleCaptureReference}
           onFlip={handleFlip}
           onTimerToggle={handleTimerToggle}
           onMirrorToggle={handleMirrorToggle}
           isMirrored={isMirrored}
           isFrontCamera={facing === 'front'}
+          autoCaptureProgress={autoCaptureProgress}
+          isInCooldown={autoCaptureCooldown}
+          hasAlignmentTarget={hasAlignmentTarget}
+          isCapturing={isCapturing}
         />
 
         {showTimer && (

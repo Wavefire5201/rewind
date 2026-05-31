@@ -5,21 +5,53 @@ import { Colors, Sizes } from '@/constants/theme';
 
 interface ShutterButtonProps {
   onPress: () => void;
+  onLongPress?: () => void;
+  autoCaptureProgress?: number;
+  isInCooldown?: boolean;
+  hasAlignmentTarget?: boolean;
+  disabled?: boolean;
 }
 
-export default function ShutterButton({ onPress }: ShutterButtonProps) {
+export default function ShutterButton({ onPress, onLongPress, autoCaptureProgress = 0, isInCooldown = false, hasAlignmentTarget, disabled = false }: ShutterButtonProps) {
   return (
     <Pressable
       onPress={() => {
-        haptics.shutter();
-        onPress();
+        if (!isInCooldown && !disabled) {
+          haptics.shutter();
+          onPress();
+        }
       }}
+      onLongPress={() => {
+        if (!isInCooldown && !disabled && onLongPress) {
+          onLongPress();
+        }
+      }}
+      delayLongPress={400}
       style={({ pressed }) => [
         styles.outer,
-        pressed && { transform: [{ scale: 0.95 }] },
+        pressed && !isInCooldown && !disabled && { transform: [{ scale: 0.95 }] },
+        isInCooldown && { opacity: 0.4 },
+        disabled && { opacity: 0.35 },
+        autoCaptureProgress > 0 && !isInCooldown && !disabled && {
+          borderColor: Colors.streak,
+        },
+        hasAlignmentTarget === false && autoCaptureProgress === 0 && !isInCooldown && !disabled && {
+          borderColor: Colors.streak,
+          opacity: 0.6,
+        },
       ]}
     >
-      <View style={styles.inner} />
+      <View style={[
+        styles.inner,
+        autoCaptureProgress > 0 && !isInCooldown && !disabled && {
+          backgroundColor: Colors.streak,
+          transform: [{ scale: 0.85 + autoCaptureProgress * 0.15 }],
+        },
+        hasAlignmentTarget === false && autoCaptureProgress === 0 && !isInCooldown && !disabled && {
+          backgroundColor: Colors.streak,
+          opacity: 0.5,
+        },
+      ]} />
     </Pressable>
   );
 }

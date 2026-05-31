@@ -1,5 +1,5 @@
-import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Platform, type LayoutChangeEvent } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Platform, Linking, type LayoutChangeEvent } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { useSharedValue } from 'react-native-reanimated';
 import { useRunOnJS } from 'react-native-worklets-core';
@@ -9,7 +9,18 @@ import { useFaceDetection } from '@/hooks/useFaceDetection';
 import GridOverlay from '@/components/camera/GridOverlay';
 import GhostOverlay from '@/components/camera/GhostOverlay';
 import FaceGuide from '@/components/camera/FaceGuide';
+import FaceDebugOverlay from '@/components/camera/FaceDebugOverlay';
 import type { FaceLandmarks } from '@/types';
+
+export interface FaceState {
+  hasFace: boolean;
+  faceX: number;
+  faceY: number;
+  faceWidth: number;
+  faceHeight: number;
+  yawAngle: number;
+  rollAngle: number;
+}
 
 interface ViewfinderProps {
   ghostImageUri: string | null;
@@ -18,6 +29,9 @@ interface ViewfinderProps {
   onGhostOpacityChange: (value: number) => void;
   isMirrored: boolean;
   showFaceGuide: boolean;
+  onFaceState?: (state: FaceState) => void;
+  onAvailabilityChange?: (available: boolean) => void;
+  showDebug?: boolean;
 }
 
 export interface ViewfinderRef {
@@ -26,7 +40,7 @@ export interface ViewfinderRef {
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
-  ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide }, ref) => {
+  ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false }, ref) => {
     const { typography } = useFont();
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
@@ -35,56 +49,80 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
     const contourData = useSharedValue<number[]>([]);
     const { detectFaces, getCurrentLandmarks, isAvailable: faceDetectionAvailable, sharedValues } = useFaceDetection();
 
-    // Bridge face data from frame processor worklet → JS thread → shared values.
-    // VisionCamera (worklets-core) and Reanimated 4 (react-native-worklets) use
-    // different worklet runtimes, so shared values written directly in the frame
-    // processor don't propagate to Reanimated's UI thread. useRunOnJS from
-    // worklets-core creates a callable that properly bridges back to JS.
-    // Preview is flipped iff facing === 'front' && !isMirrored — match that exactly
-    // so the overlay stays aligned with what the user sees.
-    const previewFlipped = facing === 'front' && !isMirrored;
-    const onFaceDetected = useRunOnJS((data: Record<string, number>) => {
-      if (previewFlipped) {
-        data.faceX = 1 - data.faceX - data.faceWidth;
-        data.leftEyeX = 1 - data.leftEyeX;
-        data.rightEyeX = 1 - data.rightEyeX;
-        data.noseX = 1 - data.noseX;
-        data.mouthLeftX = 1 - data.mouthLeftX;
-        data.mouthRightX = 1 - data.mouthRightX;
+    useEffect(() => {
+      onAvailabilityChange?.(faceDetectionAvailable);
+    }, [faceDetectionAvailable, onAvailabilityChange]);
+
+    // Single bridge call from frame processor worklet → JS thread.
+    // VisionCamera (worklets-core) and Reanimated 4 use different worklet runtimes,
+    // so shared values written in the frame processor don't propagate to Reanimated's
+    // UI thread. useRunOnJS bridges the gap. We use ONE callback to minimize
+    // worklet↔JS thread overhead (was 2-3 per frame, now 1).
+    const previewFlipped = facing === 'front' && isMirrored;
+    const onFaceResult = useRunOnJS((data: {
+      hasFace: boolean;
+      faceX?: number; faceY?: number;
+      faceWidth?: number; faceHeight?: number;
+      leftEyeX?: number; leftEyeY?: number;
+      rightEyeX?: number; rightEyeY?: number;
+      noseX?: number; noseY?: number;
+      mouthLeftX?: number; mouthLeftY?: number;
+      mouthRightX?: number; mouthRightY?: number;
+      rollAngle?: number; yawAngle?: number;
+      contour?: number[];
+    }) => {
+      if (!data.hasFace) {
+        sharedValues.hasFace.value = false;
+        contourData.value = [];
+        onFaceState?.({ hasFace: false, faceX: 0, faceY: 0, faceWidth: 0, faceHeight: 0, yawAngle: 0, rollAngle: 0 });
+        return;
       }
-      const sv = sharedValues;
-      sv.faceX.value = data.faceX;
-      sv.faceY.value = data.faceY;
-      sv.faceWidth.value = data.faceWidth;
-      sv.faceHeight.value = data.faceHeight;
-      sv.leftEyeX.value = data.leftEyeX;
-      sv.leftEyeY.value = data.leftEyeY;
-      sv.rightEyeX.value = data.rightEyeX;
-      sv.rightEyeY.value = data.rightEyeY;
-      sv.noseX.value = data.noseX;
-      sv.noseY.value = data.noseY;
-      sv.mouthLeftX.value = data.mouthLeftX;
-      sv.mouthLeftY.value = data.mouthLeftY;
-      sv.mouthRightX.value = data.mouthRightX;
-      sv.mouthRightY.value = data.mouthRightY;
-      sv.rollAngle.value = data.rollAngle;
-      sv.yawAngle.value = data.yawAngle;
-      sv.hasFace.value = true;
-    }, [sharedValues, previewFlipped]);
 
-    const onNoFace = useRunOnJS(() => {
-      sharedValues.hasFace.value = false;
-      contourData.value = [];
-    }, [sharedValues, contourData]);
-
-    const onContourDetected = useRunOnJS((flat: number[]) => {
       if (previewFlipped) {
-        for (let i = 0; i < flat.length; i += 2) {
-          flat[i] = 1 - flat[i];
+        data.faceX = 1 - data.faceX! - data.faceWidth!;
+        data.leftEyeX = 1 - data.leftEyeX!;
+        data.rightEyeX = 1 - data.rightEyeX!;
+        data.noseX = 1 - data.noseX!;
+        data.mouthLeftX = 1 - data.mouthLeftX!;
+        data.mouthRightX = 1 - data.mouthRightX!;
+        if (data.contour) {
+          for (let i = 0; i < data.contour.length; i += 2) {
+            data.contour[i] = 1 - data.contour[i];
+          }
         }
       }
-      contourData.value = flat;
-    }, [previewFlipped, contourData]);
+
+      const sv = sharedValues;
+      sv.faceX.value = data.faceX!;
+      sv.faceY.value = data.faceY!;
+      sv.faceWidth.value = data.faceWidth!;
+      sv.faceHeight.value = data.faceHeight!;
+      sv.leftEyeX.value = data.leftEyeX!;
+      sv.leftEyeY.value = data.leftEyeY!;
+      sv.rightEyeX.value = data.rightEyeX!;
+      sv.rightEyeY.value = data.rightEyeY!;
+      sv.noseX.value = data.noseX!;
+      sv.noseY.value = data.noseY!;
+      sv.mouthLeftX.value = data.mouthLeftX!;
+      sv.mouthLeftY.value = data.mouthLeftY!;
+      sv.mouthRightX.value = data.mouthRightX!;
+      sv.mouthRightY.value = data.mouthRightY!;
+      sv.rollAngle.value = data.rollAngle!;
+      sv.yawAngle.value = data.yawAngle!;
+      sv.hasFace.value = true;
+
+      if (data.contour) contourData.value = data.contour;
+
+      onFaceState?.({
+        hasFace: true,
+        faceX: data.faceX!,
+        faceY: data.faceY!,
+        faceWidth: data.faceWidth!,
+        faceHeight: data.faceHeight!,
+        yawAngle: data.yawAngle!,
+        rollAngle: data.rollAngle!,
+      });
+    }, [sharedValues, previewFlipped, contourData, onFaceState]);
 
     const frameProcessor = useFrameProcessor(
       (frame) => {
@@ -92,7 +130,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
         try {
           const faces = detectFaces(frame);
           if (!faces || faces.length === 0) {
-            onNoFace();
+            onFaceResult({ hasFace: false });
             return;
           }
 
@@ -108,7 +146,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
 
           const bounds = largest.bounds;
           if (!bounds) {
-            onNoFace();
+            onFaceResult({ hasFace: false });
             return;
           }
 
@@ -123,7 +161,8 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           const normW = isLandscape ? frameH : frameW;
           const normH = isLandscape ? frameW : frameH;
 
-          onFaceDetected({
+          const result: any = {
+            hasFace: true,
             faceX: bounds.x / normW,
             faceY: bounds.y / normH,
             faceWidth: bounds.width / normW,
@@ -140,7 +179,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
             mouthRightY: lm?.MOUTH_RIGHT ? lm.MOUTH_RIGHT.y / normH : 0,
             rollAngle: largest.rollAngle ?? 0,
             yawAngle: largest.yawAngle ?? 0,
-          });
+          };
 
           // Pass face contour points as flat [x1,y1,x2,y2,...] array
           const faceContour = (largest as any).contours?.FACE;
@@ -149,13 +188,15 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
             for (const p of faceContour) {
               flat.push(p.x / normW, p.y / normH);
             }
-            onContourDetected(flat);
+            result.contour = flat;
           }
+
+          onFaceResult(result);
         } catch (e: any) {
           console.log('[FrameProcessor] error:', e?.message || e);
         }
       },
-      [detectFaces, onFaceDetected, onNoFace, onContourDetected],
+      [detectFaces, onFaceResult],
     );
 
     useImperativeHandle(ref, () => ({
@@ -175,9 +216,14 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           </Text>
           <Text
             style={[typography.small, styles.permissionLink]}
-            onPress={requestPermission}
+            onPress={async () => {
+              const granted = await requestPermission();
+              if (!granted) {
+                Linking.openSettings();
+              }
+            }}
           >
-            Grant Permission
+            Open Settings to enable camera access
           </Text>
         </View>
       );
@@ -202,7 +248,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
       <View style={styles.container} onLayout={onLayout}>
         <Camera
           ref={cameraRef}
-          style={[StyleSheet.absoluteFill, { transform: [{ scaleX: facing === 'front' && !isMirrored ? -1 : 1 }] }]}
+          style={[StyleSheet.absoluteFill, { transform: [{ scaleX: previewFlipped ? -1 : 1 }] }]}
           device={device}
           isActive={true}
           photo={true}
@@ -218,18 +264,18 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
         ) : null}
         <GridOverlay />
         {showFaceGuide ? (
-          <>
-            <FaceGuide
-              faceX={sharedValues.faceX}
-              faceY={sharedValues.faceY}
-              faceWidth={sharedValues.faceWidth}
-              faceHeight={sharedValues.faceHeight}
-              hasFace={sharedValues.hasFace}
-              containerWidth={containerSize.width}
-              containerHeight={containerSize.height}
-              contourData={contourData}
-            />
-          </>
+          <FaceGuide
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
+            contourData={contourData}
+          />
+        ) : null}
+        {showDebug ? (
+          <FaceDebugOverlay
+            sharedValues={sharedValues}
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
+          />
         ) : null}
       </View>
     );

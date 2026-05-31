@@ -71,74 +71,6 @@ export function useFaceDetection() {
   const yawAngle = useSharedValue(0);
   const hasFace = useSharedValue(false);
 
-  const handleDetectedFaces = useCallback(
-    (faces: any[], _frame: Frame) => {
-      'worklet';
-      if (!faces || faces.length === 0) {
-        hasFace.value = false;
-        return;
-      }
-
-      // Use the largest face by bounding box area
-      let largest = faces[0];
-      let largestArea = 0;
-      for (const face of faces) {
-        const area = (face.bounds?.width ?? 0) * (face.bounds?.height ?? 0);
-        if (area > largestArea) {
-          largestArea = area;
-          largest = face;
-        }
-      }
-
-      const bounds = largest.bounds;
-      if (!bounds) {
-        hasFace.value = false;
-        return;
-      }
-
-      // Normalize coordinates to 0-1 using frame dimensions.
-      // NOTE: camera frame is rotated 90° relative to portrait view, so frame.width/height
-      // are swapped relative to what you'd expect. Frame width = device height in portrait.
-      const frameW = _frame.width || 1;
-      const frameH = _frame.height || 1;
-
-      faceX.value = bounds.x / frameW;
-      faceY.value = bounds.y / frameH;
-      faceWidth.value = bounds.width / frameW;
-      faceHeight.value = bounds.height / frameH;
-
-      const leftEye = largest.landmarks?.LEFT_EYE;
-      const rightEye = largest.landmarks?.RIGHT_EYE;
-      const nose = largest.landmarks?.NOSE_BASE;
-      const mouthLeft = largest.landmarks?.MOUTH_LEFT;
-      const mouthRight = largest.landmarks?.MOUTH_RIGHT;
-      if (leftEye) {
-        leftEyeX.value = leftEye.x / frameW;
-        leftEyeY.value = leftEye.y / frameH;
-      }
-      if (rightEye) {
-        rightEyeX.value = rightEye.x / frameW;
-        rightEyeY.value = rightEye.y / frameH;
-      }
-      if (nose) {
-        noseX.value = nose.x / frameW;
-        noseY.value = nose.y / frameH;
-      }
-      if (mouthLeft) {
-        mouthLeftX.value = mouthLeft.x / frameW;
-        mouthLeftY.value = mouthLeft.y / frameH;
-      }
-      if (mouthRight) {
-        mouthRightX.value = mouthRight.x / frameW;
-        mouthRightY.value = mouthRight.y / frameH;
-      }
-      rollAngle.value = largest.rollAngle ?? 0;
-      yawAngle.value = largest.yawAngle ?? 0;
-      hasFace.value = true;
-    },
-    [],
-  );
-
   const getCurrentLandmarks = useCallback((): FaceLandmarks | null => {
     if (!hasFace.value) return null;
     return {
@@ -158,7 +90,6 @@ export function useFaceDetection() {
 
   return {
     detectFaces,
-    handleDetectedFaces,
     getCurrentLandmarks,
     isAvailable: FACE_DETECTION_AVAILABLE,
     sharedValues: {

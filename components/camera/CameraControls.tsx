@@ -7,20 +7,30 @@ import ShutterButton from '@/components/camera/ShutterButton';
 
 interface CameraControlsProps {
   onCapture: () => void;
+  onCaptureReference?: () => void;
   onFlip: () => void;
   onTimerToggle: () => void;
   onMirrorToggle: () => void;
   isMirrored: boolean;
   isFrontCamera: boolean;
+  autoCaptureProgress?: number;
+  isInCooldown?: boolean;
+  hasAlignmentTarget?: boolean;
+  isCapturing?: boolean;
 }
 
 export default function CameraControls({
   onCapture,
+  onCaptureReference,
   onFlip,
   onTimerToggle,
   onMirrorToggle,
   isMirrored,
   isFrontCamera,
+  autoCaptureProgress,
+  isInCooldown,
+  hasAlignmentTarget,
+  isCapturing,
 }: CameraControlsProps) {
   return (
     <View style={styles.row}>
@@ -33,7 +43,7 @@ export default function CameraControls({
       >
         <ArrowsClockwise size={20} color={Colors.textSecondary} weight="light" />
       </CircleButton>
-      <ShutterButton onPress={onCapture} />
+      <ShutterButton onPress={onCapture} onLongPress={onCaptureReference} autoCaptureProgress={autoCaptureProgress} isInCooldown={isInCooldown} hasAlignmentTarget={hasAlignmentTarget} disabled={isCapturing} />
       {isFrontCamera ? (
         <CircleButton
           onPress={onMirrorToggle}
