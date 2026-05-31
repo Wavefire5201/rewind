@@ -4,6 +4,14 @@ import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
 import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
 import { cancelAlbumReminder } from '@/utils/notifications';
+import { haptics } from '@/utils/haptics';
+
+function fireAndSave(p: Promise<void>): void {
+  p.catch(e => {
+    console.error('Storage write failed:', e);
+    haptics.error();
+  });
+}
 
 const DEFAULT_ALBUMS: Album[] = [];
 
@@ -46,12 +54,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        const [storedPhotos, storedProfile, storedSettings, storedAlbums] = await Promise.all([
+        const [photosResult, profileResult, settingsResult, albumsResult] = await Promise.allSettled([
           loadPhotos(),
           loadProfile(),
           loadSettings(),
           loadAlbums(),
         ]);
+        const storedPhotos = photosResult.status === 'fulfilled' ? photosResult.value : [];
+        const storedProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+        const storedSettings = settingsResult.status === 'fulfilled' ? settingsResult.value : getDefaultSettings();
+        const storedAlbums = albumsResult.status === 'fulfilled' ? albumsResult.value : null;
 
         if (storedPhotos.length > 0) {
           // Migrate legacy photos missing albumId
@@ -127,7 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Replace if same date+album exists
       const filtered = prev.filter(p => !(p.date === entry.date && p.albumId === entry.albumId));
       const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-      savePhotos(next);
+      fireAndSave(savePhotos(next));
       return next;
     });
   }, []);
@@ -135,7 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
     setPhotos(prev => {
       const next = prev.map(p => p.id === id ? { ...p, ...updates } : p);
-      savePhotos(next);
+      fireAndSave(savePhotos(next));
       return next;
     });
   }, []);
@@ -147,7 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try { new File(target.imageUri).delete(); } catch {}
       }
       const next = prev.filter(p => p.id !== id);
-      savePhotos(next);
+      fireAndSave(savePhotos(next));
       return next;
     });
   }, []);
@@ -155,7 +167,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => {
       const next = { ...prev, ...updates };
-      saveProfile(next);
+      fireAndSave(saveProfile(next));
       return next;
     });
   }, []);
@@ -163,7 +175,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...updates };
-      saveSettings(next);
+      fireAndSave(saveSettings(next));
       return next;
     });
   }, []);
@@ -171,7 +183,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addAlbum = useCallback((album: Album) => {
     setAlbums(prev => {
       const next = [...prev, album];
-      saveAlbums(next);
+      fireAndSave(saveAlbums(next));
       return next;
     });
   }, []);
@@ -179,7 +191,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateAlbum = useCallback((id: string, updates: Partial<Album>) => {
     setAlbums(prev => {
       const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
-      saveAlbums(next);
+      fireAndSave(saveAlbums(next));
       return next;
     });
   }, []);
@@ -189,7 +201,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Guard: cannot delete the last album
       if (prev.length <= 1) return prev;
       const next = prev.filter(a => a.id !== id);
-      saveAlbums(next);
+      fireAndSave(saveAlbums(next));
       return next;
     });
     // Cancel any scheduled notification for this album
@@ -204,7 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           try { new File(photo.imageUri).delete(); } catch {}
         }
       }
-      savePhotos(next);
+      fireAndSave(savePhotos(next));
       return next;
     });
   }, []);
@@ -264,7 +276,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const existingDates = new Set(prev.map(p => `${p.date}:${p.albumId}`));
       const newPhotos = mockPhotos.filter(p => !existingDates.has(`${p.date}:${p.albumId}`));
       const next = [...prev, ...newPhotos].sort((a, b) => a.date.localeCompare(b.date));
-      savePhotos(next);
+      fireAndSave(savePhotos(next));
       return next;
     });
 
@@ -273,7 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfile(prev => {
       if (!prev.joinDate || earliest < prev.joinDate) {
         const next = { ...prev, joinDate: earliest };
-        saveProfile(next);
+        fireAndSave(saveProfile(next));
         return next;
       }
       return prev;
@@ -289,7 +301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return a;
       });
       if (JSON.stringify(updated) !== JSON.stringify(prev)) {
-        saveAlbums(updated);
+        fireAndSave(saveAlbums(updated));
         return updated;
       }
       return prev;

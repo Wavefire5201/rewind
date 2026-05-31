@@ -39,9 +39,8 @@ export default function CapturePreview({
       onSave(caption, dest.uri);
       setCaption('');
     } catch {
-      haptics.success();
-      onSave(caption, imageUri);
-      setCaption('');
+      haptics.error();
+      Alert.alert('Save failed', "Couldn't save photo, please try again.");
     } finally {
       setSaving(false);
     }

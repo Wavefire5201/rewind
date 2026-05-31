@@ -23,7 +23,13 @@ export async function savePhotos(photos: PhotoEntry[]): Promise<void> {
 
 export async function loadPhotos(): Promise<PhotoEntry[]> {
   const data = await AsyncStorage.getItem(KEYS.PHOTOS);
-  return data ? JSON.parse(data) : [];
+  if (!data) return [];
+  try {
+    return JSON.parse(data);
+  } catch {
+    console.error('loadPhotos: corrupt JSON, resetting to []');
+    return [];
+  }
 }
 
 export async function saveProfile(profile: UserProfile): Promise<void> {
@@ -32,7 +38,13 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
 
 export async function loadProfile(): Promise<UserProfile | null> {
   const data = await AsyncStorage.getItem(KEYS.PROFILE);
-  return data ? JSON.parse(data) : null;
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    console.error('loadProfile: corrupt JSON, resetting to null');
+    return null;
+  }
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
@@ -42,8 +54,13 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 export async function loadSettings(): Promise<AppSettings> {
   const data = await AsyncStorage.getItem(KEYS.SETTINGS);
   if (!data) return getDefaultSettings();
-  const stored = JSON.parse(data) as Partial<AppSettings>;
-  return { ...getDefaultSettings(), ...stored };
+  try {
+    const stored = JSON.parse(data) as Partial<AppSettings>;
+    return { ...getDefaultSettings(), ...stored };
+  } catch {
+    console.error('loadSettings: corrupt JSON, resetting to defaults');
+    return getDefaultSettings();
+  }
 }
 
 export async function saveAlbums(albums: Album[]): Promise<void> {
@@ -52,7 +69,13 @@ export async function saveAlbums(albums: Album[]): Promise<void> {
 
 export async function loadAlbums(): Promise<Album[] | null> {
   const data = await AsyncStorage.getItem(KEYS.ALBUMS);
-  return data ? JSON.parse(data) : null;
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    console.error('loadAlbums: corrupt JSON, resetting to null');
+    return null;
+  }
 }
 
 export async function clearAllData(): Promise<void> {
