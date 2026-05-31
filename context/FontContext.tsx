@@ -1,12 +1,6 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext } from 'react';
 import { TextStyle } from 'react-native';
-import { Colors } from '@/constants/theme';
-
-const FONTS = {
-  light: 'CommitMono_Light',
-  regular: 'CommitMono_Regular',
-  medium: 'CommitMono_Medium',
-};
+import { Fonts, Typography } from '@/constants/theme';
 
 interface FontContextValue {
   fonts: { light: string; regular: string; medium: string };
@@ -15,22 +9,10 @@ interface FontContextValue {
 
 const FontContext = createContext<FontContextValue | null>(null);
 
-export function FontProvider({ children }: { children: React.ReactNode }) {
-  const value = useMemo(() => {
-    const typography: Record<string, TextStyle> = {
-      displayTitle: { fontFamily: FONTS.light, fontSize: 28, lineHeight: 36, letterSpacing: -1, color: Colors.textPrimary },
-      bigNumber: { fontFamily: FONTS.light, fontSize: 32, lineHeight: 38, letterSpacing: -1, color: Colors.textPrimary },
-      mediumNumber: { fontFamily: FONTS.light, fontSize: 28, lineHeight: 34, letterSpacing: -1, color: Colors.textPrimary },
-      caption: { fontFamily: FONTS.regular, fontSize: 16, lineHeight: 22, color: Colors.textPrimary },
-      sectionLabel: { fontFamily: FONTS.regular, fontSize: 10, lineHeight: 14, letterSpacing: 2, color: Colors.textSecondary },
-      body: { fontFamily: FONTS.regular, fontSize: 14, lineHeight: 20, color: Colors.textPrimary },
-      small: { fontFamily: FONTS.regular, fontSize: 11, lineHeight: 16, color: Colors.textSecondary },
-      tiny: { fontFamily: FONTS.regular, fontSize: 10, lineHeight: 14, color: Colors.textSecondary },
-    };
-    return { fonts: FONTS, typography };
-  }, []);
+const CONTEXT_VALUE: FontContextValue = { fonts: Fonts.mono, typography: Typography };
 
-  return <FontContext.Provider value={value}>{children}</FontContext.Provider>;
+export function FontProvider({ children }: { children: React.ReactNode }) {
+  return <FontContext.Provider value={CONTEXT_VALUE}>{children}</FontContext.Provider>;
 }
 
 export function useFont() {

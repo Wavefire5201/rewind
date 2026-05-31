@@ -225,12 +225,6 @@ export default function PhotoModal({
     }
   }
 
-  function handleEdit() {
-    if (!currentPhoto) return;
-    haptics.tap();
-    Alert.alert('Coming Soon', 'Photo editing is not available yet.');
-  }
-
   function handleRetake() {
     if (!currentPhoto || !onRetake) return;
     haptics.tap();
@@ -361,10 +355,6 @@ export default function PhotoModal({
               <Pressable style={styles.actionBtn} onPress={handleShare} accessibilityLabel="Share photo" accessibilityRole="button">
                 <ShareNetwork size={22} color={Colors.textPrimary} weight="light" />
                 <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>share</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={handleEdit} accessibilityLabel="Edit photo" accessibilityRole="button">
-                <PencilSimple size={22} color={Colors.textPrimary} weight="light" />
-                <Text style={[styles.actionLabel, { fontFamily: fonts.regular }]}>edit</Text>
               </Pressable>
               <Pressable style={styles.actionBtn} onPress={handleRetake} accessibilityLabel="Retake photo" accessibilityRole="button">
                 <Camera size={22} color={Colors.textPrimary} weight="light" />

@@ -45,7 +45,7 @@ const OPTIONS: Option[] = [
   {
     format: 'mp4',
     label: 'MP4 Video',
-    description: 'Coming soon (requires dev build)',
+    description: 'Coming soon',
     icon: <FilmStrip size={22} color={Colors.textTertiary} weight="light" />,
     comingSoon: true,
   },

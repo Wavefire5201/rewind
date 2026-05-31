@@ -13,8 +13,6 @@ export default function AppLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="camera" />
       <Stack.Screen name="profile" />
-      <Stack.Screen name="albums" />
-      <Stack.Screen name="timelapse" />
     </Stack>
   );
 }

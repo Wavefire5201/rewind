@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Cloud, CaretRight, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
+import { HardDrive, Image, CaretRight, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
 import PinModal from '@/components/ui/PinModal';
 import { hasPin } from '@/utils/pin';
 import { Colors, Fonts } from '@/constants/theme';
@@ -147,19 +147,6 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
           <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
         </Pressable>
 
-        <View style={styles.divider} />
-
-        {/* Row 4: Cloud Backup */}
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          onPress={() => { haptics.tap(); Alert.alert('Coming Soon', 'Cloud backup is not available yet.'); }}
-        >
-          <View style={styles.left}>
-            <Cloud size={20} color={Colors.textSecondary} weight="light" />
-            <Text style={typography.body}>cloud backup</Text>
-          </View>
-          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
-        </Pressable>
       </View>
 
       {__DEV__ && (

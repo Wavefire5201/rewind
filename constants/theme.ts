@@ -36,5 +36,5 @@ export const Typography: Record<string, TextStyle> = {
 };
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
-export const BorderRadius = { none: 0, tabBar: 34, full: 9999 } as const;
-export const Sizes = { tabBarHeight: 48, tabBarPadding: 4, shutterOuter: 80, shutterInner: 64, circleButton: 48, avatar: 80, notifButton: 36, weekDot: 8, navButton: 36 } as const;
+export const BorderRadius = { none: 0, full: 9999 } as const;
+export const Sizes = { shutterOuter: 80, shutterInner: 64, weekDot: 8, navButton: 36 } as const;
