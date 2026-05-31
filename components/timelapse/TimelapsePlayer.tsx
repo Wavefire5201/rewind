@@ -15,6 +15,7 @@ import type { PhotoEntry } from '@/types';
 
 export interface TimelapsePlayerHandle {
   seekTo: (index: number) => void;
+  pause: () => void;
 }
 
 interface TimelapsePlayerProps {
@@ -39,12 +40,27 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
     onFrameChangeRef.current = onFrameChange;
     onPlaybackEndRef.current = onPlaybackEnd;
 
+    // Pause without firing onPlaybackEnd — used for manual seeks.
+    const pausePlayback = useCallback(() => {
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current as unknown as number);
+        intervalRef.current = null;
+      }
+      setIsPlaying(false);
+    }, []);
+
     useImperativeHandle(ref, () => ({
       seekTo(index: number) {
+        // Fix 3: pause the live timer before snapping to the requested frame so
+        // the next tick doesn't override the user's chosen position.
+        pausePlayback();
         frameRef.current = index;
         setFrameIndex(index);
       },
-    }));
+      pause() {
+        pausePlayback();
+      },
+    }), [pausePlayback]);
 
     const stopPlayback = useCallback(() => {
       if (intervalRef.current) {
@@ -76,6 +92,19 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
       };
     }, []);
 
+    // Fix 1 & 2: when the photo set shrinks (or changes size), stop any running
+    // timer and clamp the frame index so photos[frameIndex] is never undefined.
+    useEffect(() => {
+      if (photos.length === 0) return;
+      if (frameRef.current >= photos.length) {
+        const clamped = photos.length - 1;
+        frameRef.current = clamped;
+        setFrameIndex(clamped);
+      }
+      // Stop a stale timer that was scheduled against the old photos.length.
+      stopPlayback();
+    }, [photos.length, stopPlayback]);
+
     const togglePlay = useCallback(() => {
       haptics.tap();
       if (isPlaying) stopPlayback();
@@ -98,7 +127,9 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
       onPlaybackEndRef.current?.(next);
     }, [photos.length]);
 
-    const current = photos[frameIndex];
+    // Defensive clamp: guard against a render cycle before the useEffect fires.
+    const safeIndex = photos.length > 0 ? Math.min(frameIndex, photos.length - 1) : 0;
+    const current = photos[safeIndex];
 
     return (
       <View style={styles.wrapper}>
