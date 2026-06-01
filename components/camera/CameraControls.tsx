@@ -17,6 +17,7 @@ interface CameraControlsProps {
   isInCooldown?: boolean;
   hasAlignmentTarget?: boolean;
   isCapturing?: boolean;
+  timerDuration?: number;
 }
 
 export default function CameraControls({
@@ -31,6 +32,7 @@ export default function CameraControls({
   isInCooldown,
   hasAlignmentTarget,
   isCapturing,
+  timerDuration = 0,
 }: CameraControlsProps) {
   return (
     <View style={styles.row}>
@@ -62,7 +64,7 @@ export default function CameraControls({
           accessibilityLabel="Timer"
           accessibilityRole="button"
         >
-          <Timer size={20} color={Colors.textSecondary} weight="light" />
+          <Timer size={20} color={timerDuration > 0 ? Colors.accent : Colors.textSecondary} weight="light" />
         </CircleButton>
       )}
     </View>

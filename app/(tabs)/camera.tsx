@@ -98,11 +98,22 @@ export default function CameraScreen() {
     };
   }, []);
 
+  const cancelCountdown = useCallback(() => {
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setCountdown(null);
+    haptics.tap();
+  }, []);
+
   const handleCapture = async () => {
+    // If a countdown is active, pressing shutter cancels it instead of starting another
+    if (intervalRef.current !== null || countdown !== null) {
+      cancelCountdown();
+      return;
+    }
     if (timerDuration > 0) {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-      }
       setCountdown(timerDuration);
       let remaining = timerDuration;
       intervalRef.current = setInterval(() => {
@@ -308,14 +319,34 @@ export default function CameraScreen() {
         </View>
         <Text style={[typography.sectionLabel, styles.dateLabel]}>{dateLabel}</Text>
 
-        {countdown !== null ? (
-          <Text
-            style={[typography.bigNumber, styles.countdown]}
-            accessibilityRole="timer"
-            accessibilityLabel={`Timer: ${countdown} seconds`}
-          >
-            {countdown}
+        {showFaceGuide && faceDetectionAvailable ? (
+          <Text style={[typography.sectionLabel, styles.faceStatus, { fontFamily: fonts.regular }]}>
+            {!faceState.hasFace
+              ? 'no face detected'
+              : alignmentScore >= alignmentThreshold
+              ? 'aligned'
+              : alignmentScore >= alignmentThreshold - 0.15
+              ? 'hold still'
+              : faceState.faceWidth * faceState.faceHeight < 0.04
+              ? 'move closer'
+              : 'center your face'}
           </Text>
+        ) : null}
+
+        {countdown !== null ? (
+          <Pressable
+            onPress={cancelCountdown}
+            accessibilityRole="button"
+            accessibilityLabel={`Timer: ${countdown} seconds. Tap to cancel.`}
+            hitSlop={12}
+          >
+            <Text style={[typography.bigNumber, styles.countdown]}>
+              {countdown}
+            </Text>
+            <Text style={[styles.cancelHint, { fontFamily: fonts.regular }]}>
+              tap to cancel
+            </Text>
+          </Pressable>
         ) : null}
 
         <CameraControls
@@ -330,6 +361,7 @@ export default function CameraScreen() {
           isInCooldown={autoCaptureCooldown}
           hasAlignmentTarget={hasAlignmentTarget}
           isCapturing={isCapturing}
+          timerDuration={timerDuration}
         />
 
         {showTimer && (
@@ -389,5 +421,18 @@ const styles = StyleSheet.create({
   },
   countdown: {
     color: Colors.streak,
+    textAlign: 'center',
+  },
+  cancelHint: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  faceStatus: {
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
 });

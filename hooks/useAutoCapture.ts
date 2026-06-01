@@ -68,9 +68,9 @@ export function useAutoCapture({
       stableFramesRef.current = next;
       setStableFrames(next);
 
-      // Haptic feedback at alignment threshold crossing
+      // Graduated haptic feedback as alignment improves
       if (next === 1) {
-        haptics.tap();
+        haptics.alignment(alignmentScore);
       }
 
       if (next >= requiredFrames && !firedRef.current) {
