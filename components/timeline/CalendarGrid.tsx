@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import PhotoImage from '@/components/ui/PhotoImage';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { getCalendarMonth, getToday } from '@/utils/dates';
@@ -68,7 +68,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
                   style={({ pressed }) => [styles.cell, styles.photoCell, styles.todayCell, pressed && { opacity: 0.8 }]}
                   onPress={() => onDayPress(date)}
                 >
-                  <Image
+                  <PhotoImage
                     source={getImageSource(photo.imageUri)}
                     style={styles.thumbnail}
                     contentFit="cover"
@@ -96,7 +96,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
                   style={({ pressed }) => [styles.cell, styles.photoCell, pressed && { opacity: 0.8 }]}
                   onPress={() => onDayPress(date)}
                 >
-                  <Image
+                  <PhotoImage
                     source={getImageSource(photo.imageUri)}
                     style={styles.thumbnail}
                     contentFit="cover"
@@ -185,6 +185,8 @@ const styles = StyleSheet.create({
   emptyTappableCell: {
     borderWidth: 1,
     borderColor: Colors.borderPrimary,
-    borderStyle: 'dashed',
+    // Dashed reads as "addable" but renders inconsistently on Android; keep it
+    // on iOS and fall back to a subtle solid border elsewhere.
+    ...Platform.select({ ios: { borderStyle: 'dashed' as const }, default: {} }),
   },
 });

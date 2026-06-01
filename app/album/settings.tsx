@@ -219,7 +219,7 @@ export default function AlbumSettingsScreen() {
         const entries = await importFromBackup(albumId, (current, total) => {
           setImportCurrent(current);
           setImportTotal(total);
-        });
+        }, importCancelRef.current);
         setImporting(false);
         if (entries.length === 0) return;
         // I3/I4: single batch merge+dedup+sort, honest counts
@@ -231,8 +231,11 @@ export default function AlbumSettingsScreen() {
         Alert.alert('Import Complete', msg);
       } catch (e: unknown) {
         setImporting(false);
-        haptics.error();
-        Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        if (message !== 'Cancelled') {
+          haptics.error();
+          Alert.alert('Import Failed', message);
+        }
       }
     }
   }

@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
   type ViewToken,
 } from 'react-native';
-import { Image } from 'expo-image';
+import PhotoImage from '@/components/ui/PhotoImage';
 import { X, Trash, PencilSimple, Check, ShareNetwork, Camera } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -119,7 +119,7 @@ function ZoomableImage({ uri, width, height }: ZoomableImageProps) {
   return (
     <GestureDetector gesture={composed}>
       <Animated.View style={[{ width, height }, animatedStyle]}>
-        <Image
+        <PhotoImage
           source={getImageSource(uri)}
           style={{ width, height }}
           contentFit="cover"

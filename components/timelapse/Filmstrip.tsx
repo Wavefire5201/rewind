@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import PhotoImage from '@/components/ui/PhotoImage';
 import { getImageSource } from '@/utils/imageSource';
 import type { PhotoEntry } from '@/types';
 
@@ -26,7 +26,7 @@ const FilmstripItem = React.memo(function FilmstripItem({
   return (
     <Pressable onPress={() => onSelect(index)} style={styles.itemWrapper}>
       <View style={[styles.thumb, isActive ? styles.activeThumb : styles.inactiveThumb]}>
-        <Image
+        <PhotoImage
           source={getImageSource(item.imageUri)}
           style={StyleSheet.absoluteFill}
           contentFit="cover"

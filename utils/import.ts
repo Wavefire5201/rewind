@@ -37,6 +37,7 @@ function isValidDate(s: unknown): s is string {
 export async function importFromBackup(
   albumId: string = 'daily-selfie',
   onProgress?: (current: number, total: number) => void,
+  cancelSignal?: { cancelled: boolean },
 ): Promise<PhotoEntry[]> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',
@@ -58,6 +59,10 @@ export async function importFromBackup(
   const photos: PhotoEntry[] = [];
   const total = manifest.photos.length;
   for (let i = 0; i < total; i++) {
+    // Honor cancellation between entries (the per-entry base64 decode below
+    // isn't itself interruptible, so we stop before decoding the next one).
+    if (cancelSignal?.cancelled) throw new Error('Cancelled');
+
     const entry = manifest.photos[i];
 
     // I1: validate each entry's date

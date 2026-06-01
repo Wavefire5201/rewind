@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
+import PhotoImage from '@/components/ui/PhotoImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Plus, CaretRight, Camera, GearSix, LockSimple } from 'phosphor-react-native';
@@ -61,7 +61,7 @@ function HeroCard({
           <Text style={[styles.heroEmptyText, { fontFamily: fonts.regular }]}>locked</Text>
         </View>
       ) : todayPhoto ? (
-        <Image
+        <PhotoImage
           source={getImageSource(todayPhoto.imageUri)}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
@@ -145,7 +145,7 @@ function AlbumRow({ album, onUnlockRequest }: { album: Album; onUnlockRequest?: 
             <LockSimple size={20} color={Colors.textTertiary} weight="light" />
           </View>
         ) : imageUri ? (
-          <Image
+          <PhotoImage
             source={getImageSource(imageUri)}
             style={styles.thumbnailImage}
             contentFit="cover"
