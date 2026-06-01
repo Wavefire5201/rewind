@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
+import { haptics } from '@/utils/haptics';
 
 interface TextInputModalProps {
   visible: boolean;
@@ -35,15 +36,24 @@ export default function TextInputModal({
 }: TextInputModalProps) {
   const { fonts } = useFont();
   const [value, setValue] = useState(defaultValue);
+  const [showEmptyError, setShowEmptyError] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setValue(defaultValue);
+      setShowEmptyError(false);
     }
   }, [visible, defaultValue]);
 
   function handleConfirm() {
-    onConfirm(value);
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      setShowEmptyError(true);
+      haptics.error();
+      return;
+    }
+    setShowEmptyError(false);
+    onConfirm(trimmed);
   }
 
   return (
@@ -64,7 +74,7 @@ export default function TextInputModal({
           <TextInput
             style={[styles.input, { fontFamily: fonts.regular }]}
             value={value}
-            onChangeText={setValue}
+            onChangeText={(v) => { setValue(v); if (showEmptyError) setShowEmptyError(false); }}
             placeholder={placeholder}
             placeholderTextColor={Colors.textTertiary}
             autoFocus
@@ -73,6 +83,9 @@ export default function TextInputModal({
             maxLength={100}
             accessibilityLabel={placeholder || title}
           />
+          {showEmptyError ? (
+            <Text style={[styles.errorHint, { fontFamily: fonts.regular }]}>name can't be empty</Text>
+          ) : null}
           <View style={styles.row}>
             <Pressable
               style={styles.btn}
@@ -131,6 +144,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderPrimary,
     paddingVertical: 8,
+  },
+  errorHint: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    color: '#E05A5A',
+    marginTop: -8,
   },
   row: {
     flexDirection: 'row',

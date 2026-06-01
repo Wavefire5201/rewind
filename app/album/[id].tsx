@@ -284,6 +284,11 @@ export default function AlbumDetailScreen() {
             onDayPress={handleDayPress}
             onEmptyDayPress={handleEmptyDayPress}
           />
+          {captured === 0 && (isPastMonth || isCurrentMonth) && (
+            <Text style={[styles.emptyMonthHint, { fontFamily: fonts.regular }]}>
+              tap any day to backfill a photo
+            </Text>
+          )}
         </ScrollView>
       )}
 
@@ -419,5 +424,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.bgPage,
     letterSpacing: 1,
+  },
+  emptyMonthHint: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    marginTop: -8,
   },
 });

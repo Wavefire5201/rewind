@@ -105,12 +105,12 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
               );
             }
 
-            // Past day, no photo (missed)
+            // Past day, no photo (missed) — show dashed border so backfill affordance is discoverable
             if (onEmptyDayPress) {
               return (
                 <Pressable
                   key={di}
-                  style={({ pressed }) => [styles.cell, pressed && { opacity: 0.5 }]}
+                  style={({ pressed }) => [styles.cell, styles.emptyTappableCell, pressed && { opacity: 0.5 }]}
                   onPress={() => onEmptyDayPress(date)}
                 >
                   <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
@@ -181,5 +181,10 @@ const styles = StyleSheet.create({
   },
   todayNumber: {
     color: Colors.streak,
+  },
+  emptyTappableCell: {
+    borderWidth: 1,
+    borderColor: Colors.borderPrimary,
+    borderStyle: 'dashed',
   },
 });
