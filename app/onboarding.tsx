@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { CaretLeft } from 'phosphor-react-native';
 import TimePicker from '@/components/ui/TimePicker';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
@@ -43,9 +44,9 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 
 // ─── Step 2: Name album ─────────────────────────────────────────────────────
 
-function StepNameAlbum({ onNext }: { onNext: (name: string) => void }) {
+function StepNameAlbum({ onNext, initialValue }: { onNext: (name: string) => void; initialValue?: string }) {
   const { fonts } = useFont();
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialValue ?? '');
   const inputRef = useRef<TextInput>(null);
 
   function handleContinue() {
@@ -195,6 +196,11 @@ export default function OnboardingScreen() {
     setStep(3);
   }
 
+  function handleBack() {
+    if (step === 3) setStep(2);
+    else if (step === 2) setStep(1);
+  }
+
   async function finalize(reminderEnabled: boolean, reminderTime: string) {
     const newAlbum = createAlbum(albumNameRef.current, { reminderEnabled, reminderTime });
     addAlbum(newAlbum);
@@ -219,9 +225,25 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StepDots current={step} total={3} />
+      <View style={styles.topBar}>
+        {step > 1 ? (
+          <Pressable
+            onPress={handleBack}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
+          </Pressable>
+        ) : (
+          <View style={styles.backBtn} />
+        )}
+        <StepDots current={step} total={3} />
+        <View style={styles.backBtn} />
+      </View>
       {step === 1 && <StepWelcome onNext={handleWelcomeNext} />}
-      {step === 2 && <StepNameAlbum onNext={handleNameNext} />}
+      {step === 2 && <StepNameAlbum onNext={handleNameNext} initialValue={albumNameRef.current === 'daily selfie' ? '' : albumNameRef.current} />}
       {step === 3 && <StepReminder onEnable={handleReminderEnable} onSkip={handleReminderSkip} />}
     </SafeAreaView>
   );
@@ -302,11 +324,23 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: Colors.bgPage,
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    paddingTop: 16,
   },
   dot: {
     width: 6,

@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { X } from 'phosphor-react-native';
+import { X, CaretLeft } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
@@ -56,32 +56,51 @@ export default function ImportPhotoModal({
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
+  // Indexed per-photo state: keyed by original photo index
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [date, setDate] = useState('');
-  const [caption, setCaption] = useState('');
-  const [entries, setEntries] = useState<{ uri: string; date: string; caption: string }[]>([]);
+  const [photoStates, setPhotoStates] = useState<Record<number, { date: string; caption: string }>>({});
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Derived fields for the current photo (hydrated from saved state or photo suggestion)
+  const currentSaved = photoStates[currentIndex];
+  const date = currentSaved?.date ?? (photos[currentIndex]?.suggestedDate || dateToStr(new Date()));
+  const caption = currentSaved?.caption ?? '';
+
+  function setDate(d: string) {
+    setPhotoStates(prev => ({
+      ...prev,
+      [currentIndex]: {
+        date: d,
+        caption: prev[currentIndex]?.caption ?? '',
+      },
+    }));
+  }
+
+  function setCaption(c: string) {
+    setPhotoStates(prev => ({
+      ...prev,
+      [currentIndex]: {
+        date: prev[currentIndex]?.date ?? (photos[currentIndex]?.suggestedDate || dateToStr(new Date())),
+        caption: c,
+      },
+    }));
+  }
 
   const photoHeight = Math.round((screenWidth - 48) * (4 / 3));
 
   useEffect(() => {
     if (visible) {
       setCurrentIndex(0);
-      setEntries([]);
-      setCaption('');
+      setPhotoStates({});
+      setSkipped(new Set());
       setShowDatePicker(false);
-      if (photos.length > 0) {
-        setDate(photos[0].suggestedDate || dateToStr(new Date()));
-      }
     }
   }, [visible, photos]);
 
+  // Close date picker when navigating
   useEffect(() => {
-    if (photos[currentIndex]) {
-      setDate(photos[currentIndex].suggestedDate || dateToStr(new Date()));
-      setCaption('');
-      setShowDatePicker(false);
-    }
+    setShowDatePicker(false);
   }, [currentIndex]);
 
   const current = photos[currentIndex];
@@ -97,14 +116,54 @@ export default function ImportPhotoModal({
 
   function handleSaveNext() {
     haptics.tap();
-    const newEntry = { uri: current.uri, date, caption: caption.trim() };
-    const updatedEntries = [...entries, newEntry];
+    // Persist current state before advancing
+    const currentDate = photoStates[currentIndex]?.date ?? (photos[currentIndex]?.suggestedDate || dateToStr(new Date()));
+    const currentCaption = photoStates[currentIndex]?.caption ?? '';
+    const updatedStates = { ...photoStates, [currentIndex]: { date: currentDate, caption: currentCaption } };
+    setPhotoStates(updatedStates);
 
     if (isLast) {
       haptics.success();
-      onSave(updatedEntries);
+      // Collect all non-skipped entries in original order
+      const result = photos
+        .map((p, i) => {
+          if (skipped.has(i)) return null;
+          const s = updatedStates[i];
+          return { uri: p.uri, date: s?.date ?? (p.suggestedDate || dateToStr(new Date())), caption: s?.caption?.trim() ?? '' };
+        })
+        .filter((e): e is { uri: string; date: string; caption: string } => e !== null);
+      onSave(result);
     } else {
-      setEntries(updatedEntries);
+      // Advance to next non-skipped index (or just next index)
+      setCurrentIndex(prev => prev + 1);
+    }
+  }
+
+  function handleBack() {
+    haptics.tap();
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  }
+
+  function handleSkip() {
+    haptics.tap();
+    const newSkipped = new Set(skipped);
+    newSkipped.add(currentIndex);
+    setSkipped(newSkipped);
+
+    if (isLast) {
+      haptics.success();
+      // Collect all non-skipped entries including previously saved
+      const result = photos
+        .map((p, i) => {
+          if (newSkipped.has(i)) return null;
+          const s = photoStates[i];
+          return { uri: p.uri, date: s?.date ?? (p.suggestedDate || dateToStr(new Date())), caption: s?.caption?.trim() ?? '' };
+        })
+        .filter((e): e is { uri: string; date: string; caption: string } => e !== null);
+      onSave(result);
+    } else {
       setCurrentIndex(prev => prev + 1);
     }
   }
@@ -129,10 +188,19 @@ export default function ImportPhotoModal({
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>Import Photo</Text>
-          <Text style={[styles.counter, { fontFamily: fonts.regular }]}>
-            {currentIndex + 1} / {total}
-          </Text>
+          {currentIndex > 0 ? (
+            <Pressable onPress={handleBack} hitSlop={12} style={styles.closeBtn} accessibilityLabel="Go back" accessibilityRole="button">
+              <CaretLeft size={20} color={Colors.textPrimary} weight="light" />
+            </Pressable>
+          ) : (
+            <View style={styles.closeBtn} />
+          )}
+          <View style={styles.headerCenter}>
+            <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>Import Photo</Text>
+            <Text style={[styles.counter, { fontFamily: fonts.regular }]}>
+              {currentIndex + 1} / {total}
+            </Text>
+          </View>
           <Pressable onPress={handleCancel} hitSlop={12} style={styles.closeBtn}>
             <X size={20} color={Colors.textPrimary} weight="light" />
           </Pressable>
@@ -196,7 +264,7 @@ export default function ImportPhotoModal({
           </View>
         </ScrollView>
 
-        {/* Save button */}
+        {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable
             style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
@@ -205,6 +273,14 @@ export default function ImportPhotoModal({
             <Text style={[styles.saveBtnText, { fontFamily: fonts.medium }]}>
               {isLast ? 'Save' : 'Save & Next  →'}
             </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+            onPress={handleSkip}
+            accessibilityLabel="Skip this photo"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.skipBtnText, { fontFamily: fonts.regular }]}>skip</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -222,6 +298,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingBottom: 12,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
     fontFamily: Fonts.mono.regular,
@@ -306,5 +386,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.bgPage,
     letterSpacing: 0.5,
+  },
+  skipBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  skipBtnText: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.textSecondary,
   },
 });
