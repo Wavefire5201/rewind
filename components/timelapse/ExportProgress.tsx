@@ -17,7 +17,7 @@ export default function ExportProgress({ visible, label, current, total, onCance
   const fillPercent = total > 0 ? (current / total) * 100 : 0;
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={[styles.label, { fontFamily: fonts.regular }]}>{label}</Text>

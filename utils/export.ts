@@ -22,18 +22,30 @@ function cleanupExportDir() {
   } catch {}
 }
 
+export interface ExportResult {
+  exported: number;
+  skipped: number;
+}
+
 export async function exportToPhotoAlbum(
   photos: PhotoEntry[],
   onProgress: ProgressCallback,
   cancel: CancelToken
-): Promise<void> {
+): Promise<ExportResult> {
   const { status } = await MediaLibrary.requestPermissionsAsync();
   if (status !== 'granted') throw new Error('Permission denied');
 
   const localPhotos = photos.filter(p => isLocalFile(p.imageUri));
-  if (localPhotos.length === 0) throw new Error('No local photos to export');
+  const skipped = photos.length - localPhotos.length;
+  if (localPhotos.length === 0) {
+    const msg = skipped > 0
+      ? `All ${skipped} photo${skipped !== 1 ? 's' : ''} are remote and cannot be exported.`
+      : 'No local photos to export.';
+    throw new Error(msg);
+  }
 
   let album = await MediaLibrary.getAlbumAsync('Rewind');
+  let lastSaved = 0;
   for (let i = 0; i < localPhotos.length; i++) {
     if (cancel.cancelled) throw new Error('Cancelled');
     const asset = await MediaLibrary.createAssetAsync(localPhotos[i].imageUri);
@@ -42,8 +54,10 @@ export async function exportToPhotoAlbum(
     } else {
       await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
     }
-    onProgress(i + 1, localPhotos.length);
+    lastSaved = i + 1;
+    onProgress(lastSaved, localPhotos.length);
   }
+  return { exported: localPhotos.length, skipped };
 }
 
 export async function exportToBackup(
@@ -51,9 +65,15 @@ export async function exportToBackup(
   albumName: string,
   onProgress: ProgressCallback,
   cancel: CancelToken
-): Promise<string> {
+): Promise<{ filePath: string; exported: number; skipped: number }> {
   const localPhotos = photos.filter(p => isLocalFile(p.imageUri));
-  if (localPhotos.length === 0) throw new Error('No local photos to export');
+  const skipped = photos.length - localPhotos.length;
+  if (localPhotos.length === 0) {
+    const msg = skipped > 0
+      ? `All ${skipped} photo${skipped !== 1 ? 's' : ''} are remote and cannot be exported.`
+      : 'No local photos to export.';
+    throw new Error(msg);
+  }
 
   const exportDir = getExportDir();
   if (!exportDir.exists) {
@@ -95,7 +115,7 @@ export async function exportToBackup(
   outputFile.write(content, { encoding: 'base64' });
 
   onProgress(localPhotos.length + 1, localPhotos.length + 1);
-  return outputFile.uri;
+  return { filePath: outputFile.uri, exported: localPhotos.length, skipped };
 }
 
 export async function shareFile(filePath: string): Promise<void> {

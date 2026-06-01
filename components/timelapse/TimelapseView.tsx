@@ -41,6 +41,8 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
     handleDateRangeApply,
   } = timelapse;
 
+  if (filteredPhotos.length < 2) return null;
+
   return (
     <>
       <View style={styles.container}>

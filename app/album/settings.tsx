@@ -138,31 +138,39 @@ export default function AlbumSettingsScreen() {
     cancelRef.current = { cancelled: false };
 
     if (format === 'album') {
+      const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
       setExportLabel('saving to photo album...');
       setExportCurrent(0);
-      setExportTotal(albumPhotos.length);
+      setExportTotal(localCount > 0 ? localCount : albumPhotos.length);
       setExporting(true);
+      let lastSaved = 0;
       try {
-        await exportToPhotoAlbum(
+        const result = await exportToPhotoAlbum(
           albumPhotos,
-          (current, total) => { setExportCurrent(current); setExportTotal(total); },
+          (current, total) => { lastSaved = current; setExportCurrent(current); setExportTotal(total); },
           cancelRef.current
         );
         setExporting(false);
         haptics.success();
-        Alert.alert('Export Complete', `${albumPhotos.length} photos saved to your photo library.`);
+        const skippedMsg = result.skipped > 0 ? ` Skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.` : '';
+        Alert.alert('Export Complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
       } catch (err: unknown) {
         setExporting(false);
         const message = err instanceof Error ? err.message : 'Unknown error';
-        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export Failed', message); }
+        if (message !== 'Cancelled') {
+          haptics.error();
+          const detail = lastSaved > 0 ? `Saved ${lastSaved} of ${localCount} before failing.\n\n${message}` : message;
+          Alert.alert('Export Failed', detail);
+        }
       }
     } else if (format === 'backup') {
+      const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
       setExportLabel('creating backup...');
       setExportCurrent(0);
-      setExportTotal(albumPhotos.length + 1);
+      setExportTotal((localCount > 0 ? localCount : albumPhotos.length) + 1);
       setExporting(true);
       try {
-        const filePath = await exportToBackup(
+        const result = await exportToBackup(
           albumPhotos,
           albumName,
           (current, total) => { setExportCurrent(current); setExportTotal(total); },
@@ -170,8 +178,11 @@ export default function AlbumSettingsScreen() {
         );
         setExporting(false);
         haptics.success();
-        await shareFile(filePath);
+        await shareFile(result.filePath);
         await cleanupExportDir();
+        if (result.skipped > 0) {
+          Alert.alert('Export Complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
+        }
       } catch (err: unknown) {
         setExporting(false);
         await cleanupExportDir();
@@ -346,6 +357,7 @@ export default function AlbumSettingsScreen() {
                 const pinExists = await hasPin();
                 if (pinExists) {
                   updateAlbum(albumId, { isLocked: true });
+                  haptics.success();
                 } else {
                   setPendingLockAction('lock');
                   setPinIntent('set');

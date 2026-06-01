@@ -139,6 +139,7 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
               source={getImageSource(current.imageUri)}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
+              transition={150}
             />
           )}
 
