@@ -24,6 +24,7 @@ export interface FaceState {
 
 interface ViewfinderProps {
   ghostImageUri: string | null;
+  ghostLandmarks?: FaceLandmarks | null;
   facing: 'front' | 'back';
   ghostOpacity: number;
   onGhostOpacityChange: (value: number) => void;
@@ -40,7 +41,7 @@ export interface ViewfinderRef {
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
-  ({ ghostImageUri, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false }, ref) => {
+  ({ ghostImageUri, ghostLandmarks, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false }, ref) => {
     const { typography } = useFont();
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
@@ -260,6 +261,10 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
             imageUri={ghostImageUri}
             opacity={ghostOpacity}
             onOpacityChange={onGhostOpacityChange}
+            ghostLandmarks={faceDetectionAvailable ? ghostLandmarks : null}
+            liveValues={sharedValues}
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
           />
         ) : null}
         <GridOverlay />

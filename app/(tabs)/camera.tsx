@@ -267,6 +267,7 @@ export default function CameraScreen() {
       <Viewfinder
         ref={cameraRef}
         ghostImageUri={mostRecentPhoto?.imageUri ?? null}
+        ghostLandmarks={mostRecentPhoto?.faceLandmarks ?? null}
         facing={facing}
         ghostOpacity={ghostOpacity}
         onGhostOpacityChange={handleGhostOpacity}
