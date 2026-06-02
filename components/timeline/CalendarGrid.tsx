@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import PhotoImage from '@/components/ui/PhotoImage';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
-import { getCalendarMonth, getToday } from '@/utils/dates';
+import { getCalendarMonth, getToday, getFirstWeekday } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 import type { PhotoEntry } from '@/types';
 
@@ -16,7 +16,13 @@ interface CalendarGridProps {
   onEmptyDayPress?: (date: string) => void;
 }
 
-const DAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Sun-origin; rotated at module load to start from the device locale's first weekday.
+const _DAY_HEADERS_SUN_ORIGIN = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const _firstWeekday = getFirstWeekday(); // 0=Sun, 1=Mon, …
+const DAY_HEADERS = [
+  ..._DAY_HEADERS_SUN_ORIGIN.slice(_firstWeekday),
+  ..._DAY_HEADERS_SUN_ORIGIN.slice(0, _firstWeekday),
+];
 // Cell size is dynamic — use flex instead of fixed width
 
 export default function CalendarGrid({ year, month, photos, joinDate, onDayPress, onEmptyDayPress }: CalendarGridProps) {

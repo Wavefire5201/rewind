@@ -1,3 +1,17 @@
+import { getCalendars } from 'expo-localization';
+
+// Module-level cache: call getCalendars() once at import time.
+// Returns 0-indexed first weekday: 0=Sunday, 1=Monday, …, 6=Saturday.
+// getCalendars()[0]?.firstWeekday uses 1=Sunday … 7=Saturday; undefined/null → fall back to 1 (Sunday).
+let _firstWeekday: number | null = null;
+export function getFirstWeekday(): number {
+  if (_firstWeekday === null) {
+    const raw = getCalendars()[0]?.firstWeekday ?? 1;
+    _firstWeekday = (raw - 1) % 7; // convert to 0-indexed
+  }
+  return _firstWeekday;
+}
+
 export function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good Morning';
@@ -23,20 +37,27 @@ export function getToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Sun-origin label array; rotated at use-time by getFirstWeekday()
+const _DAY_LABELS_SUN_ORIGIN = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
 export function getWeekDays(referenceDate?: string): Array<{ date: string; dayLabel: string; dayNumber: number }> {
   const ref = referenceDate ? new Date(referenceDate + 'T12:00:00') : new Date();
+  const firstWeekday = getFirstWeekday(); // 0=Sun, 1=Mon, …
   const dayOfWeek = ref.getDay(); // 0=Sun
-  const monday = new Date(ref);
-  monday.setDate(ref.getDate() - ((dayOfWeek + 6) % 7)); // get Monday
+  // How many days back to reach the locale's first weekday
+  const offset = (dayOfWeek - firstWeekday + 7) % 7;
+  const weekStart = new Date(ref);
+  weekStart.setDate(ref.getDate() - offset);
 
-  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const days: Array<{ date: string; dayLabel: string; dayNumber: number }> = [];
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const dow = d.getDay(); // 0=Sun
+    const label = _DAY_LABELS_SUN_ORIGIN[dow];
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    days.push({ date: dateStr, dayLabel: labels[i], dayNumber: d.getDate() });
+    days.push({ date: dateStr, dayLabel: label, dayNumber: d.getDate() });
   }
   return days;
 }
@@ -47,12 +68,15 @@ export function getCalendarMonth(year: number, month: number): Array<Array<strin
   const lastDay = new Date(year, month, 0);
   const daysInMonth = lastDay.getDate();
   const startDow = firstDay.getDay(); // 0=Sun
+  const firstWeekday = getFirstWeekday(); // 0=Sun, 1=Mon, …
+  // Leading blank cells = how many columns before the 1st of the month
+  const leadingBlanks = (startDow - firstWeekday + 7) % 7;
 
   const weeks: Array<Array<string | null>> = [];
   let currentWeek: Array<string | null> = [];
 
   // Pad start
-  for (let i = 0; i < startDow; i++) {
+  for (let i = 0; i < leadingBlanks; i++) {
     currentWeek.push(null);
   }
 

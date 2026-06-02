@@ -32,7 +32,9 @@
       },
       "backgroundColor": "#1A1A1C",
       "package": "com.rewind.app",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -91,7 +93,8 @@
         {
           "faceIDPermission": "Rewind uses Face ID to protect locked albums."
         }
-      ]
+      ],
+      "expo-localization"
     ]
   }
 }
