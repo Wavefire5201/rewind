@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, Pressable, View, Alert } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import PhotoImage from '@/components/ui/PhotoImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Plus, CaretRight, Camera, GearSix, LockSimple } from 'phosphor-react-native';
+import { Plus, CaretRight, Camera, GearSix, LockSimple, PencilSimple, Trash } from 'phosphor-react-native';
 import { Colors, Fonts, Sizes, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
@@ -114,14 +115,45 @@ function HeroCard({
 
 // ─── AlbumRow ────────────────────────────────────────────────────────────────
 
-function AlbumRow({ album, onUnlockRequest }: { album: Album; onUnlockRequest?: (albumId: string) => void }) {
+function RightActions({ onRename, onDelete }: { onRename: () => void; onDelete: () => void }) {
+  return (
+    <View style={styles.actionsContainer}>
+      <Pressable
+        style={[styles.actionBtn, styles.actionRename]}
+        onPress={onRename}
+        accessibilityLabel="Rename album"
+        accessibilityRole="button"
+      >
+        <PencilSimple size={18} color={Colors.textPrimary} weight="regular" />
+        <Text style={[styles.actionLabel, { fontFamily: Fonts.mono.regular }]}>rename</Text>
+      </Pressable>
+      <Pressable
+        style={[styles.actionBtn, styles.actionDelete]}
+        onPress={onDelete}
+        accessibilityLabel="Delete album"
+        accessibilityRole="button"
+      >
+        <Trash size={18} color={Colors.textPrimary} weight="regular" />
+        <Text style={[styles.actionLabel, { fontFamily: Fonts.mono.regular }]}>delete</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function AlbumRow({ album, onUnlockRequest, onRenameRequest, onDeleteRequest }: {
+  album: Album;
+  onUnlockRequest?: (albumId: string) => void;
+  onRenameRequest: (album: Album) => void;
+  onDeleteRequest: (album: Album) => void;
+}) {
   const router = useRouter();
   const { totalPhotos, mostRecentPhoto } = usePhotos(album.id);
   const { currentStreak } = useStreak(album.id, album.createdAt);
   const imageUri = mostRecentPhoto?.imageUri ?? null;
-  const { fonts, typography } = useFont();
+  const { typography } = useFont();
   const { isAlbumLocked } = useAlbumLock();
   const locked = isAlbumLocked(album.id);
+  const swipeableRef = useRef<SwipeableMethods | null>(null);
 
   function handlePress() {
     haptics.tap();
@@ -132,36 +164,57 @@ function AlbumRow({ album, onUnlockRequest }: { album: Album; onUnlockRequest?: 
     router.push({ pathname: '/album/[id]', params: { id: album.id } });
   }
 
+  const renderRightActions = useCallback(
+    () => (
+      <RightActions
+        onRename={() => { swipeableRef.current?.close(); onRenameRequest(album); }}
+        onDelete={() => { swipeableRef.current?.close(); onDeleteRequest(album); }}
+      />
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [album.id],
+  );
+
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-      onPress={handlePress}
-      accessibilityLabel={`${album.name} album`}
-      accessibilityRole="button"
+    <ReanimatedSwipeable
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      overshootRight={false}
+      friction={2}
+      rightThreshold={40}
     >
-      <View style={styles.thumbnail}>
-        {locked ? (
-          <View style={[styles.thumbnailPlaceholder, { alignItems: 'center', justifyContent: 'center' }]}>
-            <LockSimple size={20} color={Colors.textTertiary} weight="light" />
+      <View style={styles.rowInner}>
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          onPress={handlePress}
+          accessibilityLabel={`${album.name} album`}
+          accessibilityRole="button"
+        >
+          <View style={styles.thumbnail}>
+            {locked ? (
+              <View style={[styles.thumbnailPlaceholder, { alignItems: 'center', justifyContent: 'center' }]}>
+                <LockSimple size={20} color={Colors.textTertiary} weight="light" />
+              </View>
+            ) : imageUri ? (
+              <PhotoImage
+                source={getImageSource(imageUri)}
+                style={styles.thumbnailImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.thumbnailPlaceholder} />
+            )}
           </View>
-        ) : imageUri ? (
-          <PhotoImage
-            source={getImageSource(imageUri)}
-            style={styles.thumbnailImage}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={styles.thumbnailPlaceholder} />
-        )}
+          <View style={styles.rowInfo}>
+            <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
+            <Text style={[typography.small, { color: Colors.textTertiary }]}>
+              {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
+            </Text>
+          </View>
+          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+        </Pressable>
       </View>
-      <View style={styles.rowInfo}>
-        <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
-        <Text style={[typography.small, { color: Colors.textTertiary }]}>
-          {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
-        </Text>
-      </View>
-      <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
-    </Pressable>
+    </ReanimatedSwipeable>
   );
 }
 
@@ -170,13 +223,58 @@ function AlbumRow({ album, onUnlockRequest }: { album: Album; onUnlockRequest?: 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { albums, isLoading, addAlbum } = useAppContext();
+  const { albums, photos, isLoading, addAlbum, updateAlbum, deleteAlbum } = useAppContext();
   const { greeting, dayNumber } = useGreeting();
   const [showNewAlbumModal, setShowNewAlbumModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [unlockTargetId, setUnlockTargetId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Album | null>(null);
   const { fonts, typography } = useFont();
   const { unlockAlbum } = useAlbumLock();
+
+  // Sort albums by most-recent photo date (fallback to createdAt), newest first.
+  const sortedAlbums = useMemo(() => {
+    const maxPhotoDate: Record<string, string> = {};
+    for (const p of photos) {
+      const cur = maxPhotoDate[p.albumId];
+      if (!cur || p.date > cur) maxPhotoDate[p.albumId] = p.date;
+    }
+    return [...albums].sort((a, b) => {
+      const dateA = maxPhotoDate[a.id] ?? a.createdAt.slice(0, 10);
+      const dateB = maxPhotoDate[b.id] ?? b.createdAt.slice(0, 10);
+      return dateB.localeCompare(dateA);
+    });
+  }, [albums, photos]);
+
+  function handleRenameRequest(album: Album) {
+    setRenameTarget(album);
+  }
+
+  function handleConfirmRename(name: string) {
+    if (!renameTarget) return;
+    const trimmed = name.trim();
+    if (trimmed) {
+      updateAlbum(renameTarget.id, { name: trimmed });
+      haptics.success();
+    }
+    setRenameTarget(null);
+  }
+
+  function handleDeleteRequest(album: Album) {
+    if (albums.length <= 1) {
+      haptics.error();
+      Alert.alert('Cannot Delete', 'You must keep at least one album.');
+      return;
+    }
+    Alert.alert(
+      'Delete Album',
+      `Delete "${album.name}" and all its photos? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => { haptics.warning(); deleteAlbum(album.id); } },
+      ],
+    );
+  }
 
   function handleUnlockRequest(albumId: string) {
     setUnlockTargetId(albumId);
@@ -231,7 +329,7 @@ export default function HomeScreen() {
     return null;
   }
 
-  const [heroAlbum, ...restAlbums] = albums;
+  const [heroAlbum, ...restAlbums] = sortedAlbums;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -271,7 +369,12 @@ export default function HomeScreen() {
             {restAlbums.map((album, index) => (
               <React.Fragment key={album.id}>
                 {index > 0 && <View style={styles.divider} />}
-                <AlbumRow album={album} onUnlockRequest={handleUnlockRequest} />
+                <AlbumRow
+                  album={album}
+                  onUnlockRequest={handleUnlockRequest}
+                  onRenameRequest={handleRenameRequest}
+                  onDeleteRequest={handleDeleteRequest}
+                />
               </React.Fragment>
             ))}
           </View>
@@ -298,6 +401,15 @@ export default function HomeScreen() {
         confirmLabel="Create"
         onConfirm={handleConfirmNewAlbum}
         onCancel={() => setShowNewAlbumModal(false)}
+      />
+      <TextInputModal
+        visible={renameTarget !== null}
+        title="Rename Album"
+        placeholder="Album name"
+        defaultValue={renameTarget?.name ?? ''}
+        confirmLabel="Rename"
+        onConfirm={handleConfirmRename}
+        onCancel={() => setRenameTarget(null)}
       />
       <PinModal
         visible={showPinModal}
@@ -460,6 +572,32 @@ const styles = StyleSheet.create({
   rowInfo: {
     flex: 1,
     gap: 3,
+  },
+
+  // Swipe row + actions
+  rowInner: {
+    backgroundColor: Colors.bgPage,
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+  },
+  actionBtn: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionRename: {
+    backgroundColor: Colors.accentDeep,
+  },
+  actionDelete: {
+    backgroundColor: Colors.danger,
+  },
+  actionLabel: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 10,
+    lineHeight: 14,
+    color: Colors.textPrimary,
   },
 
   // Skeleton
