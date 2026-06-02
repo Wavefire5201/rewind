@@ -164,15 +164,17 @@ function AlbumRow({ album, onUnlockRequest, onRenameRequest, onDeleteRequest }: 
     router.push({ pathname: '/album/[id]', params: { id: album.id } });
   }
 
+  // Locked albums must be unlocked (PIN) before rename/delete — mirror handlePress
+  // so the swipe actions can't bypass the lock gate.
   const renderRightActions = useCallback(
     () => (
       <RightActions
-        onRename={() => { swipeableRef.current?.close(); onRenameRequest(album); }}
-        onDelete={() => { swipeableRef.current?.close(); onDeleteRequest(album); }}
+        onRename={() => { swipeableRef.current?.close(); if (locked) { onUnlockRequest?.(album.id); return; } onRenameRequest(album); }}
+        onDelete={() => { swipeableRef.current?.close(); if (locked) { onUnlockRequest?.(album.id); return; } onDeleteRequest(album); }}
       />
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [album.id],
+    [album.id, locked],
   );
 
   return (
