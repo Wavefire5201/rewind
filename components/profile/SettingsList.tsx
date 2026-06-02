@@ -113,7 +113,8 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
         const photoCount = files.filter(
           (f) => f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png')
         ).length;
-        const estimatedMB = photoCount * 2;
+        const mbPerPhoto: Record<AppSettings['photoQuality'], number> = { low: 1, medium: 2, high: 4 };
+        const estimatedMB = photoCount * mbPerPhoto[settings.photoQuality];
         if (estimatedMB < 1) {
           setStorageSize('< 1 MB');
         } else if (estimatedMB < 1000) {

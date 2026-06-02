@@ -35,10 +35,6 @@ export default function ShutterButton({ onPress, onLongPress, autoCaptureProgres
         autoCaptureProgress > 0 && !isInCooldown && !disabled && {
           borderColor: Colors.streak,
         },
-        hasAlignmentTarget === false && autoCaptureProgress === 0 && !isInCooldown && !disabled && {
-          borderColor: Colors.streak,
-          opacity: 0.6,
-        },
       ]}
     >
       <View style={[
@@ -46,10 +42,6 @@ export default function ShutterButton({ onPress, onLongPress, autoCaptureProgres
         autoCaptureProgress > 0 && !isInCooldown && !disabled && {
           backgroundColor: Colors.streak,
           transform: [{ scale: 0.85 + autoCaptureProgress * 0.15 }],
-        },
-        hasAlignmentTarget === false && autoCaptureProgress === 0 && !isInCooldown && !disabled && {
-          backgroundColor: Colors.streak,
-          opacity: 0.5,
         },
       ]} />
     </Pressable>

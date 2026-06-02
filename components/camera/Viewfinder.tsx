@@ -33,6 +33,7 @@ interface ViewfinderProps {
   onFaceState?: (state: FaceState) => void;
   onAvailabilityChange?: (available: boolean) => void;
   showDebug?: boolean;
+  photoQuality?: 'low' | 'medium' | 'high';
 }
 
 export interface ViewfinderRef {
@@ -41,7 +42,7 @@ export interface ViewfinderRef {
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
-  ({ ghostImageUri, ghostLandmarks, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false }, ref) => {
+  ({ ghostImageUri, ghostLandmarks, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false, photoQuality = 'medium' }, ref) => {
     const { typography } = useFont();
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
@@ -240,6 +241,12 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
       );
     }
 
+    const qualityBalanceMap: Record<'low' | 'medium' | 'high', 'speed' | 'balanced' | 'quality'> = {
+      low: 'speed',
+      medium: 'balanced',
+      high: 'quality',
+    };
+
     const onLayout = (e: LayoutChangeEvent) => {
       const { width: w, height: h } = e.nativeEvent.layout;
       setContainerSize({ width: w, height: h });
@@ -255,6 +262,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           photo={true}
           video={faceDetectionAvailable}
           frameProcessor={faceDetectionAvailable ? frameProcessor : undefined}
+          photoQualityBalance={qualityBalanceMap[photoQuality]}
         />
         {ghostImageUri ? (
           <GhostOverlay

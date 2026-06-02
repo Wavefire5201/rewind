@@ -52,6 +52,7 @@ export default function CameraScreen() {
   // Reference target: captured from live video so we can bootstrap
   // auto-capture even when no photo has faceLandmarks yet.
   const [referenceTarget, setReferenceTarget] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [referenceJustSet, setReferenceJustSet] = useState(false);
 
   const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
@@ -229,6 +230,8 @@ export default function CameraScreen() {
       height: faceState.faceHeight,
     });
     haptics.success();
+    setReferenceJustSet(true);
+    setTimeout(() => setReferenceJustSet(false), 1800);
   }, [faceState]);
 
   const handleGhostOpacity = useCallback((value: number) => {
@@ -287,6 +290,7 @@ export default function CameraScreen() {
         onFaceState={handleFaceState}
         onAvailabilityChange={handleAvailabilityChange}
         showDebug={showDebugOverlay}
+        photoQuality={settings.photoQuality}
       />
 
       <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
@@ -330,6 +334,18 @@ export default function CameraScreen() {
               : faceState.faceWidth * faceState.faceHeight < 0.04
               ? 'move closer'
               : 'center your face'}
+          </Text>
+        ) : null}
+
+        {!hasAlignmentTarget && showFaceGuide && faceDetectionAvailable && !referenceJustSet ? (
+          <Text style={[typography.sectionLabel, styles.longPressHint, { fontFamily: fonts.regular }]}>
+            hold shutter to set reference
+          </Text>
+        ) : null}
+
+        {referenceJustSet ? (
+          <Text style={[typography.sectionLabel, styles.referenceConfirm, { fontFamily: fonts.regular }]}>
+            reference set
           </Text>
         ) : null}
 
@@ -432,6 +448,16 @@ const styles = StyleSheet.create({
   },
   faceStatus: {
     color: Colors.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  longPressHint: {
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  referenceConfirm: {
+    color: Colors.accent,
     textAlign: 'center',
     letterSpacing: 1,
   },
