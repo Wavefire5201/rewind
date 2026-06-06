@@ -40,7 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# AI tooling
 .omc/
-.superpowers/build/
+.superpowers/
+docs/superpowers/
 build/
 dist/

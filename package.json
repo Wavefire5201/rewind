@@ -7,8 +7,7 @@
     "start:mock": "EXPO_PUBLIC_MOCK_DATA=1 expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "postinstall": "./scripts/patch-expo-worklets.sh"
+    "web": "expo start --web"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -56,5 +55,8 @@
     "@types/react": "~19.2.2",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "patchedDependencies": {
+    "expo-modules-core@55.0.14": "patches/expo-modules-core@55.0.14.patch"
+  }
 }
