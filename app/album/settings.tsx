@@ -139,6 +139,17 @@ export default function AlbumSettingsScreen() {
 
     if (format === 'album') {
       const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
+      const skipped = albumPhotos.length - localCount;
+      if (skipped > 0) {
+        await new Promise<void>(resolve => {
+          Alert.alert(
+            'Remote Photos',
+            `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
+            [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
+          );
+        });
+        if (localCount === 0) return;
+      }
       setExportLabel('saving to photo album...');
       setExportCurrent(0);
       setExportTotal(localCount > 0 ? localCount : albumPhotos.length);
@@ -165,6 +176,17 @@ export default function AlbumSettingsScreen() {
       }
     } else if (format === 'backup') {
       const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
+      const skipped = albumPhotos.length - localCount;
+      if (skipped > 0) {
+        await new Promise<void>(resolve => {
+          Alert.alert(
+            'Remote Photos',
+            `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
+            [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
+          );
+        });
+        if (localCount === 0) return;
+      }
       setExportLabel('creating backup...');
       setExportCurrent(0);
       setExportTotal((localCount > 0 ? localCount : albumPhotos.length) + 1);
@@ -221,7 +243,11 @@ export default function AlbumSettingsScreen() {
           setImportTotal(total);
         }, importCancelRef.current);
         setImporting(false);
-        if (entries.length === 0) return;
+        if (entries.length === 0) {
+          setImporting(false);
+          Alert.alert('Import Complete', 'No photos found in the backup file.');
+          return;
+        }
         // I3/I4: single batch merge+dedup+sort, honest counts
         const { added, skipped } = addPhotos(entries);
         haptics.success();

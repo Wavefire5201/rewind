@@ -45,6 +45,7 @@ export interface FaceLandmarks {
   faceBounds: { x: number; y: number; width: number; height: number };
   rollAngle: number;
   yawAngle: number;
+  isMirrored: boolean;
 }
 
 export type DayStatus = 'captured' | 'missed' | 'upcoming' | 'today-done' | 'today-pending' | 'disabled';

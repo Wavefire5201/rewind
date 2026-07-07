@@ -33,6 +33,8 @@ export function useAutoCapture({
   const isInCooldownRef = useRef(false);
   const lastAlignedRef = useRef<number | null>(null);
   const decayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
   const firedRef = useRef(false);
 
   const clearDecayTimer = useCallback(() => {
@@ -42,18 +44,27 @@ export function useAutoCapture({
     }
   }, []);
 
+  const clearCooldownTimer = useCallback(() => {
+    if (cooldownTimerRef.current !== null) {
+      clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
+  }, []);
+
   const enterCooldown = useCallback(() => {
+    clearCooldownTimer();
     isInCooldownRef.current = true;
     setIsInCooldown(true);
     stableFramesRef.current = 0;
     setStableFrames(0);
     firedRef.current = false;
 
-    setTimeout(() => {
+    cooldownTimerRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
       isInCooldownRef.current = false;
       setIsInCooldown(false);
     }, cooldownMs);
-  }, [cooldownMs]);
+  }, [cooldownMs, clearCooldownTimer]);
 
   useEffect(() => {
     if (!enabled || isInCooldownRef.current) return;
@@ -94,9 +105,11 @@ export function useAutoCapture({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       clearDecayTimer();
+      clearCooldownTimer();
     };
-  }, [clearDecayTimer]);
+  }, [clearDecayTimer, clearCooldownTimer]);
 
   const progress = Math.min(1, stableFrames / requiredFrames);
 

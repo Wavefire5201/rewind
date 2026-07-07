@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import PhotoImage from '@/components/ui/PhotoImage';
 import { Colors, Fonts } from '@/constants/theme';
@@ -29,7 +29,10 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
   const { fonts } = useFont();
   const weeks = getCalendarMonth(year, month);
   const today = getToday();
-  const photoMap = new Map<string, PhotoEntry>(photos.map(p => [p.date, p]));
+  const photoMap = useMemo(
+    () => new Map<string, PhotoEntry>(photos.map(p => [p.date, p])),
+    [photos],
+  );
 
   return (
     <View style={styles.container}>

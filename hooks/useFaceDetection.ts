@@ -85,6 +85,7 @@ export function useFaceDetection() {
       },
       rollAngle: rollAngle.value,
       yawAngle: yawAngle.value,
+      isMirrored: false,
     };
   }, []);
 

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,9 +8,32 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider } from '@/context/AppContext';
 import { FontProvider } from '@/context/FontContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
+import React from 'react';
 
 SplashScreen.preventAutoHideAsync();
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) { console.error('[ErrorBoundary]', error); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={ebStyles.container}>
+          <Text style={ebStyles.title}>Something went wrong</Text>
+          <Text style={ebStyles.subtitle}>Please restart the app</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+const ebStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.bgPage, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  title: { fontFamily: Fonts.mono.regular, fontSize: 16, color: Colors.textPrimary },
+  subtitle: { fontFamily: Fonts.mono.regular, fontSize: 13, color: Colors.textSecondary },
+});
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -31,8 +55,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AppProvider>
           <FontProvider>
-            <StatusBar style="light" />
-            <Stack
+            <ErrorBoundary>
+              <StatusBar style="light" />
+              <Stack
               screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: Colors.bgPage },
@@ -41,6 +66,7 @@ export default function RootLayout() {
                 navigationBarColor: Colors.bgPage,
               }}
             />
+            </ErrorBoundary>
           </FontProvider>
         </AppProvider>
       </SafeAreaProvider>

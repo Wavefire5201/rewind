@@ -32,6 +32,7 @@ interface ViewfinderProps {
   showFaceGuide: boolean;
   onFaceState?: (state: FaceState) => void;
   onAvailabilityChange?: (available: boolean) => void;
+  onSilence?: (silent: boolean) => void;
   showDebug?: boolean;
   photoQuality?: 'low' | 'medium' | 'high';
 }
@@ -42,11 +43,12 @@ export interface ViewfinderRef {
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
-  ({ ghostImageUri, ghostLandmarks, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, showDebug = false, photoQuality = 'medium' }, ref) => {
+  ({ ghostImageUri, ghostLandmarks, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, onSilence, showDebug = false, photoQuality = 'medium' }, ref) => {
     const { typography } = useFont();
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
     const cameraRef = useRef<Camera>(null);
+    const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
     const contourData = useSharedValue<number[]>([]);
     const { detectFaces, getCurrentLandmarks, isAvailable: faceDetectionAvailable, sharedValues } = useFaceDetection();
@@ -54,6 +56,14 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
     useEffect(() => {
       onAvailabilityChange?.(faceDetectionAvailable);
     }, [faceDetectionAvailable, onAvailabilityChange]);
+
+    useEffect(() => {
+      return () => {
+        if (silenceTimerRef.current !== null) {
+          clearTimeout(silenceTimerRef.current);
+        }
+      };
+    }, []);
 
     // Single bridge call from frame processor worklet → JS thread.
     // VisionCamera (worklets-core) and Reanimated 4 use different worklet runtimes,
@@ -77,8 +87,19 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
         sharedValues.hasFace.value = false;
         contourData.value = [];
         onFaceState?.({ hasFace: false, faceX: 0, faceY: 0, faceWidth: 0, faceHeight: 0, yawAngle: 0, rollAngle: 0 });
+        if (silenceTimerRef.current === null) {
+          silenceTimerRef.current = setTimeout(() => {
+            onSilence?.(true);
+          }, 5000);
+        }
         return;
       }
+
+      if (silenceTimerRef.current !== null) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      onSilence?.(false);
 
       if (previewFlipped) {
         data.faceX = 1 - data.faceX! - data.faceWidth!;
@@ -156,12 +177,9 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           const frameH = frame.height || 1;
           const lm = largest.landmarks;
 
-          // MLKit on Android returns coords in the display-rotated space,
-          // but frame.width/height reflect the raw sensor (landscape).
-          // Normalize by swapped dimensions when sensor is landscape.
-          const isLandscape = frameW > frameH;
-          const normW = isLandscape ? frameH : frameW;
-          const normH = isLandscape ? frameW : frameH;
+          const isSensorLandscape = frame.orientation === 'portrait' || frame.orientation === 'portrait-upside-down';
+          const normW = isSensorLandscape ? frameH : frameW;
+          const normH = isSensorLandscape ? frameW : frameH;
 
           const result: any = {
             hasFace: true,
@@ -270,6 +288,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
             opacity={ghostOpacity}
             onOpacityChange={onGhostOpacityChange}
             ghostLandmarks={faceDetectionAvailable ? ghostLandmarks : null}
+            currentIsMirrored={isMirrored}
             liveValues={sharedValues}
             containerWidth={containerSize.width}
             containerHeight={containerSize.height}

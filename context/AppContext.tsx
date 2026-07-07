@@ -1,16 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
-import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData } from '@/utils/storage';
+import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, saveUnlockedAlbumIds, loadUnlockedAlbumIds } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
 import { cancelAlbumReminder } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 
-function fireAndSave(p: Promise<void>): void {
-  p.catch(e => {
-    console.error('Storage write failed:', e);
-    haptics.error();
-  });
+function fireAndSave(saveFn: () => Promise<void>): void {
+  enqueueSave(saveFn);
+}
+
+let saveQueue = Promise.resolve();
+
+function enqueueSave(saveFn: () => Promise<void>): void {
+  saveQueue = saveQueue.then(saveFn, saveFn);
 }
 
 const DEFAULT_ALBUMS: Album[] = [];
@@ -49,22 +52,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
 
   const unlockAlbum = useCallback((id: string) => {
-    setUnlockedAlbumIds(prev => new Set(prev).add(id));
+    setUnlockedAlbumIds(prev => {
+      const next = new Set(prev).add(id);
+      enqueueSave(() => saveUnlockedAlbumIds([...next]));
+      return next;
+    });
   }, []);
 
   useEffect(() => {
     async function init() {
       try {
-        const [photosResult, profileResult, settingsResult, albumsResult] = await Promise.allSettled([
-          loadPhotos(),
-          loadProfile(),
-          loadSettings(),
-          loadAlbums(),
-        ]);
+          const [photosResult, profileResult, settingsResult, albumsResult, unlockedResult] = await Promise.allSettled([
+            loadPhotos(),
+            loadProfile(),
+            loadSettings(),
+            loadAlbums(),
+            loadUnlockedAlbumIds(),
+          ]);
         const storedPhotos = photosResult.status === 'fulfilled' ? photosResult.value : [];
         const storedProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
         const storedSettings = settingsResult.status === 'fulfilled' ? settingsResult.value : getDefaultSettings();
         const storedAlbums = albumsResult.status === 'fulfilled' ? albumsResult.value : null;
+        const storedUnlockedIds = unlockedResult.status === 'fulfilled' ? unlockedResult.value : [];
+
+        if (storedUnlockedIds.length > 0) {
+          setUnlockedAlbumIds(new Set(storedUnlockedIds));
+        }
 
         if (storedPhotos.length > 0) {
           // Migrate legacy photos missing albumId
@@ -140,13 +153,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Replace if same date+album exists
       const filtered = prev.filter(p => !(p.date === entry.date && p.albumId === entry.albumId));
       const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-      fireAndSave(savePhotos(next));
+      fireAndSave(() => savePhotos(next));
       return next;
     });
   }, []);
 
-  // Batch import: merges, deduplicates, sorts once, single awaited save.
-  // Returns how many entries were actually added vs skipped (date+album collision).
   const addPhotos = useCallback((entries: PhotoEntry[]): { added: number; skipped: number } => {
     let added = 0;
     let skipped = 0;
@@ -165,7 +176,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       if (toAdd.length === 0) return prev;
       const next = [...prev, ...toAdd].sort((a, b) => a.date.localeCompare(b.date));
-      fireAndSave(savePhotos(next));
+      fireAndSave(() => savePhotos(next));
       return next;
     });
     return { added, skipped };
@@ -174,7 +185,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
     setPhotos(prev => {
       const next = prev.map(p => p.id === id ? { ...p, ...updates } : p);
-      fireAndSave(savePhotos(next));
+      fireAndSave(() => savePhotos(next));
       return next;
     });
   }, []);
@@ -182,11 +193,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deletePhoto = useCallback((id: string) => {
     setPhotos(prev => {
       const target = prev.find(p => p.id === id);
-      if (target?.imageUri && target.imageUri.startsWith('file://')) {
-        try { new File(target.imageUri).delete(); } catch {}
-      }
       const next = prev.filter(p => p.id !== id);
-      fireAndSave(savePhotos(next));
+      fireAndSave(() => savePhotos(next));
+      if (target?.imageUri?.startsWith('file://')) {
+        setImmediate(() => { try { new File(target.imageUri).delete(); } catch {} });
+      }
       return next;
     });
   }, []);
@@ -194,7 +205,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => {
       const next = { ...prev, ...updates };
-      fireAndSave(saveProfile(next));
+      fireAndSave(() => saveProfile(next));
       return next;
     });
   }, []);
@@ -202,7 +213,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...updates };
-      fireAndSave(saveSettings(next));
+      fireAndSave(() => saveSettings(next));
       return next;
     });
   }, []);
@@ -210,7 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addAlbum = useCallback((album: Album) => {
     setAlbums(prev => {
       const next = [...prev, album];
-      fireAndSave(saveAlbums(next));
+      fireAndSave(() => saveAlbums(next));
       return next;
     });
   }, []);
@@ -218,52 +229,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateAlbum = useCallback((id: string, updates: Partial<Album>) => {
     setAlbums(prev => {
       const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
-      fireAndSave(saveAlbums(next));
+      fireAndSave(() => saveAlbums(next));
       return next;
     });
   }, []);
 
   const deleteAlbum = useCallback((id: string) => {
+    if (albums.length <= 1) return;
     setAlbums(prev => {
-      // Guard: cannot delete the last album
-      if (prev.length <= 1) return prev;
       const next = prev.filter(a => a.id !== id);
-      fireAndSave(saveAlbums(next));
+      fireAndSave(() => saveAlbums(next));
       return next;
     });
-    // Cancel any scheduled notification for this album
     cancelAlbumReminder(id);
-    // Cascade delete: remove all photos belonging to this album
     setPhotos(prev => {
       const toDelete = prev.filter(p => p.albumId === id);
       const next = prev.filter(p => p.albumId !== id);
-      // Clean up local files
+      fireAndSave(() => savePhotos(next));
       for (const photo of toDelete) {
         if (photo.imageUri?.startsWith('file://')) {
-          try { new File(photo.imageUri).delete(); } catch {}
+          setImmediate(() => { try { new File(photo.imageUri).delete(); } catch {} });
         }
       }
-      fireAndSave(savePhotos(next));
       return next;
     });
-  }, []);
+  }, [albums.length]);
 
   const resetAllData = useCallback(async () => {
-    // Delete local photo files before clearing state
-    setPhotos(prev => {
-      for (const photo of prev) {
-        if (photo.imageUri?.startsWith('file://')) {
-          try { new File(photo.imageUri).delete(); } catch {}
-        }
-      }
-      return prev;
-    });
+    const localUris = photos.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
     await clearAllData();
+    for (const uri of localUris) {
+      try { new File(uri).delete(); } catch {}
+    }
     setPhotos([]);
     setProfile(defaultProfile);
     setSettings(getDefaultSettings());
     setAlbums([]);
-  }, []);
+    setUnlockedAlbumIds(new Set());
+  }, [photos]);
 
   const seedMockPhotos = useCallback((albumId?: string) => {
     // Generate 7 mock photos: today back through last 6 days
@@ -303,22 +306,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const existingDates = new Set(prev.map(p => `${p.date}:${p.albumId}`));
       const newPhotos = mockPhotos.filter(p => !existingDates.has(`${p.date}:${p.albumId}`));
       const next = [...prev, ...newPhotos].sort((a, b) => a.date.localeCompare(b.date));
-      fireAndSave(savePhotos(next));
+      fireAndSave(() => savePhotos(next));
       return next;
     });
 
-    // Update joinDate and album createdAt to earliest mock photo
     const earliest = mockPhotos[mockPhotos.length - 1].date;
     setProfile(prev => {
       if (!prev.joinDate || earliest < prev.joinDate) {
         const next = { ...prev, joinDate: earliest };
-        fireAndSave(saveProfile(next));
+        fireAndSave(() => saveProfile(next));
         return next;
       }
       return prev;
     });
 
-    // Backdate the album's createdAt so calendar shows the mock days
     setAlbums(prev => {
       const earliestISO = new Date(earliest + 'T00:00:00').toISOString();
       const updated = prev.map(a => {
@@ -328,7 +329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return a;
       });
       if (JSON.stringify(updated) !== JSON.stringify(prev)) {
-        fireAndSave(saveAlbums(updated));
+        fireAndSave(() => saveAlbums(updated));
         return updated;
       }
       return prev;

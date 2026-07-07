@@ -30,6 +30,10 @@ export default function CameraScreen() {
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
+  useEffect(() => {
+    if (!albumId) router.replace('/');
+  }, [albumId, router]);
+
   const { fonts, typography } = useFont();
   const cameraRef = useRef<ViewfinderRef>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -48,6 +52,7 @@ export default function CameraScreen() {
   const [capturedLandmarks, setCapturedLandmarks] = useState<FaceLandmarks | null>(null);
   const [faceState, setFaceState] = useState<FaceState>({ hasFace: false, faceX: 0, faceY: 0, faceWidth: 0, faceHeight: 0, yawAngle: 0, rollAngle: 0 });
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [faceSilence, setFaceSilence] = useState(false);
 
   // Reference target: captured from live video so we can bootstrap
   // auto-capture even when no photo has faceLandmarks yet.
@@ -57,12 +62,11 @@ export default function CameraScreen() {
   const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
-  const doCapture = async () => {
+  const doCapture = useCallback(async () => {
     if (isCapturingRef.current) return;
     isCapturingRef.current = true;
     setIsCapturing(true);
     try {
-      // Grab face landmarks before capture (frame processor is still running)
       const landmarks = cameraRef.current?.getCurrentLandmarks() ?? null;
       const photo = await cameraRef.current?.takePhoto();
       if (photo?.uri) {
@@ -79,7 +83,7 @@ export default function CameraScreen() {
           }
         }
         setCapturedUri(uri);
-        setCapturedLandmarks(landmarks);
+        setCapturedLandmarks(landmarks ? { ...landmarks, isMirrored } : null);
         setShowPreview(true);
       }
     } catch (e) {
@@ -89,7 +93,7 @@ export default function CameraScreen() {
       isCapturingRef.current = false;
       setIsCapturing(false);
     }
-  };
+  }, [facing, isMirrored]);
 
   useEffect(() => {
     return () => {
@@ -108,9 +112,8 @@ export default function CameraScreen() {
     haptics.tap();
   }, []);
 
-  const handleCapture = async () => {
-    // If a countdown is active, pressing shutter cancels it instead of starting another
-    if (intervalRef.current !== null || countdown !== null) {
+  const handleCapture = useCallback(async () => {
+    if (intervalRef.current !== null) {
       cancelCountdown();
       return;
     }
@@ -131,13 +134,17 @@ export default function CameraScreen() {
     } else {
       await doCapture();
     }
-  };
+  }, [cancelCountdown, timerDuration, doCapture]);
 
   const handleFlip = () => {
     setFacing(prev => prev === 'front' ? 'back' : 'front');
     setIsMirrored(settings.mirrorSelfies);
+    setReferenceTarget(null);
   };
-  const handleMirrorToggle = () => setIsMirrored(prev => !prev);
+  const handleMirrorToggle = () => {
+    setIsMirrored(prev => !prev);
+    setReferenceTarget(null);
+  };
   const handleTimerToggle = () => setShowTimer(prev => !prev);
   const handleFaceGuideToggle = () => {
     if (!faceDetectionAvailable) return;
@@ -155,6 +162,10 @@ export default function CameraScreen() {
   const handleDebugToggle = useCallback(() => {
     setShowDebugOverlay(prev => !prev);
     haptics.tap();
+  }, []);
+
+  const handleSilence = useCallback((silent: boolean) => {
+    setFaceSilence(silent);
   }, []);
 
   // Auto-capture alignment target priority:
@@ -213,7 +224,7 @@ export default function CameraScreen() {
     alignmentThreshold,
     requiredFrames: hasAlignmentTarget ? 15 : 10,
     cooldownMs: 3000,
-    onCapture: handleCapture,
+    onCapture: doCapture,
   });
 
   // Long-press shutter to capture current face position as a reference target
@@ -289,6 +300,7 @@ export default function CameraScreen() {
         showFaceGuide={showFaceGuide}
         onFaceState={handleFaceState}
         onAvailabilityChange={handleAvailabilityChange}
+        onSilence={handleSilence}
         showDebug={showDebugOverlay}
         photoQuality={settings.photoQuality}
       />
@@ -325,7 +337,9 @@ export default function CameraScreen() {
 
         {showFaceGuide && faceDetectionAvailable ? (
           <Text style={[typography.sectionLabel, styles.faceStatus, { fontFamily: fonts.regular }]}>
-            {!faceState.hasFace
+            {faceSilence
+              ? 'face detection stalled'
+              : !faceState.hasFace
               ? 'no face detected'
               : alignmentScore >= alignmentThreshold
               ? 'aligned'

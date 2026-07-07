@@ -134,11 +134,19 @@ export default function AlbumDetailScreen() {
       try {
         const picked = await pickPhotosFromLibrary();
         if (picked.length === 0) return;
-        // Use the first picked photo for the target date
         const { createPhotoEntry } = await import('@/utils/import');
-        const entry = createPhotoEntry(picked[0].uri, importTargetDate ?? picked[0].date ?? '', '', id);
-        addPhoto(entry);
-        haptics.success();
+        const entries = [];
+        for (const p of picked) {
+          try {
+            entries.push(createPhotoEntry(p.uri, p.date ?? importTargetDate ?? '', '', id));
+          } catch { /* copy failure — skip this file */ }
+        }
+        if (entries.length > 0) {
+          for (const entry of entries) addPhoto(entry);
+          haptics.success();
+        } else {
+          haptics.error();
+        }
       } catch {
         haptics.error();
       }

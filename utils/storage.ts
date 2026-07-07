@@ -6,6 +6,7 @@ const KEYS = {
   PROFILE: '@rewind/profile',
   SETTINGS: '@rewind/settings',
   ALBUMS: '@rewind/albums',
+  UNLOCKED_ALBUMS: '@rewind/unlocked-albums',
 } as const;
 
 export function getDefaultSettings(): AppSettings {
@@ -79,5 +80,20 @@ export async function loadAlbums(): Promise<Album[] | null> {
 }
 
 export async function clearAllData(): Promise<void> {
-  await AsyncStorage.multiRemove([KEYS.PHOTOS, KEYS.PROFILE, KEYS.SETTINGS, KEYS.ALBUMS]);
+  await AsyncStorage.multiRemove([KEYS.PHOTOS, KEYS.PROFILE, KEYS.SETTINGS, KEYS.ALBUMS, KEYS.UNLOCKED_ALBUMS]);
+}
+
+export async function saveUnlockedAlbumIds(ids: string[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.UNLOCKED_ALBUMS, JSON.stringify(ids));
+}
+
+export async function loadUnlockedAlbumIds(): Promise<string[]> {
+  const data = await AsyncStorage.getItem(KEYS.UNLOCKED_ALBUMS);
+  if (!data) return [];
+  try {
+    return JSON.parse(data);
+  } catch {
+    console.error('loadUnlockedAlbumIds: corrupt JSON, resetting to []');
+    return [];
+  }
 }

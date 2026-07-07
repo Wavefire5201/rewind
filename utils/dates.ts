@@ -105,8 +105,8 @@ export function formatMonthYear(year: number, month: number): string {
   return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toLowerCase();
 }
 
-export function formatTime(iso: string): string {
+export function formatTime(iso: string, use24h: boolean = false): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: !use24h });
 }
 

@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import type { PhotoEntry } from '@/types';
 import { TimelapsePlayerHandle } from '@/components/timelapse/TimelapsePlayer';
-import { haptics } from '@/utils/haptics';
 
 export function formatMMDD(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
@@ -24,12 +23,15 @@ export function useTimelapse({ photos }: UseTimelapseOptions) {
   const [showDateRange, setShowDateRange] = useState(false);
 
   // Derived
-  const allDates = photos.map((p) => p.date).sort();
+  const allDates = useMemo(() => photos.map((p) => p.date).sort(), [photos]);
   const rangeStart = dateRange?.start ?? (allDates[0] ?? '');
   const rangeEnd = dateRange?.end ?? (allDates[allDates.length - 1] ?? '');
-  const filteredPhotos = dateRange
-    ? photos.filter((p) => p.date >= dateRange.start && p.date <= dateRange.end)
-    : photos;
+  const filteredPhotos = useMemo(
+    () => dateRange
+      ? photos.filter((p) => p.date >= dateRange.start && p.date <= dateRange.end)
+      : photos,
+    [photos, dateRange],
+  );
   const hasDateFilter = dateRange !== null;
 
   const handleFrameChange = useCallback((index: number) => {

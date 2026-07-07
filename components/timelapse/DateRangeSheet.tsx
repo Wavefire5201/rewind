@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -100,7 +100,7 @@ export default function DateRangeSheet({
     onApply(selStart, selEnd);
   }
 
-  const sortedDates = [...dates].sort();
+  const sortedDates = useMemo(() => [...dates].sort(), [dates]);
 
   return (
     <Modal

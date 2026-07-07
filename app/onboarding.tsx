@@ -243,7 +243,7 @@ export default function OnboardingScreen() {
         <View style={styles.backBtn} />
       </View>
       {step === 1 && <StepWelcome onNext={handleWelcomeNext} />}
-      {step === 2 && <StepNameAlbum onNext={handleNameNext} initialValue={albumNameRef.current === 'daily selfie' ? '' : albumNameRef.current} />}
+      {step === 2 && <StepNameAlbum onNext={handleNameNext} initialValue={albumNameRef.current} />}
       {step === 3 && <StepReminder onEnable={handleReminderEnable} onSkip={handleReminderSkip} />}
     </SafeAreaView>
   );

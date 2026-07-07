@@ -9,7 +9,7 @@ export interface FaceGuideProps {
   contourData?: SharedValue<number[]>;
 }
 
-const DOT_COUNT = 40;
+const DOT_COUNT = 60;
 
 function ContourDot({ index, contourData, containerWidth, containerHeight }: { index: number; contourData: SharedValue<number[]>; containerWidth: number; containerHeight: number }) {
   const dotStyle = useAnimatedStyle(() => {
