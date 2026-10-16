@@ -9,5 +9,5 @@ it("draws one dot per point of ML Kit's face contour (36), no hidden spares", as
   const contour = { value: [] } as unknown as SharedValue<number[]>;
   await render(<FaceGuide containerWidth={300} containerHeight={400} contourData={contour} />);
   // Each dot runs an animated style on every face update, hidden or not.
-  expect(screen.root.children).toHaveLength(36);
+  expect(screen.root?.children).toHaveLength(36);
 });
