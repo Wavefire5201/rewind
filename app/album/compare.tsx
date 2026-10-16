@@ -38,7 +38,11 @@ function CompareScreen() {
   const header = (
     <View style={styles.header}>
       <Pressable
-        onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+        onPress={() => {
+          haptics.tap();
+          if (router.canGoBack()) router.back();
+          else router.replace('/');
+        }}
         hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel="Go back"
