@@ -4,7 +4,7 @@ import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
 import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, clearUnlockedAlbumIds } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
-import { cancelAlbumReminder } from '@/utils/notifications';
+import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 
 function fireAndSave(saveFn: () => Promise<void>): Promise<boolean> {
@@ -329,6 +329,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}
     }
+    // The albums are gone, so are their reminders.
+    await cancelAllReminders();
     setPhotos([]);
     setProfile(defaultProfile);
     setSettings(getDefaultSettings());

@@ -403,6 +403,8 @@ describe('AppContext', () => {
     expect(ctx!.albums).toEqual([]);
     expect(await AsyncStorage.getItem('@rewind/photos')).toBeNull();
     expect(deletedUris).toContain('file:///document/p.jpg');
+    // The deleted albums' daily reminders must stop too.
+    expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
     await unmount();
   });
 
