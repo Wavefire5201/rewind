@@ -24,6 +24,7 @@ import FaceTrendCard from '@/components/face/FaceTrendCard';
 import type { PhotoEntry } from '@/types';
 import { haptics } from '@/utils/haptics';
 import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
+import { nounFor } from '@/utils/text';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
@@ -226,7 +227,7 @@ function AlbumDetailScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
-              <Text style={typography.small}>photos</Text>
+              <Text style={typography.small}>{nounFor(photos.length, 'photo')}</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>

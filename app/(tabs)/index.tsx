@@ -19,6 +19,7 @@ import { haptics } from '@/utils/haptics';
 import { getImageSource } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
 import { createAlbum } from '@/utils/albums';
+import { plural } from '@/utils/text';
 import type { Album } from '@/types';
 
 const CONTENT_PADDING = 28;
@@ -219,7 +220,7 @@ function AlbumRow({ album, onUnlockRequest, onRenameRequest, onDeleteRequest }: 
           <View style={styles.rowInfo}>
             <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
             <Text style={[typography.small, { color: Colors.textTertiary }]}>
-              {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
+              {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : plural(totalPhotos, 'photo')}
             </Text>
           </View>
           <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
