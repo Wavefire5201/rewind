@@ -18,7 +18,7 @@ import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
 import { getImageSource } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
-import { createAlbum } from '@/utils/albums';
+import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { plural } from '@/utils/text';
 import type { Album } from '@/types';
 
@@ -411,6 +411,7 @@ export default function HomeScreen() {
         message="Enter a name for the album"
         placeholder="Album name"
         confirmLabel="Create"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmNewAlbum}
         onCancel={() => setShowNewAlbumModal(false)}
       />
@@ -420,6 +421,7 @@ export default function HomeScreen() {
         placeholder="Album name"
         defaultValue={renameTarget?.name ?? ''}
         confirmLabel="Rename"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setRenameTarget(null)}
       />

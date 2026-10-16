@@ -18,3 +18,8 @@ it('shows the empty-name error in the danger colour', async () => {
   const error = screen.getByText("name can't be empty");
   expect(StyleSheet.flatten(error.props.style).color).toBe(Colors.danger);
 });
+
+it('limits the input to the given length', async () => {
+  await renderModal({ placeholder: 'album name', maxLength: 50 });
+  expect(screen.getByLabelText('album name').props.maxLength).toBe(50);
+});

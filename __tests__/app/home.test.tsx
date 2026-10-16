@@ -42,7 +42,8 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/components/ui/PhotoImage', () => () => null);
 jest.mock('@/components/ui/PinModal', () => () => null);
-jest.mock('@/components/ui/TextInputModal', () => () => null);
+const mockTextInputModal = jest.fn();
+jest.mock('@/components/ui/TextInputModal', () => (props: unknown) => { mockTextInputModal(props); return null; });
 
 const renderHome = () => render(<FontProvider><HomeScreen /></FontProvider>);
 
@@ -57,4 +58,14 @@ it('counts a single photo as "1 photo"', async () => {
   await renderHome();
   expect(screen.getAllByText('1 photo').length).toBeGreaterThan(0);
   expect(screen.queryByText('1 photos')).toBeNull();
+});
+
+it('caps album names at the same length as onboarding', async () => {
+  await renderHome();
+  const { ALBUM_NAME_MAX_LENGTH } = require('@/utils/albums') as typeof import('@/utils/albums');
+  for (const [props] of mockTextInputModal.mock.calls as [{ maxLength?: number }][]) {
+    expect(props.maxLength).toBe(ALBUM_NAME_MAX_LENGTH);
+  }
+  expect(mockTextInputModal).toHaveBeenCalled();
+  expect(ALBUM_NAME_MAX_LENGTH).toBe(50);
 });

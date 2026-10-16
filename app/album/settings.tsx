@@ -16,6 +16,7 @@ import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
+import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { getToday } from '@/utils/dates';
 import { requestNotificationPermission, syncAllReminders } from '@/utils/notifications';
 import { pickPhotosFromLibrary, importFromBackup, createPhotoEntry } from '@/utils/import';
@@ -502,6 +503,7 @@ function AlbumSettingsScreen() {
         placeholder="Album name"
         defaultValue={albumName}
         confirmLabel="Rename"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setShowRenameModal(false)}
       />

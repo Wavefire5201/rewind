@@ -15,7 +15,7 @@ import TimePicker from '@/components/ui/TimePicker';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
-import { createAlbum } from '@/utils/albums';
+import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { scheduleAlbumReminder } from '@/utils/notifications';
 import { getToday } from '@/utils/dates';
 
@@ -74,7 +74,7 @@ function StepNameAlbum({ onNext, initialValue }: { onNext: (name: string) => voi
           autoCorrect={false}
           returnKeyType="done"
           onSubmitEditing={handleContinue}
-          maxLength={50}
+          maxLength={ALBUM_NAME_MAX_LENGTH}
         />
         <Text style={[styles.hint, { fontFamily: fonts.regular }]}>you can create more albums later</Text>
       </View>

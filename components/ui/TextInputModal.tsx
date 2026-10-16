@@ -20,6 +20,7 @@ interface TextInputModalProps {
   placeholder?: string;
   defaultValue?: string;
   confirmLabel?: string;
+  maxLength?: number;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }
@@ -31,6 +32,7 @@ export default function TextInputModal({
   placeholder = '',
   defaultValue = '',
   confirmLabel = 'Confirm',
+  maxLength = 100,
   onConfirm,
   onCancel,
 }: TextInputModalProps) {
@@ -80,7 +82,7 @@ export default function TextInputModal({
             autoFocus
             returnKeyType="done"
             onSubmitEditing={handleConfirm}
-            maxLength={100}
+            maxLength={maxLength}
             accessibilityLabel={placeholder || title}
           />
           {showEmptyError ? (
