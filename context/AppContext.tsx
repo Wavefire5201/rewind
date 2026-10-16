@@ -31,6 +31,36 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
   return done;
 }
 
+// Photo saves are latest-wins. Each one writes the whole array (about 1 MB at 1000 photos),
+// and the states in between are never read back, so while a write is in flight newer states
+// replace each other and only the newest is written next: a burst of N changes costs one or
+// two writes, not N. Each caller still hears whether a write including its change landed.
+let pendingPhotos: { photos: PhotoEntry[]; waiters: ((saved: boolean) => void)[] } | null = null;
+let writingPhotos = false;
+
+function savePhotosLatest(photos: PhotoEntry[]): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    if (pendingPhotos) {
+      pendingPhotos.photos = photos;
+      pendingPhotos.waiters.push(resolve);
+    } else {
+      pendingPhotos = { photos, waiters: [resolve] };
+    }
+    if (!writingPhotos) void writePendingPhotos();
+  });
+}
+
+async function writePendingPhotos() {
+  writingPhotos = true;
+  while (pendingPhotos) {
+    const { photos, waiters } = pendingPhotos;
+    pendingPhotos = null;
+    const saved = await enqueueSave(() => savePhotos(photos));
+    waiters.forEach((resolve) => resolve(saved));
+  }
+  writingPhotos = false;
+}
+
 const DEFAULT_ALBUMS: Album[] = [];
 
 const photoKey = (p: PhotoEntry) => `${p.albumId}:${p.date}`;
@@ -221,7 +251,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
         // An updater can run twice (StrictMode); the first save to settle answers.
-        fireAndSave(() => savePhotos(next)).then(resolve);
+        savePhotosLatest(next).then(resolve);
         return next;
       });
     });
@@ -273,12 +303,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [commitPhotos]);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
-    setPhotos(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, ...updates } : p);
-      fireAndSave(() => savePhotos(next));
-      return next;
-    });
-  }, []);
+    commitPhotos(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+  }, [commitPhotos]);
 
   // Batched variant of updatePhoto: one state update + one save for many photos.
   // updatePhoto rewrites the whole array per call, so a 240-photo face-scan backfill
@@ -406,7 +432,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const existingDates = new Set(prev.map(p => `${p.date}:${p.albumId}`));
       const newPhotos = mockPhotos.filter(p => !existingDates.has(`${p.date}:${p.albumId}`));
       const next = [...prev, ...newPhotos].sort(byDate);
-      fireAndSave(() => savePhotos(next));
+      savePhotosLatest(next);
       return next;
     });
 

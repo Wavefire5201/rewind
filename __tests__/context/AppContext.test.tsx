@@ -416,6 +416,27 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it('writes a burst of photo changes as one or two saves, with every change in the last', async () => {
+    // Each save writes the whole array (~1 MB at 1000 photos); the in-between states
+    // are never read back, so only the newest needs writing.
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addPhotos(Array.from({ length: 10 }, (_, i) => photo({ id: `p${i}`, date: `2026-03-${String(i + 1).padStart(2, '0')}` })));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(10));
+    const setItem = jest.mocked(AsyncStorage.setItem);
+    setItem.mockClear();
+    const results: Promise<boolean>[] = [];
+    await act(async () => {
+      for (let i = 0; i < 10; i++) results.push(ctx!.updatePhotos({ [`p${i}`]: { caption: `c${i}` } }));
+    });
+    expect(await Promise.all(results)).toEqual(Array(10).fill(true));
+    const writes = setItem.mock.calls.filter(([key]) => key === '@rewind/photos');
+    expect(writes.length).toBeLessThanOrEqual(2);
+    expect((await storedPhotos()).map((p) => p.caption)).toEqual(Array.from({ length: 10 }, (_, i) => `c${i}`));
+    await unmount();
+  });
+
   it('updatePhotos with no patches does not write photos', async () => {
     const { unmount } = await renderProvider();
     const setItem = jest.mocked(AsyncStorage.setItem);
