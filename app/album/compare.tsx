@@ -35,9 +35,25 @@ function CompareScreen() {
   // null = the last photo, whenever the photos arrive.
   const [b, setB] = useState<number | null>(null);
 
+  const header = (
+    <View style={styles.header}>
+      <Pressable
+        onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <CaretLeft size={20} color={Colors.textPrimary} />
+      </Pressable>
+      <Text style={[styles.title, { fontFamily: fonts.regular }]}>compare</Text>
+      <View style={{ width: 20 }} />
+    </View>
+  );
+
   if (photos.length < 2 || !trend) {
     return (
       <SafeAreaView style={styles.safe}>
+        {header}
         <Text style={[styles.note, { fontFamily: fonts.regular }]}>not enough measured photos to compare yet</Text>
       </SafeAreaView>
     );
@@ -51,13 +67,7 @@ function CompareScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => { haptics.tap(); router.back(); }} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
-          <CaretLeft size={20} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={[styles.title, { fontFamily: fonts.regular }]}>compare</Text>
-        <View style={{ width: 20 }} />
-      </View>
+      {header}
       <View style={styles.panes}>
         <ComparePane photo={pa} targetEyeDist={targetEyeDist} />
         <ComparePane photo={pb} targetEyeDist={targetEyeDist} />
