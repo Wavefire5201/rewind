@@ -84,17 +84,8 @@ export async function clearAllData(): Promise<void> {
   await AsyncStorage.multiRemove([KEYS.PHOTOS, KEYS.PROFILE, KEYS.SETTINGS, KEYS.ALBUMS, KEYS.UNLOCKED_ALBUMS]);
 }
 
-export async function saveUnlockedAlbumIds(ids: string[]): Promise<void> {
-  await AsyncStorage.setItem(KEYS.UNLOCKED_ALBUMS, JSON.stringify(ids));
-}
-
-export async function loadUnlockedAlbumIds(): Promise<string[]> {
-  const data = await AsyncStorage.getItem(KEYS.UNLOCKED_ALBUMS);
-  if (!data) return [];
-  try {
-    return JSON.parse(data);
-  } catch {
-    console.error('loadUnlockedAlbumIds: corrupt JSON, resetting to []');
-    return [];
-  }
+// Album unlocks used to be saved here, which kept a locked album open across restarts.
+// They now live only in memory; this removes what older versions left behind.
+export async function clearUnlockedAlbumIds(): Promise<void> {
+  await AsyncStorage.removeItem(KEYS.UNLOCKED_ALBUMS);
 }

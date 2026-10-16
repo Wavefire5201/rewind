@@ -1,4 +1,5 @@
 import React from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, waitFor, act } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
@@ -77,7 +78,17 @@ describe('AppContext', () => {
     expect(ctx!.profile.name).toBe('Ada');
     expect(ctx!.settings.mirrorSelfies).toBe(false);
     expect(ctx!.albums).toHaveLength(1);
-    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
+    await unmount();
+  });
+
+  it('ignores and removes unlocks saved by older versions', async () => {
+    await AsyncStorage.multiSet([
+      ['@rewind/albums', JSON.stringify([album({ isLocked: true })])],
+      ['@rewind/unlocked-albums', JSON.stringify(['a1'])],
+    ]);
+    const { unmount } = await renderProvider();
+    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+    await waitFor(async () => expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull());
     await unmount();
   });
 
@@ -301,27 +312,79 @@ describe('AppContext', () => {
     await unmount();
   });
 
-  it('unlockAlbum persists across mounts', async () => {
-    const first = await renderProvider();
-    await act(async () => {
-      ctx!.addAlbum(album({ id: 'a1', isLocked: true }));
-    });
-    await waitFor(() => expect(ctx!.albums).toHaveLength(1));
-    await act(async () => {
-      ctx!.unlockAlbum('a1');
-    });
-    await waitFor(() => expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true));
-    await waitFor(async () => {
-      expect(JSON.parse((await AsyncStorage.getItem('@rewind/unlocked-albums')) ?? '[]')).toEqual([
-        'a1',
-      ]);
-    });
-    await first.unmount();
+  describe('album unlocks', () => {
+    async function renderWithUnlockedAlbum() {
+      const utils = await renderProvider();
+      await act(async () => {
+        ctx!.addAlbum(album({ id: 'a1', isLocked: true }));
+        ctx!.addAlbum(album({ id: 'a2', isLocked: true }));
+      });
+      await waitFor(() => expect(ctx!.albums).toHaveLength(2));
+      await act(async () => {
+        ctx!.unlockAlbum('a1');
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
+      return utils;
+    }
 
-    // Remount reads the persisted unlock
-    const second = await renderProvider();
-    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
-    await second.unmount();
+    it('last only for this session: a remount starts locked and nothing is saved', async () => {
+      const first = await renderWithUnlockedAlbum();
+      await first.unmount();
+      expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull();
+
+      const second = await renderProvider();
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await second.unmount();
+    });
+
+    it('locking an album again drops its unlock', async () => {
+      const { unmount } = await renderWithUnlockedAlbum();
+      await act(async () => {
+        ctx!.updateAlbum('a1', { isLocked: false });
+      });
+      await act(async () => {
+        ctx!.updateAlbum('a1', { isLocked: true });
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await unmount();
+    });
+
+    it('deleting an album drops its unlock', async () => {
+      const { unmount } = await renderWithUnlockedAlbum();
+      await act(async () => {
+        ctx!.deleteAlbum('a1');
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await unmount();
+    });
+
+    it('re-lock after more than a minute in the background, but survive a short trip', async () => {
+      const listeners: ((state: AppStateStatus) => void)[] = [];
+      // Once: restoring a spy on the react-native mock would strip its implementation.
+      jest.spyOn(AppState, 'addEventListener').mockImplementationOnce((_type, listener) => {
+        listeners.push(listener as (state: AppStateStatus) => void);
+        return { remove: () => {} } as ReturnType<typeof AppState.addEventListener>;
+      });
+      const now = jest.spyOn(Date, 'now');
+      const { unmount } = await renderWithUnlockedAlbum();
+      const emit = (state: AppStateStatus) => act(async () => listeners.forEach((l) => l(state)));
+
+      // A picker or share sheet: back within the minute, still unlocked.
+      now.mockReturnValue(1_000_000);
+      await emit('background');
+      now.mockReturnValue(1_000_000 + 30_000);
+      await emit('active');
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
+
+      now.mockReturnValue(2_000_000);
+      await emit('background');
+      now.mockReturnValue(2_000_000 + 61_000);
+      await emit('active');
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+
+      now.mockRestore();
+      await unmount();
+    });
   });
 
   it('resetAllData clears state, storage, and local files', async () => {

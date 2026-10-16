@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
-import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, saveUnlockedAlbumIds, loadUnlockedAlbumIds } from '@/utils/storage';
+import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, clearUnlockedAlbumIds } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
 import { cancelAlbumReminder } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
@@ -29,6 +30,11 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
 }
 
 const DEFAULT_ALBUMS: Album[] = [];
+
+// Unlocked albums lock again once the app has been in the background this long. Long
+// enough to survive a photo picker or share sheet, short enough that a phone picked up
+// later doesn't open them.
+export const RELOCK_AFTER_MS = 60_000;
 
 interface AppContextValue {
   photos: PhotoEntry[];
@@ -72,33 +78,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const photosRef = useRef<PhotoEntry[]>([]);
   photosRef.current = photos;
 
+  // Unlocks are memory-only: a restart, or a while in the background, locks albums again.
   const unlockAlbum = useCallback((id: string) => {
+    setUnlockedAlbumIds(prev => new Set(prev).add(id));
+  }, []);
+
+  const forgetUnlock = useCallback((id: string) => {
     setUnlockedAlbumIds(prev => {
-      const next = new Set(prev).add(id);
-      enqueueSave(() => saveUnlockedAlbumIds([...next]));
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
       return next;
     });
   }, []);
 
   useEffect(() => {
+    let backgroundedAt: number | null = null;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        backgroundedAt = Date.now();
+      } else if (state === 'active') {
+        if (backgroundedAt !== null && Date.now() - backgroundedAt > RELOCK_AFTER_MS) {
+          setUnlockedAlbumIds(prev => (prev.size === 0 ? prev : new Set()));
+        }
+        backgroundedAt = null;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
     async function init() {
       try {
-          const [photosResult, profileResult, settingsResult, albumsResult, unlockedResult] = await Promise.allSettled([
+          const [photosResult, profileResult, settingsResult, albumsResult] = await Promise.allSettled([
             loadPhotos(),
             loadProfile(),
             loadSettings(),
             loadAlbums(),
-            loadUnlockedAlbumIds(),
+            clearUnlockedAlbumIds(),
           ]);
         const storedPhotos = photosResult.status === 'fulfilled' ? photosResult.value : [];
         const storedProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
         const storedSettings = settingsResult.status === 'fulfilled' ? settingsResult.value : getDefaultSettings();
         const storedAlbums = albumsResult.status === 'fulfilled' ? albumsResult.value : null;
-        const storedUnlockedIds = unlockedResult.status === 'fulfilled' ? unlockedResult.value : [];
-
-        if (storedUnlockedIds.length > 0) {
-          setUnlockedAlbumIds(new Set(storedUnlockedIds));
-        }
 
         if (storedPhotos.length > 0) {
           // Migrate legacy photos missing albumId
@@ -275,7 +297,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       fireAndSave(() => saveAlbums(next));
       return next;
     });
-  }, []);
+    // Locking an album again must take effect, not ride on an earlier unlock.
+    if (updates.isLocked === true) forgetUnlock(id);
+  }, [forgetUnlock]);
 
   const deleteAlbum = useCallback((id: string) => {
     if (albums.length <= 1) return;
@@ -285,6 +309,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     cancelAlbumReminder(id);
+    forgetUnlock(id);
     setPhotos(prev => {
       const toDelete = prev.filter(p => p.albumId === id);
       const next = prev.filter(p => p.albumId !== id);
@@ -296,7 +321,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return next;
     });
-  }, [albums.length]);
+  }, [albums.length, forgetUnlock]);
 
   const resetAllData = useCallback(async () => {
     const localUris = photos.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
