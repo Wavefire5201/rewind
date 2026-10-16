@@ -254,6 +254,18 @@ describe('importFromBackup', () => {
     expect(writtenPhotos()).toHaveLength(0);
   });
 
+  it('yields between photos, so a Cancel tap (or a progress render) can get in', async () => {
+    await seedBackupZip(
+      { photos: [1, 2, 3, 4].map((d) => ({ id: `p${d}`, date: `2026-03-0${d}`, caption: '', imageFile: `images/${d}.jpg` })) },
+      { 'images/1.jpg': 'QUJD', 'images/2.jpg': 'REVG', 'images/3.jpg': 'R0hJ', 'images/4.jpg': 'SktM' },
+    );
+    const signal = { cancelled: false };
+    // Arrives like a tap: as a separate task, not from inside the import's own callbacks.
+    setTimeout(() => { signal.cancelled = true; }, 0);
+    await expect(importFromBackup('album-1', undefined, signal)).rejects.toThrow('Cancelled');
+    expect(writtenPhotos().length).toBe(0);
+  });
+
   it('skips malformed manifest entries instead of failing the whole import', async () => {
     await seedBackupZip(
       { photos: [null, 'x', { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },

@@ -60,7 +60,8 @@ export async function importFromBackup(
         return handle.readBytes(length);
       },
     };
-    return readBackupEntries(src, albumId, existingDates, onProgress, cancelSignal);
+    // Awaited so the handle stays open until the last photo is read.
+    return await readBackupEntries(src, albumId, existingDates, onProgress, cancelSignal);
   } finally {
     handle.close();
     // The picker copied the backup into the cache — possibly gigabytes; don't leave it there.
@@ -74,13 +75,16 @@ export interface BackupImport {
   skipped: number;
 }
 
-function readBackupEntries(
+// Lets queued work run: a Cancel tap, the progress count re-rendering.
+const yieldToApp = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+async function readBackupEntries(
   src: ByteSource,
   albumId: string,
   existingDates: ReadonlySet<string>,
   onProgress?: (current: number, total: number) => void,
   cancelSignal?: { cancelled: boolean },
-): BackupImport {
+): Promise<BackupImport> {
   const entries = readZipEntries(src);
   const manifestEntry = entries.get('manifest.json');
   if (!manifestEntry) throw new Error('Invalid backup: no manifest.json found');
@@ -97,6 +101,10 @@ function readBackupEntries(
   let skipped = 0;
   try {
     for (let i = 0; i < total; i++) {
+      // Each photo is read and written synchronously; without a yield between them the
+      // whole restore (a gigabyte or more) blocks the JS thread, so neither progress nor
+      // Cancel could get through until it finished.
+      if (i > 0) await yieldToApp();
       // Honor cancellation between entries (reading one photo isn't interruptible,
       // so we stop before reading the next one).
       if (cancelSignal?.cancelled) throw new Error('Cancelled');
