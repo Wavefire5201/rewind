@@ -27,6 +27,7 @@ import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import SectionLabel from '@/components/ui/SectionLabel';
+import SettingsRow from '@/components/ui/SettingsRow';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 export default function AlbumSettingsRoute() {
@@ -41,7 +42,7 @@ export default function AlbumSettingsRoute() {
 function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
-  const { fonts, typography } = useFont();
+  const { fonts } = useFont();
   const { profile, albums, photos, settings, addPhotos, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
@@ -383,21 +384,20 @@ function AlbumSettingsScreen() {
         {/* ALBUM section */}
         <SectionLabel>album</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<PencilSimple size={20} color={Colors.textSecondary} weight="light" />}
+            label="rename"
+            value={albumName}
+            chevron
             onPress={() => { haptics.tap(); setShowRenameModal(true); }}
             accessibilityLabel="Rename album"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <PencilSimple size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>rename</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{albumName} ›</Text>
-          </Pressable>
+          />
           <View style={styles.divider} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<LockSimple size={20} color={album.isLocked ? Colors.streak : Colors.textSecondary} weight="light" />}
+            label="lock album"
+            value={album.isLocked ? 'on' : 'off'}
+            highlight={album.isLocked}
             onPress={async () => {
               haptics.tap();
               if (album.isLocked) {
@@ -416,61 +416,33 @@ function AlbumSettingsScreen() {
               }
             }}
             accessibilityLabel={album.isLocked ? 'Unlock album' : 'Lock album'}
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <LockSimple
-                size={20}
-                color={album.isLocked ? Colors.streak : Colors.textSecondary}
-                weight="light"
-              />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>lock album</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: album.isLocked ? Colors.streak : Colors.textTertiary }]}>
-              {album.isLocked ? 'on' : 'off'}
-            </Text>
-          </Pressable>
+          />
         </View>
 
         {/* REMINDERS section */}
         <SectionLabel style={{ marginTop: 24 }}>reminders</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<BellSimple size={20} color={album.reminderEnabled ? Colors.streak : Colors.textSecondary} weight="light" />}
+            label="daily reminder"
+            value={album.reminderEnabled ? 'on' : 'off'}
+            highlight={album.reminderEnabled}
             onPress={handleReminderToggle}
             accessibilityLabel={album.reminderEnabled ? 'Disable daily reminder' : 'Enable daily reminder'}
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <BellSimple
-                size={20}
-                color={album.reminderEnabled ? Colors.streak : Colors.textSecondary}
-                weight="light"
-              />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>daily reminder</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: album.reminderEnabled ? Colors.streak : Colors.textTertiary }]}>
-              {album.reminderEnabled ? 'on' : 'off'}
-            </Text>
-          </Pressable>
+          />
 
           {album.reminderEnabled && (
             <>
               <View style={styles.divider} />
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              <SettingsRow
+                icon={<View style={{ width: 20 }} />}
+                label="reminder time"
+                muted
+                value={formatReminderTime(album.reminderTime)}
+                highlight
                 onPress={() => { haptics.tap(); setShowTimePicker(prev => !prev); }}
                 accessibilityLabel="Change reminder time"
-                accessibilityRole="button"
-              >
-                <View style={styles.rowLeft}>
-                  <View style={{ width: 20 }} />
-                  <Text style={[typography.body, { fontFamily: fonts.regular, color: Colors.textSecondary }]}>reminder time</Text>
-                </View>
-                <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: Colors.streak }]}>
-                  {formatReminderTime(album.reminderTime)}
-                </Text>
-              </Pressable>
+              />
 
               <Animated.View style={[styles.pickerContainer, pickerAnimatedStyle]}>
                 <TimePicker
@@ -486,33 +458,23 @@ function AlbumSettingsScreen() {
         {/* DATA section */}
         <SectionLabel style={{ marginTop: 24 }}>data</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<Export size={20} color={Colors.textSecondary} weight="light" />}
+            label="export album"
+            chevron
             onPress={() => { haptics.tap(); setShowExportSheet(true); }}
             accessibilityLabel="Export album"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <Export size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>export album</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>›</Text>
-          </Pressable>
+          />
 
           <View style={styles.divider} />
 
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<DownloadSimple size={20} color={Colors.textSecondary} weight="light" />}
+            label="import photos"
+            chevron
             onPress={handleImport}
             accessibilityLabel="Import photos"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <DownloadSimple size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>import photos</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>›</Text>
-          </Pressable>
+          />
         </View>
 
         {/* Delete (only if more than 1 album) */}
@@ -520,17 +482,13 @@ function AlbumSettingsScreen() {
           <>
             <View style={{ marginTop: 24 }} />
             <View style={styles.card}>
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              <SettingsRow
+                icon={<Trash size={20} color={Colors.danger} weight="light" />}
+                label="delete album"
+                danger
                 onPress={handleDelete}
                 accessibilityLabel="Delete album"
-                accessibilityRole="button"
-              >
-                <View style={styles.rowLeft}>
-                  <Trash size={20} color={Colors.danger} weight="light" />
-                  <Text style={[typography.body, { fontFamily: fonts.regular, color: Colors.danger }]}>delete album</Text>
-                </View>
-              </Pressable>
+              />
             </View>
           </>
         )}
@@ -624,23 +582,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     backgroundColor: Colors.bgCard,
     overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rowValue: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 13,
-    color: Colors.textTertiary,
   },
   divider: {
     height: 1,

@@ -66,3 +66,10 @@ it('locks the album and returns home when a PIN already exists', async () => {
   // The screen is behind the lock gate, so staying would show the unlock prompt.
   expect(mockDismissAll).toHaveBeenCalled();
 });
+
+it('keeps a long album name on one line in the rename row', async () => {
+  const long = 'my extremely long album name that would wrap across the row';
+  mockAlbums = [album('a', { name: long }), album('b')];
+  await renderSettings();
+  expect(screen.getByText(long).props.numberOfLines).toBe(1);
+});

@@ -39,4 +39,6 @@ export const Typography: Record<string, TextStyle> = {
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
 export const BorderRadius = { none: 0, full: 9999 } as const;
+/** Pressed-state opacity: filled buttons dim a little, text buttons and rows a little more. */
+export const Pressed = { filled: 0.85, text: 0.7 } as const;
 export const Sizes = { shutterOuter: 80, shutterInner: 64, weekDot: 8, navButton: 36 } as const;
