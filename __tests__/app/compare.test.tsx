@@ -5,6 +5,7 @@ import type { FaceMeasure, PhotoEntry } from '@/types';
 
 let mockPhotos: PhotoEntry[] = [];
 jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ photos: mockPhotos }) }));
+jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ albumId: 'a' }), useRouter: () => ({ back: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');

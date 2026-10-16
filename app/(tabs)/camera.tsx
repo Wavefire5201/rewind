@@ -22,11 +22,21 @@ import type { Size } from '@/utils/faceAlign';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
 import type { PhotoEntry, FaceLandmarks } from '@/types';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 /** Room the top row and shutter row need under the viewfinder. */
 const CONTROLS_MIN_HEIGHT = 200;
 
-export default function CameraScreen() {
+export default function CameraRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <CameraScreen />
+    </AlbumLockGate>
+  );
+}
+
+function CameraScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   // Photos are 4:3 (the whole sensor), so the viewfinder is too: it shows exactly what gets

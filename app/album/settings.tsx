@@ -27,8 +27,18 @@ import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import SectionLabel from '@/components/ui/SectionLabel';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
-export default function AlbumSettingsScreen() {
+export default function AlbumSettingsRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <AlbumSettingsScreen />
+    </AlbumLockGate>
+  );
+}
+
+function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { fonts, typography } = useFont();
@@ -305,6 +315,10 @@ export default function AlbumSettingsScreen() {
     setShowPinModal(false);
     if (pendingLockAction === 'lock') {
       updateAlbum(albumId, { isLocked: true });
+      // Locked now, so this screen would turn into the unlock prompt: leave for home.
+      haptics.success();
+      if (router.canDismiss()) router.dismissAll();
+      else router.replace('/');
     } else if (pendingLockAction === 'unlock') {
       updateAlbum(albumId, { isLocked: false });
     }
