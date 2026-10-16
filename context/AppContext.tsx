@@ -6,6 +6,7 @@ import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSet
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
+import { useToday } from '@/hooks/useToday';
 
 function fireAndSave(saveFn: () => Promise<void>): Promise<boolean> {
   return enqueueSave(saveFn);
@@ -53,6 +54,8 @@ interface AppContextValue {
   profile: UserProfile;
   settings: AppSettings;
   albums: Album[];
+  /** Today's local date, updated at midnight and on returning to the foreground. */
+  today: string;
   isLoading: boolean;
   addPhoto: (entry: PhotoEntry) => void;
   addPhotos: (entries: PhotoEntry[]) => { added: number; skipped: number };
@@ -82,6 +85,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
   const [isLoading, setIsLoading] = useState(true);
   const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
+  const today = useToday();
 
   // Synchronous mirror of `photos` for event handlers that must compute against
   // current state (e.g. addPhotos dedup counts). setState updaters run
@@ -436,6 +440,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         profile,
         settings,
         albums,
+        today,
         isLoading,
         addPhoto,
         addPhotos,

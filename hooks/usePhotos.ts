@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { getToday } from '@/utils/dates';
 import type { PhotoEntry } from '@/types';
 
 export function usePhotos(albumId?: string) {
-  const { photos, addPhoto, updatePhoto, deletePhoto } = useAppContext();
+  const { photos, today, addPhoto, updatePhoto, deletePhoto } = useAppContext();
 
   const filteredPhotos = useMemo(
     () => albumId ? photos.filter(p => p.albumId === albumId) : photos,
@@ -17,8 +16,8 @@ export function usePhotos(albumId?: string) {
   );
 
   const todayPhoto = useMemo(
-    () => filteredPhotos.find(p => p.date === getToday()) ?? null,
-    [filteredPhotos]
+    () => filteredPhotos.find(p => p.date === today) ?? null,
+    [filteredPhotos, today]
   );
 
   const mostRecentPhoto = useMemo(

@@ -8,7 +8,7 @@ import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
 import { useAppContext } from '@/context/AppContext';
-import { getToday, formatDateLabel } from '@/utils/dates';
+import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
 import Viewfinder, { type FaceState, type ViewfinderRef } from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
@@ -49,7 +49,7 @@ function CameraScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
-  const { albums, settings, updateAlbum } = useAppContext();
+  const { albums, settings, updateAlbum, today } = useAppContext();
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
@@ -105,7 +105,6 @@ function CameraScreen() {
     setViewfinderSize((prev) => (prev && prev.w === width && prev.h === height ? prev : { w: width, h: height }));
   }, []);
 
-  const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = useCallback(async () => {

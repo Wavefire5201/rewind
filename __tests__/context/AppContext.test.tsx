@@ -447,8 +447,11 @@ describe('AppContext', () => {
 
     it('re-lock after more than a minute in the background, but survive a short trip', async () => {
       const listeners: ((state: AppStateStatus) => void)[] = [];
-      // Once: restoring a spy on the react-native mock would strip its implementation.
-      jest.spyOn(AppState, 'addEventListener').mockImplementationOnce((_type, listener) => {
+      // Put the react-native mock's own implementation back afterwards (mockRestore on it
+      // would strip it, breaking every later unmount).
+      const addListener = jest.mocked(AppState.addEventListener);
+      const original = addListener.getMockImplementation();
+      addListener.mockImplementation((_type, listener) => {
         listeners.push(listener as (state: AppStateStatus) => void);
         return { remove: () => {} } as ReturnType<typeof AppState.addEventListener>;
       });
@@ -471,6 +474,7 @@ describe('AppContext', () => {
 
       now.mockRestore();
       await unmount();
+      addListener.mockImplementation(original);
     });
   });
 
