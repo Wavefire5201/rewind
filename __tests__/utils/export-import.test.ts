@@ -7,7 +7,7 @@ import { exportToBackup, exportToPhotoAlbum, shareFile } from '@/utils/export';
 import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/utils/import';
 import { getToday } from '@/utils/dates';
 import type { PhotoEntry } from '@/types';
-import { fileStore, deletedUris, openedHandles, base64Reads, resetFileSystemMock } from '../helpers/fileSystemMock';
+import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 
@@ -75,6 +75,35 @@ describe('exportToBackup', () => {
     expect(manifest.album).toBe('Daily');
     expect(manifest.photos).toHaveLength(2);
     expect(await zip.file('images/2026-03-08.jpg')!.async('base64')).toBe('QUJD');
+  });
+
+  it('streams the backup to disk one photo at a time, readable by the importer', async () => {
+    // Building the archive in memory (base64 + JSZip) needs several times the album's size,
+    // which a year of photos can't survive.
+    const photo = (seed: number) =>
+      Buffer.from(Array.from({ length: 50_000 }, (_, i) => (i * seed + 3) & 0xff)).toString('base64');
+    const days = ['2026-03-01', '2026-03-02', '2026-03-03'];
+    days.forEach((d, i) => fileStore.set(`file:///${d}.jpg`, photo(i + 7)));
+    const res = await exportToBackup(
+      days.map((d) => makePhoto({ imageUri: `file:///${d}.jpg`, date: d, caption: d })),
+      'Daily',
+      () => {},
+      { cancelled: false },
+    );
+
+    expect(base64Reads).toHaveLength(0);
+    const backupWrites = writeLog.filter((w) => w.uri === res.filePath);
+    expect(backupWrites.length).toBeGreaterThan(days.length);
+    expect(Math.max(...backupWrites.map((w) => w.bytes))).toBeLessThan(60_000);
+
+    // Restore it with the real importer.
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: res.filePath }],
+    });
+    const { photos } = await importFromBackup('album-2');
+    expect(photos.map((p) => [p.date, p.caption])).toEqual(days.map((d) => [d, d]));
+    photos.forEach((p, i) => expect(fileStore.get(p.imageUri)).toBe(fileStore.get(`file:///${days[i]}.jpg`)));
   });
 
   it('throws when there is nothing local to export', async () => {
