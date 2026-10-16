@@ -7,6 +7,7 @@ import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import PillButton from '@/components/ui/PillButton';
 import { haptics } from '@/utils/haptics';
+import { cachePolicyFor } from '@/utils/imageSource';
 
 interface CapturePreviewProps {
   visible: boolean;
@@ -79,6 +80,7 @@ export default function CapturePreview({
       <SafeAreaView style={styles.container}>
         <Image
           source={{ uri: imageUri }}
+          cachePolicy={cachePolicyFor(imageUri)}
           style={[styles.photo, { width: width - 48, height: photoHeight }]}
           contentFit="cover"
         />
