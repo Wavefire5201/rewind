@@ -113,7 +113,7 @@ export default function TextInputModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: Colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   errorHint: {
     fontFamily: Fonts.mono.regular,
     fontSize: 12,
-    color: '#E05A5A',
+    color: Colors.danger,
     marginTop: -8,
   },
   row: {

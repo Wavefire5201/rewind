@@ -104,7 +104,7 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     backgroundColor: Colors.bgCard,

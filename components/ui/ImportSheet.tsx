@@ -86,7 +86,7 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     backgroundColor: Colors.bgCard,

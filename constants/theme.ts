@@ -14,6 +14,8 @@ export const Colors = {
   borderDivider: '#262628',
   danger: '#E85D5D',
   bgPageTranslucent: 'rgba(26,26,28,0.6)',
+  /** Backdrop behind sheets and dialogs. */
+  scrim: 'rgba(0,0,0,0.6)',
 } as const;
 
 export const Fonts = {
