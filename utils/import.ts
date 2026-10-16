@@ -6,27 +6,27 @@ import type { PhotoEntry } from '@/types';
 import { getToday } from '@/utils/dates';
 import { readZipEntries, readZipEntry, type ByteSource } from '@/utils/zipReader';
 
-export async function pickPhotosFromLibrary(): Promise<{ uri: string; date: string | null }[]> {
+export async function pickPhotosFromLibrary(
+  { multiple = true }: { multiple?: boolean } = {},
+): Promise<{ uri: string; date: string | null }[]> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsMultipleSelection: true,
+    allowsMultipleSelection: multiple,
     quality: 1,
     exif: true,
   });
   if (result.canceled) return [];
-  return result.assets.map(asset => ({
-    uri: asset.uri,
-    date: asset.exif?.DateTimeOriginal
-      ? (() => {
-          try {
-            // EXIF format: "YYYY:MM:DD HH:MM:SS"
-            const raw = String(asset.exif.DateTimeOriginal);
-            const datePart = raw.split(' ')[0].replace(/:/g, '-');
-            return datePart; // YYYY-MM-DD
-          } catch { return getToday(); }
-        })()
-      : getToday(),
-  }));
+  return result.assets.map(asset => ({ uri: asset.uri, date: exifDate(asset.exif?.DateTimeOriginal) }));
+}
+
+// EXIF dates read "YYYY:MM:DD HH:MM:SS". Screenshots and edited or downloaded images often
+// have none (or zeros): that's null, for the caller to decide, never silently today.
+function exifDate(raw: unknown): string | null {
+  if (raw == null) return null;
+  const date = String(raw).split(' ')[0].replace(/:/g, '-');
+  if (!isValidDate(date)) return null;
+  const [y, m, d] = date.split('-').map(Number);
+  return y > 1900 && m >= 1 && m <= 12 && d >= 1 && d <= 31 ? date : null;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

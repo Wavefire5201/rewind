@@ -238,18 +238,29 @@ describe('pickPhotosFromLibrary', () => {
     await expect(pickPhotosFromLibrary()).resolves.toEqual([]);
   });
 
-  it('parses EXIF dates and defaults to today', async () => {
+  it('parses EXIF dates and leaves the date empty when there is none', async () => {
+    // A missing date must stay missing: defaulting to today let a screenshot replace
+    // today's photo.
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
       canceled: false,
       assets: [
         { uri: 'file:///a.jpg', exif: { DateTimeOriginal: '2026:03:09 10:00:00' } },
         { uri: 'file:///b.jpg', exif: null },
+        { uri: 'file:///c.jpg', exif: { DateTimeOriginal: '0000:00:00 00:00:00' } },
       ],
     });
     const res = await pickPhotosFromLibrary();
     expect(res).toEqual([
       { uri: 'file:///a.jpg', date: '2026-03-09' },
-      { uri: 'file:///b.jpg', date: getToday() },
+      { uri: 'file:///b.jpg', date: null },
+      { uri: 'file:///c.jpg', date: null },
     ]);
+  });
+
+  it('can pick a single photo', async () => {
+    await pickPhotosFromLibrary({ multiple: false });
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowsMultipleSelection: false }),
+    );
   });
 });

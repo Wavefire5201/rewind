@@ -23,7 +23,7 @@ import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
 import FaceTrendCard from '@/components/face/FaceTrendCard';
 import type { PhotoEntry } from '@/types';
 import { haptics } from '@/utils/haptics';
-import { pickPhotosFromLibrary } from '@/utils/import';
+import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
@@ -46,7 +46,7 @@ function AlbumDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { photos, getPhotosByMonth } = usePhotos(id);
-  const { profile, albums, addPhoto, updatePhoto, deletePhoto } = useAppContext();
+  const { profile, albums, addPhotos, updatePhoto, deletePhoto } = useAppContext();
   const album = albums.find(a => a.id === id);
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
@@ -158,23 +158,17 @@ function AlbumDetailScreen() {
 
   async function handleImportSource(source: ImportSource) {
     setShowImportSheet(false);
+    const date = importTargetDate;
+    setImportTargetDate(null);
     if (source === 'camera-roll') {
+      // Fills the tapped empty day: one photo, on that day whatever its EXIF date says,
+      // and never replacing a photo that's already there.
       try {
-        const picked = await pickPhotosFromLibrary();
-        if (picked.length === 0) return;
-        const { createPhotoEntry } = await import('@/utils/import');
-        const entries = [];
-        for (const p of picked) {
-          try {
-            entries.push(await createPhotoEntry(p.uri, p.date ?? importTargetDate ?? '', '', id));
-          } catch { /* copy failure — skip this file */ }
-        }
-        if (entries.length > 0) {
-          for (const entry of entries) addPhoto(entry);
-          haptics.success();
-        } else {
-          haptics.error();
-        }
+        const [picked] = await pickPhotosFromLibrary({ multiple: false });
+        if (!picked || !date) return;
+        const { added } = addPhotos([await createPhotoEntry(picked.uri, date, '', id)]);
+        if (added > 0) haptics.success();
+        else haptics.error();
       } catch {
         haptics.error();
       }
@@ -182,7 +176,6 @@ function AlbumDetailScreen() {
       // Redirect to album settings for full backup import
       router.push({ pathname: '/album/settings', params: { albumId: id } });
     }
-    setImportTargetDate(null);
   }
 
   function handleRetake(albumId: string) {
