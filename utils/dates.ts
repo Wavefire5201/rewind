@@ -35,6 +35,14 @@ export function getDayNumber(joinDate: string, currentDate?: string): number {
   return Math.max(1, diff + 1); // Day 1 minimum, even with timezone edge cases
 }
 
+/**
+ * Orders anything with a YYYY-MM-DD date. Plain string comparison: ISO dates sort
+ * correctly as strings, and localeCompare goes through the Intl collator (slow on Hermes).
+ */
+export function byDate(a: { date: string }, b: { date: string }): number {
+  return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+}
+
 const SHORT_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 /** "mar 1, 2026", the timelapse date badge. Plain string building: it runs for every photo. */

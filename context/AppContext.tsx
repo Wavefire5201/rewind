@@ -7,7 +7,7 @@ import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/const
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 import { useToday } from '@/hooks/useToday';
-import { getToday } from '@/utils/dates';
+import { getToday, byDate } from '@/utils/dates';
 
 function fireAndSave(saveFn: () => Promise<void>): Promise<boolean> {
   return enqueueSave(saveFn);
@@ -149,11 +149,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (needsMigration) {
             await savePhotos(migratedPhotos);
           }
-          setPhotos(migratedPhotos);
+          // Kept in date order from here on (every add sorts), so hooks never re-sort.
+          setPhotos([...migratedPhotos].sort(byDate));
           // Derive joinDate from earliest photo if no stored profile
           const fallbackProfile: UserProfile = storedProfile ?? {
             ...newProfile(),
-            joinDate: [...storedPhotos].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? getToday(),
+            joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
           };
           if (!storedProfile) await saveProfile(fallbackProfile);
           setProfile(fallbackProfile);
@@ -188,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAlbums(migratedAlbums);
         } else if (USE_MOCK_DATA) {
           // Seed default album for mock data mode
-          const earliestDate = [...MOCK_PHOTOS].sort((a, b) => a.date.localeCompare(b.date))[0]?.date;
+          const earliestDate = [...MOCK_PHOTOS].sort(byDate)[0]?.date;
           const mockAlbum: Album = {
             id: 'daily-selfie',
             name: 'daily selfie',
@@ -232,7 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     commitPhotos(prev => {
       replaced = prev.filter(p => photoKey(p) === photoKey(entry));
       const kept = prev.filter(p => photoKey(p) !== photoKey(entry));
-      return [...kept, entry].sort((a, b) => a.date.localeCompare(b.date));
+      return [...kept, entry].sort(byDate);
     }).then(saved => {
       if (saved) deleteUnreferencedFiles(replaced.map(p => p.imageUri), photosRef.current);
     });
@@ -265,7 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dropped = toAdd.filter(e => prevKeys.has(photoKey(e)));
         const fresh = toAdd.filter(e => !prevKeys.has(photoKey(e)));
         if (fresh.length === 0) return prev;
-        return [...prev, ...fresh].sort((a, b) => a.date.localeCompare(b.date));
+        return [...prev, ...fresh].sort(byDate);
       }).then(() => deleteUnreferencedFiles(dropped.map(e => e.imageUri), photosRef.current));
     }
     return { added: toAdd.length, skipped: skipped.length };
@@ -404,7 +405,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Don't overwrite existing photos for same date+album
       const existingDates = new Set(prev.map(p => `${p.date}:${p.albumId}`));
       const newPhotos = mockPhotos.filter(p => !existingDates.has(`${p.date}:${p.albumId}`));
-      const next = [...prev, ...newPhotos].sort((a, b) => a.date.localeCompare(b.date));
+      const next = [...prev, ...newPhotos].sort(byDate);
       fireAndSave(() => savePhotos(next));
       return next;
     });

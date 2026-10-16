@@ -10,10 +10,8 @@ export function usePhotos(albumId?: string) {
     [photos, albumId]
   );
 
-  const sortedPhotos = useMemo(
-    () => [...filteredPhotos].sort((a, b) => a.date.localeCompare(b.date)),
-    [filteredPhotos]
-  );
+  // AppContext keeps photos in date order, and filtering keeps it.
+  const sortedPhotos = filteredPhotos;
 
   const todayPhoto = useMemo(
     () => filteredPhotos.find(p => p.date === today) ?? null,

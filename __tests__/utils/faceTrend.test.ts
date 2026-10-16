@@ -147,3 +147,12 @@ describe('trendAt on irregular data', () => {
     }
   });
 });
+
+describe('ordering', () => {
+  it("doesn't use the locale collator to order photos", () => {
+    const collate = jest.spyOn(String.prototype, 'localeCompare');
+    buildFaceTrend(album(60).reverse());
+    expect(collate).not.toHaveBeenCalled();
+    collate.mockRestore();
+  });
+});

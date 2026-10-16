@@ -8,6 +8,7 @@
  */
 import type { FaceScan } from '@/types';
 import { isComparable, notComparableReason, widthIndex } from '@/utils/faceMetrics';
+import { byDate } from '@/utils/dates';
 
 export const MIN_COMPARABLE = 30;
 const HALF_WINDOW = 15;
@@ -56,7 +57,7 @@ export function rollingMedian(days: number[], values: number[]): (number | null)
 function comparablePhotos(photos: TrendPhoto[]) {
   return photos
     .filter((p) => p.faceScan?.measure && isComparable(p.faceScan.measure))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort(byDate);
 }
 
 export function comparableCount(photos: TrendPhoto[]): number {

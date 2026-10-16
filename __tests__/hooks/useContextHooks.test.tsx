@@ -61,6 +61,16 @@ describe('usePhotos', () => {
     expect(result.current.todayPhoto).toBeNull();
   });
 
+  it("keeps the context's date order without sorting again", async () => {
+    const collate = jest.spyOn(String.prototype, 'localeCompare');
+    const sorted = [photo('p1', '2026-03-08'), photo('p2', '2026-03-09'), photo('p3', '2026-03-10', 'a2')];
+    mockUseAppContext.mockReturnValue({ photos: sorted, today: '2026-03-09', addPhoto: jest.fn(), updatePhoto: jest.fn(), deletePhoto: jest.fn() });
+    const { result } = await renderHook(() => usePhotos('a1'));
+    expect(result.current.photos.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(collate).not.toHaveBeenCalled();
+    collate.mockRestore();
+  });
+
   it('returns everything without an album filter', async () => {
     const { result } = await renderHook(() => usePhotos());
     expect(result.current.totalPhotos).toBe(3);

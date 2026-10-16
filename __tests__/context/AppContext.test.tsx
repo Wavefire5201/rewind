@@ -105,6 +105,29 @@ describe('AppContext', () => {
     }
   });
 
+  it('keeps photos sorted by date from the moment they load', async () => {
+    // Hooks rely on this order instead of re-sorting on every update.
+    await AsyncStorage.setItem('@rewind/photos', JSON.stringify([
+      photo({ id: 'c', date: '2026-03-10' }), photo({ id: 'a', date: '2026-03-08' }), photo({ id: 'b', date: '2026-03-09' }),
+    ]));
+    const { unmount } = await renderProvider();
+    expect(ctx!.photos.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    await unmount();
+  });
+
+  it('sorts without the locale collator (slow on Hermes; ISO dates compare as strings)', async () => {
+    const collate = jest.spyOn(String.prototype, 'localeCompare');
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addPhotos([photo({ id: 'b', date: '2026-03-09' }), photo({ id: 'a', date: '2026-03-08' })]);
+      ctx!.addPhoto(photo({ id: 'c', date: '2026-03-07' }));
+    });
+    await waitFor(() => expect(ctx!.photos.map((p) => p.id)).toEqual(['c', 'a', 'b']));
+    expect(collate).not.toHaveBeenCalled();
+    collate.mockRestore();
+    await unmount();
+  });
+
   it('migrates legacy photos missing albumId', async () => {
     const legacy = { ...photo(), albumId: undefined };
     await AsyncStorage.setItem('@rewind/photos', JSON.stringify([legacy]));
