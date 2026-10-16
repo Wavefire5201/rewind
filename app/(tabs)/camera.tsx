@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation, useIsFocused } from 'expo-router';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
@@ -49,6 +49,7 @@ function CameraScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
+  const focused = useIsFocused();
   const { albums, settings, updateAlbum, today } = useAppContext();
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
@@ -70,6 +71,9 @@ function CameraScreen() {
   const [showTimer, setShowTimer] = useState(false);
   const [timerDuration, setTimerDuration] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
+  // Read by doCapture, which may be called from a stale closure (auto-capture, the timer).
+  const previewOpenRef = useRef(false);
+  previewOpenRef.current = showPreview;
   const [capturedUri, setCapturedUri] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFaceGuide, setShowFaceGuide] = useState(false);
@@ -108,7 +112,8 @@ function CameraScreen() {
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = useCallback(async () => {
-    if (isCapturingRef.current) return;
+    // One photo at a time, and none while one is being reviewed.
+    if (isCapturingRef.current || previewOpenRef.current) return;
     isCapturingRef.current = true;
     setIsCapturing(true);
     try {
@@ -129,6 +134,7 @@ function CameraScreen() {
         }
         setCapturedUri(uri);
         setCapturedLandmarks(landmarks ? { ...landmarks, isMirrored } : null);
+        previewOpenRef.current = true;
         setShowPreview(true);
       }
     } catch {
@@ -221,7 +227,8 @@ function CameraScreen() {
   // Note: face-state ticks arrive throttled at ~10Hz (see Viewfinder), so
   // requiredFrames doubles as a hold duration: 15 ≈ 1.5s, 10 ≈ 1s.
   const { progress: autoCaptureProgress, isInCooldown: autoCaptureCooldown } = useAutoCapture({
-    enabled: showFaceGuide && faceState.hasFace,
+    // Not while the preview is open: a second auto-capture would replace the photo under review.
+    enabled: showFaceGuide && faceState.hasFace && !showPreview && focused,
     alignmentScore,
     alignmentThreshold,
     requiredFrames: 15,
@@ -318,6 +325,7 @@ function CameraScreen() {
           onSilence={handleSilence}
           showDebug={showDebugOverlay}
           photoQuality={settings.photoQuality}
+          active={focused && !showPreview}
         />
         {status || hint ? (
           // Over the viewfinder rather than below it, so the preview keeps the space.
