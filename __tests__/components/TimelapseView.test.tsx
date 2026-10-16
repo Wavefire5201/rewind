@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import TimelapseView from '@/components/timelapse/TimelapseView';
 import { FontProvider } from '@/context/FontContext';
 import type { useTimelapse } from '@/hooks/useTimelapse';
@@ -151,5 +151,24 @@ describe('TimelapseView playhead wiring', () => {
     expect(player.playheadFrame).toBeDefined();
     expect(scrubber.frame).toBe(player.playheadFrame);
     expect(filmstrip.frame).toBe(player.shownFrame);
+  });
+});
+
+describe('TimelapseView scanning while scrubbing', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('pauses the face scan during a drag and for a moment after, so the frame under the finger decodes first', async () => {
+    jest.useFakeTimers();
+    await renderView();
+    const enabled = () => mockBackfill.mock.calls.at(-1)?.[1];
+    expect(enabled()).toBe(true);
+
+    const scrub = (on: boolean) => (mockScrubber.mock.calls.at(-1)?.[0] as { onScrubChange: (s: boolean) => void }).onScrubChange(on);
+    await act(async () => scrub(true));
+    expect(enabled()).toBe(false);
+    await act(async () => scrub(false));
+    expect(enabled()).toBe(false);
+    await act(async () => { jest.advanceTimersByTime(1600); });
+    expect(enabled()).toBe(true);
   });
 });
