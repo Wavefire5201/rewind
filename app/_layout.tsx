@@ -20,8 +20,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     if (this.state.hasError) {
       return (
         <View style={ebStyles.container}>
-          <Text style={ebStyles.title}>Something went wrong</Text>
-          <Text style={ebStyles.subtitle}>Please restart the app</Text>
+          <Text style={ebStyles.title}>something went wrong</Text>
+          <Text style={ebStyles.subtitle}>please restart the app</Text>
         </View>
       );
     }

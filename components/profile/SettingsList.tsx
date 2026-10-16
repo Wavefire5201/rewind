@@ -57,12 +57,12 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
     const lockedAlbumIds = albums.filter(a => a.isLocked).map(a => a.id);
     if (lockedAlbumIds.length > 0) {
       Alert.alert(
-        'Remove Passcode',
+        'Remove passcode?',
         `${lockedAlbumIds.length} album${lockedAlbumIds.length === 1 ? '' : 's'} ${lockedAlbumIds.length === 1 ? 'is' : 'are'} currently locked. Removing the passcode will unlock ${lockedAlbumIds.length === 1 ? 'it' : 'them'}. Continue?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Remove & Unlock',
+            text: 'Remove and unlock',
             style: 'destructive',
             onPress: () => {
               setPinStep('remove');
@@ -189,9 +189,9 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
               danger
               onPress={() => {
                 haptics.tap();
-                Alert.alert('Clear All Data', 'This will permanently delete all photos, albums, and settings. This cannot be undone.', [
+                Alert.alert('Clear all data?', 'This will permanently delete all photos, albums, and settings. This cannot be undone.', [
                   { text: 'Cancel', style: 'cancel' },
-                  { text: 'Clear Everything', style: 'destructive', onPress: onClearData },
+                  { text: 'Clear everything', style: 'destructive', onPress: onClearData },
                 ]);
               }}
             />

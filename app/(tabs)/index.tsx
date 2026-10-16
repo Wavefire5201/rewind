@@ -396,20 +396,20 @@ export default function HomeScreen() {
       </ScrollView>
       <TextInputModal
         visible={showNewAlbumModal}
-        title="New Album"
-        message="Enter a name for the album"
-        placeholder="Album name"
-        confirmLabel="Create"
+        title="new album"
+        message="enter a name for the album"
+        placeholder="album name"
+        confirmLabel="create"
         maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmNewAlbum}
         onCancel={() => setShowNewAlbumModal(false)}
       />
       <TextInputModal
         visible={renameTarget !== null}
-        title="Rename Album"
-        placeholder="Album name"
+        title="rename album"
+        placeholder="album name"
         defaultValue={renameTarget?.name ?? ''}
-        confirmLabel="Rename"
+        confirmLabel="rename"
         maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setRenameTarget(null)}

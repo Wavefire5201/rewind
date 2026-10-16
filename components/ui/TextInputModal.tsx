@@ -31,7 +31,7 @@ export default function TextInputModal({
   message,
   placeholder = '',
   defaultValue = '',
-  confirmLabel = 'Confirm',
+  confirmLabel = 'confirm',
   maxLength = 100,
   onConfirm,
   onCancel,
@@ -95,7 +95,7 @@ export default function TextInputModal({
               accessibilityLabel="Cancel"
               accessibilityRole="button"
             >
-              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>Cancel</Text>
+              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>cancel</Text>
             </Pressable>
             <Pressable
               style={styles.btn}

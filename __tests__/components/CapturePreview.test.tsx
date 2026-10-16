@@ -31,7 +31,7 @@ beforeEach(() => {
 it("doesn't copy the photo when the save isn't confirmed (Replace → Cancel)", async () => {
   const onSave = jest.fn();
   await renderPreview(async () => false, onSave);
-  await act(async () => fireEvent.press(screen.getByText('Save')));
+  await act(async () => fireEvent.press(screen.getByText('save')));
   expect(onSave).not.toHaveBeenCalled();
   expect(savedCopies()).toHaveLength(0);
 });
@@ -39,7 +39,7 @@ it("doesn't copy the photo when the save isn't confirmed (Replace → Cancel)", 
 it('copies the photo into the documents directory and saves it once confirmed', async () => {
   const onSave = jest.fn();
   await renderPreview(async () => true, onSave);
-  await act(async () => fireEvent.press(screen.getByText('Save')));
+  await act(async () => fireEvent.press(screen.getByText('save')));
   expect(savedCopies()).toHaveLength(1);
   expect(onSave).toHaveBeenCalledWith('', savedCopies()[0]);
 });

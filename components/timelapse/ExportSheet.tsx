@@ -25,27 +25,27 @@ interface Option {
 const OPTIONS: Option[] = [
   {
     format: 'album',
-    label: 'Photo Album',
-    description: 'Save frames to camera roll',
+    label: 'photo album',
+    description: 'save frames to camera roll',
     icon: <FolderOpen size={22} color={Colors.textPrimary} weight="light" />,
   },
   {
     format: 'backup',
-    label: 'Rewind Backup',
-    description: 'Importable .rewind file',
+    label: 'rewind backup',
+    description: 'importable .rewind file',
     icon: <DownloadSimple size={22} color={Colors.textPrimary} weight="light" />,
   },
   {
     format: 'gif',
-    label: 'Animated GIF',
-    description: 'Coming soon',
+    label: 'animated gif',
+    description: 'coming soon',
     icon: <Images size={22} color={Colors.textTertiary} weight="light" />,
     comingSoon: true,
   },
   {
     format: 'mp4',
-    label: 'MP4 Video',
-    description: 'Coming soon',
+    label: 'mp4 video',
+    description: 'coming soon',
     icon: <FilmStrip size={22} color={Colors.textTertiary} weight="light" />,
     comingSoon: true,
   },
@@ -58,7 +58,7 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
   function handlePress(option: Option) {
     if (option.comingSoon) {
       haptics.tap();
-      Alert.alert('Coming Soon', `${option.label} export is not available yet.`);
+      Alert.alert('Coming soon', "This export isn't available yet.");
       return;
     }
     haptics.tap();
@@ -75,7 +75,7 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Export</Text>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>export</Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}

@@ -139,7 +139,7 @@ function CameraScreen() {
       }
     } catch {
       haptics.error();
-      Alert.alert('Capture Failed', 'Could not take photo. Please try again.');
+      Alert.alert('Capture failed', 'Could not take photo. Please try again.');
     } finally {
       isCapturingRef.current = false;
       setIsCapturing(false);
@@ -261,7 +261,7 @@ function CameraScreen() {
       return;
     }
     Alert.alert(
-      'Replace Photo',
+      'Replace photo?',
       "You've already captured today. Replace it with this one?",
       [
         { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },

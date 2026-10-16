@@ -21,5 +21,5 @@ it('shows the error screen, not a blank app, when a provider throws', async () =
   // providers) unmounts everything. The boundary now wraps the providers too.
   jest.spyOn(console, 'error').mockImplementation(() => {});
   await render(<RootLayout />);
-  expect(screen.getByText('Something went wrong')).toBeTruthy();
+  expect(screen.getByText('something went wrong')).toBeTruthy();
 });

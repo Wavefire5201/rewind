@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
+import SectionLabel from '@/components/ui/SectionLabel';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
@@ -43,7 +44,7 @@ function dateToStr(d: Date): string {
 
 function formatDisplayDate(str: string): string {
   const d = dateStrToDate(str);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
 }
 
 export default function ImportPhotoModal({
@@ -196,7 +197,7 @@ export default function ImportPhotoModal({
             <View style={styles.closeBtn} />
           )}
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>Import Photo</Text>
+            <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>import photo</Text>
             <Text style={[styles.counter, { fontFamily: fonts.regular }]}>
               {currentIndex + 1} / {total}
             </Text>
@@ -233,7 +234,7 @@ export default function ImportPhotoModal({
           <View style={styles.fields}>
             {/* Date */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>DATE</Text>
+              <SectionLabel>date</SectionLabel>
               <Pressable
                 style={styles.dateButton}
                 onPress={() => { haptics.tap(); setShowDatePicker(prev => !prev); }}
@@ -259,7 +260,7 @@ export default function ImportPhotoModal({
 
             {/* Caption */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>CAPTION</Text>
+              <SectionLabel>caption</SectionLabel>
               <TextInput
                 style={[styles.input, styles.captionInput, { fontFamily: fonts.regular }]}
                 value={caption}
@@ -280,7 +281,7 @@ export default function ImportPhotoModal({
             onPress={handleSaveNext}
           >
             <Text style={[styles.saveBtnText, { fontFamily: fonts.medium }]}>
-              {isLast ? 'Save' : 'Save & Next  →'}
+              {isLast ? 'save' : 'save & next  →'}
             </Text>
           </Pressable>
           <Pressable
@@ -348,12 +349,6 @@ const styles = StyleSheet.create({
   },
   fieldGroup: {
     gap: 8,
-  },
-  fieldLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: Colors.textSecondary,
   },
   dateButton: {
     borderBottomWidth: 1,

@@ -5,7 +5,7 @@ import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 
 const TIMER_OPTIONS: { label: string; value: number }[] = [
-  { label: 'Off', value: 0 },
+  { label: 'off', value: 0 },
   { label: '3s', value: 3 },
   { label: '5s', value: 5 },
   { label: '10s', value: 10 },

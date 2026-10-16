@@ -38,8 +38,8 @@ describe('dates', () => {
   });
 
   describe('formatDateLabel', () => {
-    it('formats as uppercase "MONTH D, YYYY"', () => {
-      expect(formatDateLabel('2026-03-09')).toBe('MARCH 9, 2026');
+    it('formats as lowercase "month d, yyyy"', () => {
+      expect(formatDateLabel('2026-03-09')).toBe('march 9, 2026');
     });
   });
 
@@ -88,7 +88,7 @@ describe('dates', () => {
 
   describe('formatTime', () => {
     it('formats 12h by default', () => {
-      expect(formatTime('2026-03-09T14:30:00')).toBe('2:30 PM');
+      expect(formatTime('2026-03-09T14:30:00')).toBe('2:30 pm');
     });
 
     it('formats 24h when requested', () => {

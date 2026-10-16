@@ -29,7 +29,7 @@ export default function ExportProgress({ visible, label, current, total, onCance
           <Text style={[styles.percent, { fontFamily: fonts.regular }]}>{percent}%</Text>
 
           <Pressable style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]} onPress={onCancel}>
-            <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>Cancel</Text>
+            <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>cancel</Text>
           </Pressable>
         </View>
       </View>

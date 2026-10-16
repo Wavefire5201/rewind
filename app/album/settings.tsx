@@ -112,7 +112,7 @@ function AlbumSettingsScreen() {
     if (newEnabled) {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        Alert.alert('Permission Required', 'Enable notifications in Settings to use reminders.');
+        Alert.alert('Permission required', 'Enable notifications in Settings to use reminders.');
         return;
       }
     }
@@ -156,7 +156,7 @@ function AlbumSettingsScreen() {
       if (skipped > 0) {
         await new Promise<void>(resolve => {
           Alert.alert(
-            'Remote Photos',
+            'Remote photos',
             `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
             [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
           );
@@ -177,14 +177,14 @@ function AlbumSettingsScreen() {
         setExporting(false);
         haptics.success();
         const skippedMsg = result.skipped > 0 ? ` Skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.` : '';
-        Alert.alert('Export Complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
+        Alert.alert('Export complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
       } catch (err: unknown) {
         setExporting(false);
         const message = err instanceof Error ? err.message : 'Unknown error';
         if (message !== 'Cancelled') {
           haptics.error();
           const detail = lastSaved > 0 ? `Saved ${lastSaved} of ${localCount} before failing.\n\n${message}` : message;
-          Alert.alert('Export Failed', detail);
+          Alert.alert('Export failed', detail);
         }
       }
     } else if (format === 'backup') {
@@ -193,7 +193,7 @@ function AlbumSettingsScreen() {
       if (skipped > 0) {
         await new Promise<void>(resolve => {
           Alert.alert(
-            'Remote Photos',
+            'Remote photos',
             `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
             [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
           );
@@ -216,13 +216,13 @@ function AlbumSettingsScreen() {
         await shareFile(result.filePath);
         await cleanupExportDir();
         if (result.skipped > 0) {
-          Alert.alert('Export Complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
+          Alert.alert('Export complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
         }
       } catch (err: unknown) {
         setExporting(false);
         await cleanupExportDir();
         const message = err instanceof Error ? err.message : 'Unknown error';
-        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export Failed', message); }
+        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export failed', message); }
       }
     }
   }
@@ -243,7 +243,7 @@ function AlbumSettingsScreen() {
         setShowImportModal(true);
       } catch (e: unknown) {
         haptics.error();
-        Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
+        Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
       }
     } else if (source === 'backup') {
       importCancelRef.current = { cancelled: false };
@@ -259,7 +259,7 @@ function AlbumSettingsScreen() {
         }, importCancelRef.current, existingDates);
         setImporting(false);
         if (result.photos.length === 0 && result.skipped === 0) {
-          Alert.alert('Import Complete', 'No photos found in the backup file.');
+          Alert.alert('Import complete', 'No photos found in the backup file.');
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
@@ -270,13 +270,13 @@ function AlbumSettingsScreen() {
         const msg = skipped > 0
           ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`
           : `${added} photo${added !== 1 ? 's' : ''} restored from backup.`;
-        Alert.alert('Import Complete', msg);
+        Alert.alert('Import complete', msg);
       } catch (e: unknown) {
         setImporting(false);
         const message = e instanceof Error ? e.message : 'Unknown error';
         if (message !== 'Cancelled') {
           haptics.error();
-          Alert.alert('Import Failed', message);
+          Alert.alert('Import failed', message);
         }
       }
     }
@@ -313,7 +313,7 @@ function AlbumSettingsScreen() {
     if (added > 0) parts.push(`${added} photo${added !== 1 ? 's' : ''} added`);
     if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
     if (copyFailed > 0) parts.push(`${copyFailed} failed to copy`);
-    Alert.alert('Import Complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
+    Alert.alert('Import complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
   }
 
   // --- PIN / Lock ---
@@ -488,11 +488,11 @@ function AlbumSettingsScreen() {
       {/* Modals */}
       <TextInputModal
         visible={showRenameModal}
-        title="Rename Album"
-        message="Enter a new name"
-        placeholder="Album name"
+        title="rename album"
+        message="enter a new name"
+        placeholder="album name"
         defaultValue={albumName}
-        confirmLabel="Rename"
+        confirmLabel="rename"
         maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setShowRenameModal(false)}

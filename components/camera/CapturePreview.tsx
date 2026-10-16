@@ -93,12 +93,12 @@ export default function CapturePreview({
         />
         <View style={styles.buttonRow}>
           <PillButton
-            label={saving ? 'Saving…' : 'Save'}
+            label={saving ? 'saving…' : 'save'}
             onPress={handleSave}
             variant="filled"
             style={styles.buttonFlex}
           />
-          <PillButton label="Retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
+          <PillButton label="retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
         </View>
       </SafeAreaView>
     </Modal>

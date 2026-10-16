@@ -118,7 +118,7 @@ export default function DateRangeSheet({
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Date Range</Text>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>date range</Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}
@@ -145,7 +145,7 @@ export default function DateRangeSheet({
             </Text>
           </Pressable>
 
-          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>TO</Text>
+          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>to</Text>
 
           <Pressable
             style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
@@ -198,7 +198,7 @@ export default function DateRangeSheet({
             accessibilityRole="button"
             accessibilityLabel="Show all dates"
           >
-            <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>Reset to all</Text>
+            <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>reset to all</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]}
@@ -206,7 +206,7 @@ export default function DateRangeSheet({
             accessibilityRole="button"
             accessibilityLabel="Apply date range"
           >
-            <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>Apply</Text>
+            <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>apply</Text>
           </Pressable>
         </View>
       </View>
