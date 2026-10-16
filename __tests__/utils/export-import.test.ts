@@ -151,7 +151,7 @@ describe('importFromBackup', () => {
       { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG' }
     );
     const progress: [number, number][] = [];
-    const photos = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
+    const { photos } = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
       cancelled: false,
     });
     expect(photos).toHaveLength(2);
@@ -175,7 +175,7 @@ describe('importFromBackup', () => {
     );
     const backupSize = Buffer.from(fileStore.get(uri)!, 'base64').length;
 
-    const photos = await importFromBackup('album-1');
+    const { photos } = await importFromBackup('album-1');
 
     expect(photos).toHaveLength(3);
     expect(base64Reads).not.toContain(uri);
@@ -189,13 +189,13 @@ describe('importFromBackup', () => {
       { photos: [{ id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },
       { 'images/a.jpg': 'QUJD' },
     );
-    const [entry] = await importFromBackup('album-1');
+    const { photos: [entry] } = await importFromBackup('album-1');
     expect(fileStore.get(entry.imageUri)).toBe('QUJD');
     expect(deletedUris).toContain(uri);
   });
 
-  it('returns [] when the picker is cancelled', async () => {
-    await expect(importFromBackup()).resolves.toEqual([]);
+  it('returns nothing when the picker is cancelled', async () => {
+    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0 });
   });
 
   it('rejects invalid backups', async () => {
@@ -214,6 +214,53 @@ describe('importFromBackup', () => {
     await expect(importFromBackup('album-1', undefined, { cancelled: true })).rejects.toThrow(
       'Cancelled'
     );
+  });
+
+  // Paths of the photos the import wrote (the picked backup itself lives in the cache).
+  const writtenPhotos = () => [...fileStore.keys()].filter((k) => k.includes('rewind_import_'));
+
+  it("skips days the album already has before writing them, and counts them", async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-03-02', caption: '', imageFile: 'images/b.jpg' },
+          { id: 'p3', date: '2026-03-02', caption: '', imageFile: 'images/c.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG', 'images/c.jpg': 'R0hJ' },
+    );
+    const result = await importFromBackup('album-1', undefined, undefined, new Set(['2026-03-01']));
+    expect(result.photos.map((p) => p.date)).toEqual(['2026-03-02']);
+    // 03-01 is already in the album; the second 03-02 repeats a day in the backup.
+    expect(result.skipped).toBe(2);
+    expect(writtenPhotos()).toHaveLength(1);
+  });
+
+  it('removes the photos it already wrote when cancelled partway', async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-03-02', caption: '', imageFile: 'images/b.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG' },
+    );
+    const signal = { cancelled: false };
+    await expect(
+      importFromBackup('album-1', () => { signal.cancelled = true; }, signal),
+    ).rejects.toThrow('Cancelled');
+    expect(writtenPhotos()).toHaveLength(0);
+  });
+
+  it('skips malformed manifest entries instead of failing the whole import', async () => {
+    await seedBackupZip(
+      { photos: [null, 'x', { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },
+      { 'images/a.jpg': 'QUJD' },
+    );
+    const { photos } = await importFromBackup('album-1');
+    expect(photos.map((p) => p.date)).toEqual(['2026-03-01']);
   });
 });
 

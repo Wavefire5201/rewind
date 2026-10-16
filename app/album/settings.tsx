@@ -248,18 +248,21 @@ function AlbumSettingsScreen() {
       setImportTotal(0);
       setImporting(true);
       try {
-        const entries = await importFromBackup(albumId, (current, total) => {
+        // Days this album already has are skipped before their photos are written.
+        const existingDates = new Set(photos.filter(p => p.albumId === albumId).map(p => p.date));
+        const result = await importFromBackup(albumId, (current, total) => {
           setImportCurrent(current);
           setImportTotal(total);
-        }, importCancelRef.current);
+        }, importCancelRef.current, existingDates);
         setImporting(false);
-        if (entries.length === 0) {
-          setImporting(false);
+        if (result.photos.length === 0 && result.skipped === 0) {
           Alert.alert('Import Complete', 'No photos found in the backup file.');
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
-        const { added, skipped } = addPhotos(entries);
+        const batch = addPhotos(result.photos);
+        const added = batch.added;
+        const skipped = batch.skipped + result.skipped;
         haptics.success();
         const msg = skipped > 0
           ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`

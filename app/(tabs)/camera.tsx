@@ -248,36 +248,38 @@ function CameraScreen() {
     setGhostOpacity(value);
   }, []);
 
-  const handleSave = (caption: string, savedUri: string) => {
-    const doSave = () => {
-      const newPhoto: PhotoEntry = {
-        id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        albumId: albumId,
-        date: today,
-        imageUri: savedUri,
-        caption,
-        capturedAt: new Date().toISOString(),
-        cameraDirection: facing,
-        ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
-      };
-      addPhoto(newPhoto);
-      setShowPreview(false);
-      setCapturedUri('');
-      router.replace({ pathname: '/album/[id]', params: { id: albumId } });
-    };
-
-    if (todayPhoto) {
-      Alert.alert(
-        'Replace Photo',
-        "You've already captured today. Replace it with this one?",
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Replace', style: 'destructive', onPress: doSave },
-        ],
-      );
-    } else {
-      doSave();
+  // Asked before the preview copies the photo, so declining leaves nothing behind.
+  const confirmSave = useCallback(() => new Promise<boolean>((resolve) => {
+    if (!todayPhoto) {
+      resolve(true);
+      return;
     }
+    Alert.alert(
+      'Replace Photo',
+      "You've already captured today. Replace it with this one?",
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  }), [todayPhoto]);
+
+  const handleSave = (caption: string, savedUri: string) => {
+    const newPhoto: PhotoEntry = {
+      id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      albumId: albumId,
+      date: today,
+      imageUri: savedUri,
+      caption,
+      capturedAt: new Date().toISOString(),
+      cameraDirection: facing,
+      ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
+    };
+    addPhoto(newPhoto);
+    setShowPreview(false);
+    setCapturedUri('');
+    router.replace({ pathname: '/album/[id]', params: { id: albumId } });
   };
 
   const handleRetake = () => {
@@ -409,6 +411,7 @@ function CameraScreen() {
         imageUri={capturedUri}
         onSave={handleSave}
         onRetake={handleRetake}
+        confirmSave={confirmSave}
       />
     </SafeAreaView>
   );

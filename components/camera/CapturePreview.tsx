@@ -13,6 +13,8 @@ interface CapturePreviewProps {
   imageUri: string;
   onSave: (caption: string, savedUri: string) => void;
   onRetake: () => void;
+  /** Asked before anything is written (e.g. "replace today's photo?"); false keeps the preview open. */
+  confirmSave?: () => Promise<boolean>;
 }
 
 export default function CapturePreview({
@@ -20,6 +22,7 @@ export default function CapturePreview({
   imageUri,
   onSave,
   onRetake,
+  confirmSave,
 }: CapturePreviewProps) {
   const { fonts } = useFont();
   const [caption, setCaption] = useState('');
@@ -31,6 +34,8 @@ export default function CapturePreview({
     if (saving) return;
     setSaving(true);
     try {
+      // Confirm before copying, so a declined save leaves no stray copy behind.
+      if (confirmSave && !(await confirmSave())) return;
       const filename = `rewind_${Date.now()}.jpg`;
       const src = new File(imageUri);
       const dest = new File(Paths.document, filename);

@@ -39,12 +39,14 @@ export async function importFromBackup(
   albumId: string = 'daily-selfie',
   onProgress?: (current: number, total: number) => void,
   cancelSignal?: { cancelled: boolean },
-): Promise<PhotoEntry[]> {
+  /** Days the album already has a photo for: skipped without writing them. */
+  existingDates: ReadonlySet<string> = new Set(),
+): Promise<BackupImport> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',
     copyToCacheDirectory: true,
   });
-  if (result.canceled || !result.assets?.length) return [];
+  if (result.canceled || !result.assets?.length) return { photos: [], skipped: 0 };
   const srcFile = new File(result.assets[0].uri);
   // Random access through a file handle: read the zip's directory, then one photo at a
   // time. Loading the whole backup (base64 + JSZip) needs several times its size in JS
@@ -58,7 +60,7 @@ export async function importFromBackup(
         return handle.readBytes(length);
       },
     };
-    return readBackupEntries(src, albumId, onProgress, cancelSignal);
+    return readBackupEntries(src, albumId, existingDates, onProgress, cancelSignal);
   } finally {
     handle.close();
     // The picker copied the backup into the cache — possibly gigabytes; don't leave it there.
@@ -66,12 +68,19 @@ export async function importFromBackup(
   }
 }
 
+export interface BackupImport {
+  photos: PhotoEntry[];
+  /** Entries for a day the album, or an earlier entry in the backup, already has. */
+  skipped: number;
+}
+
 function readBackupEntries(
   src: ByteSource,
   albumId: string,
+  existingDates: ReadonlySet<string>,
   onProgress?: (current: number, total: number) => void,
   cancelSignal?: { cancelled: boolean },
-): PhotoEntry[] {
+): BackupImport {
   const entries = readZipEntries(src);
   const manifestEntry = entries.get('manifest.json');
   if (!manifestEntry) throw new Error('Invalid backup: no manifest.json found');
@@ -84,46 +93,65 @@ function readBackupEntries(
 
   const photos: PhotoEntry[] = [];
   const total = manifest.photos.length;
-  for (let i = 0; i < total; i++) {
-    // Honor cancellation between entries (reading one photo isn't interruptible,
-    // so we stop before reading the next one).
-    if (cancelSignal?.cancelled) throw new Error('Cancelled');
+  const takenDates = new Set(existingDates);
+  let skipped = 0;
+  try {
+    for (let i = 0; i < total; i++) {
+      // Honor cancellation between entries (reading one photo isn't interruptible,
+      // so we stop before reading the next one).
+      if (cancelSignal?.cancelled) throw new Error('Cancelled');
 
-    const entry = manifest.photos[i];
+      const entry: unknown = manifest.photos[i];
+      if (!entry || typeof entry !== 'object') continue;
+      const { date, imageFile, caption } = entry as { date?: unknown; imageFile?: unknown; caption?: unknown };
 
-    // I1: validate each entry's date
-    const entryDate: string = isValidDate(entry.date) ? entry.date : getToday();
+      // I1: validate each entry's date
+      const entryDate: string = isValidDate(date) ? date : getToday();
+      // A day the album already has (or an earlier entry here filled): don't write it at all.
+      if (takenDates.has(entryDate)) {
+        skipped++;
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
 
-    const imageEntry = entries.get(entry.imageFile);
-    if (!imageEntry) continue;
-    const imageBytes = readZipEntry(src, imageEntry);
+      const imageEntry = typeof imageFile === 'string' ? entries.get(imageFile) : undefined;
+      if (!imageEntry) continue;
+      const imageBytes = readZipEntry(src, imageEntry);
 
-    // I1: append loop index to avoid same-millisecond filename collisions
-    const filename = `rewind_import_${Date.now()}_${i}_${entryDate}.jpg`;
-    const destFile = new File(Paths.document, filename);
+      // I1: append loop index to avoid same-millisecond filename collisions
+      const filename = `rewind_import_${Date.now()}_${i}_${entryDate}.jpg`;
+      const destFile = new File(Paths.document, filename);
 
-    // I2: treat a failed write as a hard failure for this entry (skip it)
-    try {
-      destFile.write(imageBytes);
-    } catch {
+      // I2: treat a failed write as a hard failure for this entry (skip it)
+      try {
+        destFile.write(imageBytes);
+      } catch {
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
+
+      takenDates.add(entryDate);
+      photos.push({
+        id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
+        albumId,
+        date: entryDate,
+        imageUri: destFile.uri,
+        caption: typeof caption === 'string' ? caption : '',
+        capturedAt: new Date().toISOString(),
+        cameraDirection: 'front',
+      });
+
+      // I1: surface progress after each photo is processed
       if (onProgress) onProgress(i + 1, total);
-      continue;
     }
-
-    photos.push({
-      id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
-      albumId,
-      date: entryDate,
-      imageUri: destFile.uri,
-      caption: entry.caption || '',
-      capturedAt: new Date().toISOString(),
-      cameraDirection: 'front',
-    });
-
-    // I1: surface progress after each photo is processed
-    if (onProgress) onProgress(i + 1, total);
+  } catch (e) {
+    // Cancelled or failed: nothing will reference what was written so far.
+    for (const p of photos) {
+      try { new File(p.imageUri).delete(); } catch {}
+    }
+    throw e;
   }
-  return photos;
+  return { photos, skipped };
 }
 
 // I2: createPhotoEntry treats a failed copy as a HARD failure - throws instead of
