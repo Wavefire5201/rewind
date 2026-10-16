@@ -129,7 +129,7 @@ function RightActions({ onRename, onDelete }: { onRename: () => void; onDelete: 
     <View style={styles.actionsContainer}>
       <Pressable
         style={[styles.actionBtn, styles.actionRename]}
-        onPress={onRename}
+        onPress={() => { haptics.tap(); onRename(); }}
         accessibilityLabel="Rename album"
         accessibilityRole="button"
       >

@@ -47,6 +47,11 @@ export default function TextInputModal({
     }
   }, [visible, defaultValue]);
 
+  function cancel() {
+    haptics.tap();
+    onCancel();
+  }
+
   function handleConfirm() {
     const trimmed = value.trim();
     if (trimmed.length === 0) {
@@ -55,6 +60,7 @@ export default function TextInputModal({
       return;
     }
     setShowEmptyError(false);
+    haptics.tap();
     onConfirm(trimmed);
   }
 
@@ -69,7 +75,7 @@ export default function TextInputModal({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={cancel} accessible={false} />
         <View style={styles.card}>
           <Text style={[styles.title, { fontFamily: fonts.regular }]}>{title}</Text>
           {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
@@ -91,7 +97,7 @@ export default function TextInputModal({
           <View style={styles.row}>
             <Pressable
               style={styles.btn}
-              onPress={onCancel}
+              onPress={cancel}
               accessibilityLabel="Cancel"
               accessibilityRole="button"
             >

@@ -12,6 +12,7 @@ import { X } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
+import PillButton from '@/components/ui/PillButton';
 
 interface DateRangeSheetProps {
   visible: boolean;
@@ -107,6 +108,12 @@ export default function DateRangeSheet({
 
   const sortedDates = useMemo(() => [...dates].sort(), [dates]);
 
+  // Closing taps, like closing the photo viewer.
+  const dismiss = () => {
+    haptics.tap();
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -114,13 +121,13 @@ export default function DateRangeSheet({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>date range</Text>
           <Pressable
-            onPress={onClose}
+            onPress={dismiss}
             hitSlop={12}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
@@ -192,22 +199,23 @@ export default function DateRangeSheet({
 
         {/* Footer buttons */}
         <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [styles.resetButton, pressed && { opacity: 0.7 }]}
+          <PillButton
+            label="reset to all"
+            variant="outlined"
+            size="medium"
             onPress={handleReset}
-            accessibilityRole="button"
+            haptic={false}
+            style={styles.footerButton}
             accessibilityLabel="Show all dates"
-          >
-            <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>reset to all</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]}
+          />
+          <PillButton
+            label="apply"
+            size="medium"
             onPress={handleApply}
-            accessibilityRole="button"
+            haptic={false}
+            style={styles.footerButton}
             accessibilityLabel="Apply date range"
-          >
-            <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>apply</Text>
-          </Pressable>
+          />
         </View>
       </View>
     </Modal>
@@ -294,27 +302,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 4,
   },
-  resetButton: {
+  footerButton: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderPrimary,
-  },
-  resetText: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  applyButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: Colors.accent,
-  },
-  applyText: {
-    fontFamily: Fonts.mono.medium,
-    fontSize: 12,
-    color: Colors.bgPage,
   },
 });

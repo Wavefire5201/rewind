@@ -65,6 +65,12 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
     onSelect(option.format);
   }
 
+  // Closing taps, like closing the photo viewer.
+  const dismiss = () => {
+    haptics.tap();
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -72,12 +78,12 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>export</Text>
           <Pressable
-            onPress={onClose}
+            onPress={dismiss}
             hitSlop={12}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
             accessibilityRole="button"

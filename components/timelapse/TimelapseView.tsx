@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { Camera, CalendarBlank } from 'phosphor-react-native';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 import TimelapsePlayer from '@/components/timelapse/TimelapsePlayer';
@@ -165,7 +165,12 @@ export function TimelapseEmpty({
       <Camera size={48} color={Colors.textTertiary} weight="light" />
       <Text style={[styles.emptyText, { fontFamily: fonts.regular }]}>{message}</Text>
       {hasDateFilter && (
-        <Pressable onPress={onAdjustRange} style={({ pressed }) => [pressed && { opacity: 0.7 }]} accessibilityLabel="Adjust date range" accessibilityRole="button">
+        <Pressable
+          onPress={() => { haptics.tap(); onAdjustRange(); }}
+          style={({ pressed }) => [pressed && { opacity: Pressed.text }]}
+          accessibilityLabel="Adjust date range"
+          accessibilityRole="button"
+        >
           <Text style={[styles.emptyLink, { fontFamily: fonts.regular }]}>adjust range</Text>
         </Pressable>
       )}

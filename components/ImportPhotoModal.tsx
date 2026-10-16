@@ -19,6 +19,7 @@ import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 import SectionLabel from '@/components/ui/SectionLabel';
+import PillButton from '@/components/ui/PillButton';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
@@ -276,14 +277,12 @@ export default function ImportPhotoModal({
 
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable
-            style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
+          <PillButton
+            label={isLast ? 'save' : 'save & next  →'}
             onPress={handleSaveNext}
-          >
-            <Text style={[styles.saveBtnText, { fontFamily: fonts.medium }]}>
-              {isLast ? 'save' : 'save & next  →'}
-            </Text>
-          </Pressable>
+            size="large"
+            haptic={false}
+          />
           <Pressable
             style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
             onPress={handleSkip}
@@ -376,20 +375,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: Colors.borderDivider,
-  },
-  saveBtn: {
-    backgroundColor: Colors.accent,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveBtnPressed: {
-    backgroundColor: Colors.accentDeep,
-  },
-  saveBtnText: {
-    fontFamily: Fonts.mono.medium,
-    fontSize: 14,
-    color: Colors.bgPage,
-    letterSpacing: 0.5,
   },
   skipBtn: {
     paddingVertical: 12,

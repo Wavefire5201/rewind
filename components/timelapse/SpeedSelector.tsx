@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { haptics } from '@/utils/haptics';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { SPEEDS } from '@/utils/playback';
 
@@ -25,7 +25,10 @@ function SpeedSelector({ selectedSpeed, onSelect, style, trailing }: SpeedSelect
           <Pressable
             key={value}
             onPress={() => { haptics.tap(); onSelect(value); }}
-            style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.item, pressed && { opacity: Pressed.text }]}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} speed`}
+            accessibilityState={{ selected: isActive }}
           >
             <Text style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel, { fontFamily: isActive ? fonts.medium : fonts.regular }]}>
               {label}

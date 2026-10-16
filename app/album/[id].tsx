@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import MonthPicker from '@/components/ui/MonthPicker';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { trackingStartDate } from '@/utils/streak';
@@ -290,7 +290,7 @@ function AlbumDetailScreen() {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         {photos.length >= 2 && (
           <Pressable
-            style={({ pressed }) => [styles.timelapseBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.timelapseBtn, pressed && { opacity: Pressed.filled }]}
             onPress={() => { haptics.tap(); router.push({ pathname: '/album/timelapse', params: { albumId: id } }); }}
             accessibilityLabel="Play timelapse"
             accessibilityRole="button"
@@ -300,7 +300,7 @@ function AlbumDetailScreen() {
           </Pressable>
         )}
         <Pressable
-          style={({ pressed }) => [styles.captureBtn, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [styles.captureBtn, pressed && { opacity: Pressed.filled }]}
           onPress={() => { haptics.tap(); router.push({ pathname: '/(tabs)/camera', params: { albumId: id } }); }}
           accessibilityLabel="Take photo"
           accessibilityRole="button"

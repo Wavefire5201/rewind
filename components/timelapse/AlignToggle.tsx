@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 import { UserFocus } from 'phosphor-react-native';
 import { haptics } from '@/utils/haptics';
-import { Colors } from '@/constants/theme';
+import { Colors, Pressed } from '@/constants/theme';
 
 interface AlignToggleProps {
   enabled: boolean;
@@ -14,7 +14,7 @@ export default function AlignToggle({ enabled, onToggle }: AlignToggleProps) {
     <Pressable
       onPress={() => { haptics.tap(); onToggle(!enabled); }}
       hitSlop={8}
-      style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [styles.item, pressed && { opacity: Pressed.text }]}
       accessibilityRole="switch"
       accessibilityState={{ checked: enabled }}
       accessibilityLabel="align faces"
