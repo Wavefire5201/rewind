@@ -314,14 +314,19 @@ function AlbumSettingsScreen() {
   }
 
   // --- PIN / Lock ---
+  // Locked now, so this screen (behind the lock gate) would turn into the unlock prompt:
+  // leave for home instead.
+  function lockAndLeave() {
+    updateAlbum(albumId, { isLocked: true });
+    haptics.success();
+    if (router.canDismiss()) router.dismissAll();
+    else router.replace('/');
+  }
+
   function handlePinSuccess() {
     setShowPinModal(false);
     if (pendingLockAction === 'lock') {
-      updateAlbum(albumId, { isLocked: true });
-      // Locked now, so this screen would turn into the unlock prompt: leave for home.
-      haptics.success();
-      if (router.canDismiss()) router.dismissAll();
-      else router.replace('/');
+      lockAndLeave();
     } else if (pendingLockAction === 'unlock') {
       updateAlbum(albumId, { isLocked: false });
     }
@@ -402,8 +407,7 @@ function AlbumSettingsScreen() {
               } else {
                 const pinExists = await hasPin();
                 if (pinExists) {
-                  updateAlbum(albumId, { isLocked: true });
-                  haptics.success();
+                  lockAndLeave();
                 } else {
                   setPendingLockAction('lock');
                   setPinIntent('set');
