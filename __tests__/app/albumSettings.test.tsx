@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import AlbumSettingsRoute from '@/app/album/settings';
 import { FontProvider } from '@/context/FontContext';
@@ -72,4 +73,12 @@ it('keeps a long album name on one line in the rename row', async () => {
   mockAlbums = [album('a', { name: long }), album('b')];
   await renderSettings();
   expect(screen.getByText(long).props.numberOfLines).toBe(1);
+});
+
+it('deletes an album through the shared confirmation', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await renderSettings();
+  await act(async () => fireEvent.press(screen.getByLabelText('Delete album')));
+  expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
+  alertSpy.mockRestore();
 });

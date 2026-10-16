@@ -17,6 +17,7 @@ import { useAppContext } from '@/context/AppContext';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
 import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
+import { confirmDeleteAlbum } from '@/utils/albumDialogs';
 import { getToday } from '@/utils/dates';
 import { requestNotificationPermission, syncAllReminders } from '@/utils/notifications';
 import { pickPhotosFromLibrary, importFromBackup, createPhotoEntry } from '@/utils/import';
@@ -321,6 +322,11 @@ function AlbumSettingsScreen() {
   function lockAndLeave() {
     updateAlbum(albumId, { isLocked: true });
     haptics.success();
+    leaveForHome();
+  }
+
+  // Back to the album list, not to an album screen that's now locked or gone.
+  function leaveForHome() {
     if (router.canDismiss()) router.dismissAll();
     else router.replace('/');
   }
@@ -337,26 +343,10 @@ function AlbumSettingsScreen() {
 
   // --- Delete ---
   function handleDelete() {
-    haptics.tap();
-    if (albums.length <= 1) {
-      Alert.alert("Can't Delete", 'You need at least one album.');
-      return;
-    }
-    Alert.alert(
-      'Delete Album?',
-      'This will permanently delete all photos in this album. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Album',
-          style: 'destructive',
-          onPress: () => {
-            deleteAlbum(albumId);
-            router.replace('/');
-          },
-        },
-      ],
-    );
+    confirmDeleteAlbum({ name: albumName }, albums.length, () => {
+      deleteAlbum(albumId);
+      leaveForHome();
+    });
   }
 
   return (

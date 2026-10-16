@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, Pressable, View, Alert, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, Text, Pressable, View, useWindowDimensions } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import { getImageSource } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
 import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { plural } from '@/utils/text';
+import { confirmDeleteAlbum } from '@/utils/albumDialogs';
 import type { Album } from '@/types';
 
 const CONTENT_PADDING = 28;
@@ -273,19 +274,7 @@ export default function HomeScreen() {
   }
 
   function handleDeleteRequest(album: Album) {
-    if (albums.length <= 1) {
-      haptics.error();
-      Alert.alert('Cannot Delete', 'You must keep at least one album.');
-      return;
-    }
-    Alert.alert(
-      'Delete Album',
-      `Delete "${album.name}" and all its photos? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { haptics.warning(); deleteAlbum(album.id); } },
-      ],
-    );
+    confirmDeleteAlbum(album, albums.length, () => deleteAlbum(album.id));
   }
 
   function handleUnlockRequest(albumId: string) {

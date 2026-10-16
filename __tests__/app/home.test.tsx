@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import HomeScreen from '@/app/(tabs)/index';
 import { FontProvider } from '@/context/FontContext';
 import type { Album } from '@/types';
@@ -68,4 +69,12 @@ it('caps album names at the same length as onboarding', async () => {
   }
   expect(mockTextInputModal).toHaveBeenCalled();
   expect(ALBUM_NAME_MAX_LENGTH).toBe(50);
+});
+
+it('deletes an album through the shared confirmation', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await renderHome();
+  await act(async () => fireEvent.press(screen.getAllByLabelText('Delete album')[0]));
+  expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
+  alertSpy.mockRestore();
 });
