@@ -10,6 +10,8 @@ export interface PhotoEntry {
   faceScan?: FaceScan;
   /** 'q95' once the file is stored as a q95 JPEG (utils/photoEncode); never re-encoded after. */
   encoding?: 'q95';
+  /** A small copy for calendar cells, filmstrip tiles and album rows (utils/photoEncode). */
+  thumbUri?: string;
 }
 
 export interface UserProfile {

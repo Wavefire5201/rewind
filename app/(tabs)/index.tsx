@@ -16,7 +16,7 @@ import { useStreak } from '@/hooks/useStreak';
 import { useGreeting } from '@/hooks/useGreeting';
 import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
-import { getImageSource } from '@/utils/imageSource';
+import { getImageSource, thumbnailUri } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
 import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { plural } from '@/utils/text';
@@ -158,7 +158,7 @@ function AlbumRow({ album, onUnlockRequest, onRenameRequest, onDeleteRequest }: 
   const router = useRouter();
   const { totalPhotos, mostRecentPhoto } = usePhotos(album.id);
   const { currentStreak } = useStreak(album.id, album.createdAt);
-  const imageUri = mostRecentPhoto?.imageUri ?? null;
+  const imageUri = mostRecentPhoto ? thumbnailUri(mostRecentPhoto) : null;
   const thumbPosition = faceContentPosition(mostRecentPhoto?.faceScan, { w: THUMB_SIZE, h: THUMB_SIZE });
   const { typography } = useFont();
   const { isAlbumLocked } = useAlbumLock();

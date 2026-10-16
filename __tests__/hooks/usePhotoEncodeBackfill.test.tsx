@@ -106,3 +106,27 @@ it('stops reporting pending work once the only photo left has failed this sessio
   fail();
   await waitFor(() => expect(result.current.pending).toBe(false));
 });
+
+describe('usePhotoEncodeBackfill progress', () => {
+  it('updates its progress at most about once a second, not per photo', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(5_000_000);
+    mockUpdatePhotos.mockResolvedValue(true);
+    // Real encodes take a while, so each update gets its own render; a timer tick does that here.
+    encode.mockImplementation((_src, name) => new Promise((resolve) => setTimeout(() => {
+      const uri = `file:///document/${name}`;
+      fileStore.set(uri, 'cTk1');
+      resolve(uri);
+    }, 1)));
+    const seen: string[] = [];
+    const photos = Array.from({ length: 8 }, (_, i) => makePhoto(i));
+    await renderHook(() => {
+      const p = usePhotoEncodeBackfill(photos, true);
+      seen.push(JSON.stringify({ encoding: p.encoding, done: p.done, total: p.total }));
+      return p;
+    });
+    await waitFor(() => expect(encode).toHaveBeenCalledTimes(8));
+    await waitFor(() => expect(JSON.parse(seen.at(-1)!).encoding).toBe(false));
+    const encodingStates = new Set(seen.filter((x) => x.includes('"encoding":true')));
+    expect(encodingStates.size).toBe(1);
+  });
+});

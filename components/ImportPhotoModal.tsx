@@ -20,6 +20,7 @@ import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 import SectionLabel from '@/components/ui/SectionLabel';
 import PillButton from '@/components/ui/PillButton';
+import { cachePolicyFor } from '@/utils/imageSource';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
@@ -224,6 +225,7 @@ export default function ImportPhotoModal({
             <View style={[styles.photoPlaceholder, { width: screenWidth - 48, height: photoHeight }]}>
               <Image
                 source={{ uri: current.uri }}
+                cachePolicy={cachePolicyFor(current.uri)}
                 style={[styles.photo, { width: screenWidth - 48, height: photoHeight }]}
                 contentFit="cover"
                 onError={() => {}}

@@ -105,6 +105,56 @@ describe('AppContext', () => {
     }
   });
 
+  it('keeps photos sorted by date from the moment they load', async () => {
+    // Hooks rely on this order instead of re-sorting on every update.
+    await AsyncStorage.setItem('@rewind/photos', JSON.stringify([
+      photo({ id: 'c', date: '2026-03-10' }), photo({ id: 'a', date: '2026-03-08' }), photo({ id: 'b', date: '2026-03-09' }),
+    ]));
+    const { unmount } = await renderProvider();
+    expect(ctx!.photos.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    await unmount();
+  });
+
+  it('sorts without the locale collator (slow on Hermes; ISO dates compare as strings)', async () => {
+    const collate = jest.spyOn(String.prototype, 'localeCompare');
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addPhotos([photo({ id: 'b', date: '2026-03-09' }), photo({ id: 'a', date: '2026-03-08' })]);
+      ctx!.addPhoto(photo({ id: 'c', date: '2026-03-07' }));
+    });
+    await waitFor(() => expect(ctx!.photos.map((p) => p.id)).toEqual(['c', 'a', 'b']));
+    expect(collate).not.toHaveBeenCalled();
+    collate.mockRestore();
+    await unmount();
+  });
+
+  it("doesn't hand consumers a new value when nothing in it changed", async () => {
+    let renders = 0;
+    const Consumer = React.memo(function Consumer() {
+      renders++;
+      useAppContext();
+      return null;
+    });
+    // Re-renders the provider without changing any of its state.
+    let bump = () => {};
+    function Parent() {
+      const [, setN] = React.useState(0);
+      bump = () => setN((n) => n + 1);
+      return (
+        <AppProvider>
+          <Consumer />
+        </AppProvider>
+      );
+    }
+    const { unmount } = await render(<Parent />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const settled = renders;
+    await act(async () => bump());
+    await act(async () => bump());
+    expect(renders).toBe(settled);
+    await unmount();
+  });
+
   it('migrates legacy photos missing albumId', async () => {
     const legacy = { ...photo(), albumId: undefined };
     await AsyncStorage.setItem('@rewind/photos', JSON.stringify([legacy]));
@@ -227,6 +277,21 @@ describe('AppContext', () => {
         await new Promise((r) => setTimeout(r, 20));
       });
       expect(deletedUris).not.toContain('file:///document/b.jpg');
+      await unmount();
+    });
+
+    it("deletePhoto deletes the photo's thumbnail too", async () => {
+      fileStore.set('file:///document/p.jpg', 'QUJD');
+      fileStore.set('file:///document/p_thumb.jpg', 'dGg=');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg', thumbUri: 'file:///document/p_thumb.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        ctx!.deletePhoto('p1');
+      });
+      await waitFor(() => expect(deletedUris).toEqual(expect.arrayContaining(['file:///document/p.jpg', 'file:///document/p_thumb.jpg'])));
       await unmount();
     });
 
@@ -366,6 +431,27 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it('writes a burst of photo changes as one or two saves, with every change in the last', async () => {
+    // Each save writes the whole array (~1 MB at 1000 photos); the in-between states
+    // are never read back, so only the newest needs writing.
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addPhotos(Array.from({ length: 10 }, (_, i) => photo({ id: `p${i}`, date: `2026-03-${String(i + 1).padStart(2, '0')}` })));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(10));
+    const setItem = jest.mocked(AsyncStorage.setItem);
+    setItem.mockClear();
+    const results: Promise<boolean>[] = [];
+    await act(async () => {
+      for (let i = 0; i < 10; i++) results.push(ctx!.updatePhotos({ [`p${i}`]: { caption: `c${i}` } }));
+    });
+    expect(await Promise.all(results)).toEqual(Array(10).fill(true));
+    const writes = setItem.mock.calls.filter(([key]) => key === '@rewind/photos');
+    expect(writes.length).toBeLessThanOrEqual(2);
+    expect((await storedPhotos()).map((p) => p.caption)).toEqual(Array.from({ length: 10 }, (_, i) => `c${i}`));
+    await unmount();
+  });
+
   it('updatePhotos with no patches does not write photos', async () => {
     const { unmount } = await renderProvider();
     const setItem = jest.mocked(AsyncStorage.setItem);
@@ -493,10 +579,11 @@ describe('AppContext', () => {
 
   it('resetAllData clears state, storage, and local files', async () => {
     fileStore.set('file:///document/p.jpg', 'QUJD');
+    fileStore.set('file:///document/p_thumb.jpg', 'dGg=');
     const { unmount } = await renderProvider();
     await act(async () => {
       ctx!.addAlbum(album({ id: 'a1' }));
-      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg', thumbUri: 'file:///document/p_thumb.jpg' }));
     });
     await waitFor(() => expect(ctx!.photos).toHaveLength(1));
 
@@ -507,6 +594,7 @@ describe('AppContext', () => {
     expect(ctx!.albums).toEqual([]);
     expect(await AsyncStorage.getItem('@rewind/photos')).toBeNull();
     expect(deletedUris).toContain('file:///document/p.jpg');
+    expect(deletedUris).toContain('file:///document/p_thumb.jpg');
     // The deleted albums' daily reminders must stop too.
     expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
     await unmount();

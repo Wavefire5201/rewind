@@ -23,6 +23,9 @@ export function useTimelapse({ photos }: UseTimelapseOptions) {
   const [filmstripIndex, setFilmstripIndex] = useState(0);
   const isPlayingRef = useRef(false);
   const lastFilmstripAtRef = useRef(0);
+  // The frame on screen. While playing it only lives here: the picture, counter and scrubber
+  // follow the player's shared frame on the UI thread, so React state catches up on pause.
+  const shownIndexRef = useRef(0);
   const playerRef = useRef<TimelapsePlayerHandle>(null);
 
   // Date range
@@ -41,38 +44,42 @@ export function useTimelapse({ photos }: UseTimelapseOptions) {
   );
   const hasDateFilter = dateRange !== null;
 
-  // Frames arrive ~10x/s while playing; the filmstrip follows at most every
-  // FILMSTRIP_THROTTLE_MS then, and exactly when paused.
-  const handleFrameChange = useCallback((index: number) => {
+  const showIndex = useCallback((index: number) => {
+    shownIndexRef.current = index;
     setDisplayIndex(index);
+    setFilmstripIndex(index);
+  }, []);
+
+  // Frames arrive ~10x/s while playing. Re-rendering the whole screen for each cost work
+  // on both threads, so then only the filmstrip follows, at most every
+  // FILMSTRIP_THROTTLE_MS; when paused, everything follows exactly.
+  const handleFrameChange = useCallback((index: number) => {
+    if (!isPlayingRef.current) {
+      showIndex(index);
+      return;
+    }
+    shownIndexRef.current = index;
     const now = Date.now();
-    if (!isPlayingRef.current || now - lastFilmstripAtRef.current >= FILMSTRIP_THROTTLE_MS) {
+    if (now - lastFilmstripAtRef.current >= FILMSTRIP_THROTTLE_MS) {
       lastFilmstripAtRef.current = now;
       setFilmstripIndex(index);
     }
-  }, []);
+  }, [showIndex]);
 
   const handlePlayingChange = useCallback((playing: boolean) => {
     isPlayingRef.current = playing;
     setIsPlaying(playing);
-  }, []);
+    if (!playing) showIndex(shownIndexRef.current);
+  }, [showIndex]);
 
-  const handlePlaybackEnd = useCallback((index: number) => {
-    setDisplayIndex(index);
-    setFilmstripIndex(index);
-  }, []);
+  const handlePlaybackEnd = showIndex;
 
   const handleSeek = useCallback((index: number) => {
-    setDisplayIndex(index);
-    setFilmstripIndex(index);
+    showIndex(index);
     playerRef.current?.seekTo(index);
-  }, []);
+  }, [showIndex]);
 
-  const handleFilmstripSelect = useCallback((index: number) => {
-    setDisplayIndex(index);
-    setFilmstripIndex(index);
-    playerRef.current?.seekTo(index);
-  }, []);
+  const handleFilmstripSelect = handleSeek;
 
   const handleSpeedSelect = useCallback((s: number) => setSpeed(s), []);
 

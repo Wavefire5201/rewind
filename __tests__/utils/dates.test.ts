@@ -8,6 +8,7 @@ import {
   formatMonthYear,
   formatTime,
   localDateOf,
+  formatBadgeDate,
 } from '@/utils/dates';
 
 describe('dates', () => {
@@ -107,5 +108,12 @@ describe('localDateOf', () => {
   it('keeps bare dates, and dates older versions stored as UTC midnight, as written', () => {
     expect(localDateOf('2026-03-09')).toBe('2026-03-09');
     expect(localDateOf('2026-03-09T00:00:00.000Z')).toBe('2026-03-09');
+  });
+});
+
+describe('formatBadgeDate', () => {
+  it('reads like the rest of the app: "mar 1, 2026"', () => {
+    expect(formatBadgeDate('2026-03-01')).toBe('mar 1, 2026');
+    expect(formatBadgeDate('2025-12-31')).toBe('dec 31, 2025');
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { Camera, CalendarBlank } from 'phosphor-react-native';
@@ -24,6 +24,30 @@ interface TimelapseViewProps {
   timelapse: ReturnType<typeof useTimelapse>;
   /** Extra style for SpeedSelector (e.g. bottom padding) */
   speedSelectorStyle?: object;
+}
+
+/** How long scanning waits after the last drag or seek before it resumes. */
+const SCAN_RESUME_AFTER_MS = 1500;
+
+/**
+ * False from the moment any of `deps` changes until `ms` pass without another change (true at
+ * first: nothing has happened yet).
+ */
+function useSettledAfter(deps: unknown[], ms: number): boolean {
+  const [settled, setSettled] = useState(true);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setSettled(false);
+    const timer = setTimeout(() => setSettled(true), ms);
+    return () => clearTimeout(timer);
+    // The caller's values are the dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, ms]);
+  return settled;
 }
 
 export default function TimelapseView({ header, timelapse, speedSelectorStyle }: TimelapseViewProps) {
@@ -61,8 +85,10 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
   // Hidden entirely when the native detector is missing (Expo Go / older dev client).
   const scanAvailable = isFaceScanAvailable();
   const align = scanAvailable && settings.alignFaces;
-  // Scanning decodes images too; pause it while playing so playback gets the CPU.
-  const scanProgress = useFaceScanBackfill(filteredPhotos, align && !isPlaying);
+  // Scanning decodes images too: it pauses while playing, during a drag, and for a moment
+  // after a drag or seek, so the frames people are looking for decode first.
+  const settled = useSettledAfter([scrubbing, displayIndex], SCAN_RESUME_AFTER_MS);
+  const scanProgress = useFaceScanBackfill(filteredPhotos, align && !isPlaying && !scrubbing && settled);
 
   if (filteredPhotos.length < 2) return null;
 
