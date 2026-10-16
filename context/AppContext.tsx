@@ -65,11 +65,15 @@ const DEFAULT_ALBUMS: Album[] = [];
 
 const photoKey = (p: PhotoEntry) => `${p.albumId}:${p.date}`;
 
-// Deletes local photo files that no entry in `photos` points at. Only call it after the
-// save that dropped them succeeded: a failed save keeps the entries, which still need them.
-function deleteUnreferencedFiles(uris: (string | undefined)[], photos: PhotoEntry[]) {
-  const inUse = new Set(photos.map(p => p.imageUri));
-  for (const uri of new Set(uris)) {
+// A photo's files on disk: the photo itself and its thumbnail.
+const filesOf = (p: PhotoEntry) => [p.imageUri, p.thumbUri];
+
+// Deletes the files of `removed` entries that no entry in `photos` still points at. Only call
+// it after the save that dropped them succeeded: a failed save keeps the entries, which
+// still need them.
+function deleteUnreferencedFiles(removed: PhotoEntry[], photos: PhotoEntry[]) {
+  const inUse = new Set(photos.flatMap(filesOf));
+  for (const uri of new Set(removed.flatMap(filesOf))) {
     if (!uri?.startsWith('file://') || inUse.has(uri)) continue;
     try { new File(uri).delete(); } catch {}
   }
@@ -265,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const kept = prev.filter(p => photoKey(p) !== photoKey(entry));
       return [...kept, entry].sort(byDate);
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(replaced.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(replaced, photosRef.current);
     });
   }, [commitPhotos]);
 
@@ -288,7 +292,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toAdd.push(entry);
       }
     }
-    deleteUnreferencedFiles(skipped.map(e => e.imageUri), [...photosRef.current, ...toAdd]);
+    deleteUnreferencedFiles(skipped, [...photosRef.current, ...toAdd]);
     if (toAdd.length > 0) {
       let dropped: PhotoEntry[] = [];
       commitPhotos(prev => {
@@ -297,7 +301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const fresh = toAdd.filter(e => !prevKeys.has(photoKey(e)));
         if (fresh.length === 0) return prev;
         return [...prev, ...fresh].sort(byDate);
-      }).then(() => deleteUnreferencedFiles(dropped.map(e => e.imageUri), photosRef.current));
+      }).then(() => deleteUnreferencedFiles(dropped, photosRef.current));
     }
     return { added: toAdd.length, skipped: skipped.length };
   }, [commitPhotos]);
@@ -323,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removed = prev.filter(p => p.id === id);
       return removed.length > 0 ? prev.filter(p => p.id !== id) : prev;
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
   }, [commitPhotos]);
 
@@ -375,12 +379,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removed = prev.filter(p => p.albumId === id);
       return removed.length > 0 ? prev.filter(p => p.albumId !== id) : prev;
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
   }, [albums.length, forgetUnlock, commitPhotos]);
 
   const resetAllData = useCallback(async () => {
-    const localUris = photosRef.current.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
+    const localUris = photosRef.current.flatMap(filesOf).filter((uri): uri is string => !!uri?.startsWith('file://'));
     await clearAllData();
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}

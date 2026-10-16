@@ -29,6 +29,18 @@ describe('CalendarGrid', () => {
     expect(screen.getByTestId('thumb:file:///document/2026-03-05.jpg')).toBeTruthy();
   });
 
+  it("shows a photo's thumbnail when it has one, not the full photo", async () => {
+    const withThumb = { ...photo('2026-03-05'), thumbUri: 'file:///document/2026-03-05_thumb.jpg' };
+    await render(
+      <FontProvider>
+        <CalendarGrid year={2026} month={3} photos={[withThumb, photo('2026-03-06')]} joinDate="2026-03-01" onDayPress={jest.fn()} />
+      </FontProvider>,
+    );
+    expect(screen.getByTestId('thumb:file:///document/2026-03-05_thumb.jpg')).toBeTruthy();
+    // Not made yet: the full photo, as before.
+    expect(screen.getByTestId('thumb:file:///document/2026-03-06.jpg')).toBeTruthy();
+  });
+
   it('crops a tall photo around the face, not the middle', async () => {
     const tall = {
       ...photo('2026-03-05'),

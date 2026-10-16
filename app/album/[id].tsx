@@ -18,6 +18,7 @@ import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
 import { usePhotoEncodeBackfill } from '@/hooks/usePhotoEncodeBackfill';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
+import { useThumbnailBackfill } from '@/hooks/useThumbnailBackfill';
 import { isFaceScanAvailable, needsFaceScan } from '@/utils/faceScan';
 import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
 import FaceTrendCard from '@/components/face/FaceTrendCard';
@@ -61,6 +62,8 @@ function AlbumDetailScreen() {
   // encoder has just replaced would fail for this session.
   const faceAvailable = isFaceScanAvailable();
   const faceProgress = useFaceScanBackfill(photos, faceAvailable && focused && !encode.pending);
+  // Small copies for the calendar, filmstrip and album rows; made from the q95 files.
+  useThumbnailBackfill(photos, focused && !encode.pending);
   const faceTrend = useMemo(() => (faceAvailable ? buildFaceTrend(photos) : null), [faceAvailable, photos]);
 
   const [currentMonth, setCurrentMonth] = useState(() => {

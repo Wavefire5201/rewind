@@ -280,6 +280,21 @@ describe('AppContext', () => {
       await unmount();
     });
 
+    it("deletePhoto deletes the photo's thumbnail too", async () => {
+      fileStore.set('file:///document/p.jpg', 'QUJD');
+      fileStore.set('file:///document/p_thumb.jpg', 'dGg=');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg', thumbUri: 'file:///document/p_thumb.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        ctx!.deletePhoto('p1');
+      });
+      await waitFor(() => expect(deletedUris).toEqual(expect.arrayContaining(['file:///document/p.jpg', 'file:///document/p_thumb.jpg'])));
+      await unmount();
+    });
+
     it("addPhoto deletes the replaced photo's file once the replacement is saved", async () => {
       fileStore.set('file:///document/old.jpg', 'QUJD');
       fileStore.set('file:///document/new.jpg', 'QUJD');
@@ -564,10 +579,11 @@ describe('AppContext', () => {
 
   it('resetAllData clears state, storage, and local files', async () => {
     fileStore.set('file:///document/p.jpg', 'QUJD');
+    fileStore.set('file:///document/p_thumb.jpg', 'dGg=');
     const { unmount } = await renderProvider();
     await act(async () => {
       ctx!.addAlbum(album({ id: 'a1' }));
-      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg', thumbUri: 'file:///document/p_thumb.jpg' }));
     });
     await waitFor(() => expect(ctx!.photos).toHaveLength(1));
 
@@ -578,6 +594,7 @@ describe('AppContext', () => {
     expect(ctx!.albums).toEqual([]);
     expect(await AsyncStorage.getItem('@rewind/photos')).toBeNull();
     expect(deletedUris).toContain('file:///document/p.jpg');
+    expect(deletedUris).toContain('file:///document/p_thumb.jpg');
     // The deleted albums' daily reminders must stop too.
     expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
     await unmount();

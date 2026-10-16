@@ -9,7 +9,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import PhotoImage from '@/components/ui/PhotoImage';
-import { getImageSource } from '@/utils/imageSource';
+import { getImageSource, thumbnailUri } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
 import type { PhotoEntry } from '@/types';
 
@@ -45,7 +45,7 @@ const FilmstripItem = React.memo(function FilmstripItem({
     <Pressable onPress={() => onSelect(index)} style={styles.itemWrapper}>
       <Animated.View testID={`filmstrip-thumb-${index}`} style={[styles.thumb, highlight]}>
         <PhotoImage
-          source={getImageSource(item.imageUri)}
+          source={getImageSource(thumbnailUri(item))}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           contentPosition={faceContentPosition(item.faceScan, THUMB)}

@@ -105,8 +105,9 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
       try {
         const docDir = new Directory(Paths.document);
         const files = docDir.list();
+        // Photos only: thumbnails are a few KB each.
         const photoCount = files.filter(
-          (f) => f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png')
+          (f) => /\.(jpe?g|png)$/i.test(f.name) && !f.name.endsWith('_thumb.jpg')
         ).length;
         const mbPerPhoto: Record<AppSettings['photoQuality'], number> = { low: 1, medium: 2, high: 4 };
         const estimatedMB = photoCount * mbPerPhoto[settings.photoQuality];

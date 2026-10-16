@@ -7,8 +7,8 @@ import type { PhotoEntry } from '@/types';
 jest.mock('react-native-reanimated', () => require('../helpers/reanimatedMock').reanimatedMock);
 jest.mock('@/components/ui/PhotoImage', () => {
   const { View } = require('react-native');
-  return (props: { recyclingKey: string; contentPosition?: object }) => (
-    <View testID={`thumb:${props.recyclingKey}`} contentPosition={props.contentPosition} />
+  return (props: { recyclingKey: string; contentPosition?: object; source: { uri: string } }) => (
+    <View testID={`thumb:${props.recyclingKey}`} contentPosition={props.contentPosition} uri={props.source.uri} />
   );
 });
 
@@ -31,5 +31,14 @@ describe('Filmstrip', () => {
     await render(<Filmstrip photos={photos} currentIndex={0} onSelect={jest.fn()} />);
     // 38x48 thumb: the photo is drawn 38 wide, 76 tall; face centre 0.45 * 76 = 34.2 -> (34.2 - 24) / 28.
     expect(screen.getByTestId('thumb:p-0').props.contentPosition).toEqual({ left: '50%', top: '36.4%' });
+  });
+});
+
+describe('Filmstrip thumbnails', () => {
+  it("decodes a photo's thumbnail when it has one", async () => {
+    const photos = [{ ...PHOTOS[0], thumbUri: 'file:///0_thumb.jpg' }, PHOTOS[1]];
+    await render(<Filmstrip photos={photos} currentIndex={0} onSelect={jest.fn()} />);
+    expect(screen.getByTestId('thumb:p-0').props.uri).toBe('file:///0_thumb.jpg');
+    expect(screen.getByTestId('thumb:p-1').props.uri).toBe('file:///1.jpg');
   });
 });

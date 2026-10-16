@@ -5,6 +5,11 @@ export function getImageSource(uri: string): ImageSource {
   return { uri };
 }
 
+/** The file a small tile shows: the photo's thumbnail once it has one, else the photo. */
+export function thumbnailUri(photo: { imageUri: string; thumbUri?: string }): string {
+  return photo.thumbUri ?? photo.imageUri;
+}
+
 /**
  * Cache policy for a photo: local files stay out of the disk cache. Glide otherwise
  * re-encodes every resized decode to disk (full-size, quality 100) — measured at 1-8 per
