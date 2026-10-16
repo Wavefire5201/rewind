@@ -1,18 +1,21 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   Modal,
   Pressable,
-  ScrollView,
+  FlatList,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'phosphor-react-native';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 import PillButton from '@/components/ui/PillButton';
+
+/** Fixed, so the list can jump straight to the selected date (getItemLayout). */
+const DATE_ROW_HEIGHT = 40;
 
 interface DateRangeSheetProps {
   visible: boolean;
@@ -49,7 +52,6 @@ export default function DateRangeSheet({
   const [selStart, setSelStart] = useState(startDate);
   const [selEnd, setSelEnd] = useState(endDate);
   const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
-  const listScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (visible) {
@@ -168,21 +170,26 @@ export default function DateRangeSheet({
           </Pressable>
         </View>
 
-        {/* Scrollable date list */}
+        {/* Date list: a FlatList, since three years of photos is ~1000 rows */}
         {activeField !== null && (
-          <ScrollView
-            ref={listScrollRef}
+          <FlatList
+            key={activeField}
+            data={sortedDates}
+            keyExtractor={(date) => date}
+            extraData={[selStart, selEnd, activeField]}
+            getItemLayout={(_, index) => ({ length: DATE_ROW_HEIGHT, offset: DATE_ROW_HEIGHT * index, index })}
+            initialScrollIndex={Math.max(0, sortedDates.indexOf(activeField === 'start' ? selStart : selEnd))}
+            initialNumToRender={8}
+            windowSize={5}
             style={styles.dateList}
             showsVerticalScrollIndicator={false}
-          >
-            {sortedDates.map((date) => {
+            renderItem={({ item: date }) => {
               const isSelected =
                 (activeField === 'start' && date === selStart) ||
                 (activeField === 'end' && date === selEnd);
               return (
                 <Pressable
-                  key={date}
-                  style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: 0.7 }]}
+                  style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: Pressed.text }]}
                   onPress={() => handleDateSelect(date)}
                   accessibilityRole="button"
                   accessibilityLabel={formatLongDate(date)}
@@ -193,8 +200,8 @@ export default function DateRangeSheet({
                   </Text>
                 </Pressable>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         )}
 
         {/* Footer buttons */}
@@ -281,7 +288,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dateListItem: {
-    paddingVertical: 11,
+    height: DATE_ROW_HEIGHT,
+    justifyContent: 'center',
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderPrimary,
