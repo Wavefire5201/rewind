@@ -71,6 +71,21 @@ describe('usePhotos', () => {
     collate.mockRestore();
   });
 
+  it("returns the same month list until the photos change, so the calendar and viewer don't redo work", async () => {
+    const ctx = { photos, today: '2026-03-09', addPhoto: jest.fn(), updatePhoto: jest.fn(), deletePhoto: jest.fn() };
+    mockUseAppContext.mockImplementation(() => ctx);
+    const { result, rerender } = await renderHook(() => usePhotos('a1'));
+    const march = result.current.getPhotosByMonth(2026, 3);
+    expect(march.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(result.current.getPhotosByMonth(2026, 3)).toBe(march);
+    await rerender({});
+    expect(result.current.getPhotosByMonth(2026, 3)).toBe(march);
+
+    ctx.photos = [...photos, photo('p4', '2026-03-11')];
+    await rerender({});
+    expect(result.current.getPhotosByMonth(2026, 3)).not.toBe(march);
+  });
+
   it('returns everything without an album filter', async () => {
     const { result } = await renderHook(() => usePhotos());
     expect(result.current.totalPhotos).toBe(3);

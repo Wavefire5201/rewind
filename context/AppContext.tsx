@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
@@ -354,7 +354,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [albums.length, forgetUnlock, commitPhotos]);
 
   const resetAllData = useCallback(async () => {
-    const localUris = photos.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
+    const localUris = photosRef.current.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
     await clearAllData();
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}
@@ -366,7 +366,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(getDefaultSettings());
     setAlbums([]);
     setUnlockedAlbumIds(new Set());
-  }, [photos]);
+  }, []);
 
   const seedMockPhotos = useCallback((albumId?: string) => {
     // Generate 7 mock photos: today back through last 6 days
@@ -436,34 +436,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return (
-    <AppContext.Provider
-      value={{
-        photos,
-        profile,
-        settings,
-        albums,
-        today,
-        isLoading,
-        addPhoto,
-        addPhotos,
-        updatePhoto,
-        updatePhotos,
-        deletePhoto,
-        updateProfile: handleUpdateProfile,
-        updateSettings: handleUpdateSettings,
-        addAlbum,
-        updateAlbum,
-        deleteAlbum,
-        resetAllData,
-        seedMockPhotos,
-        unlockedAlbumIds,
-        unlockAlbum,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  // Memoized so a provider render with nothing changed doesn't re-render every consumer.
+  const value = useMemo<AppContextValue>(() => ({
+    photos,
+    profile,
+    settings,
+    albums,
+    today,
+    isLoading,
+    addPhoto,
+    addPhotos,
+    updatePhoto,
+    updatePhotos,
+    deletePhoto,
+    updateProfile: handleUpdateProfile,
+    updateSettings: handleUpdateSettings,
+    addAlbum,
+    updateAlbum,
+    deleteAlbum,
+    resetAllData,
+    seedMockPhotos,
+    unlockedAlbumIds,
+    unlockAlbum,
+  }), [photos, profile, settings, albums, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useAppContext(): AppContextValue {

@@ -128,6 +128,33 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it("doesn't hand consumers a new value when nothing in it changed", async () => {
+    let renders = 0;
+    const Consumer = React.memo(function Consumer() {
+      renders++;
+      useAppContext();
+      return null;
+    });
+    // Re-renders the provider without changing any of its state.
+    let bump = () => {};
+    function Parent() {
+      const [, setN] = React.useState(0);
+      bump = () => setN((n) => n + 1);
+      return (
+        <AppProvider>
+          <Consumer />
+        </AppProvider>
+      );
+    }
+    const { unmount } = await render(<Parent />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const settled = renders;
+    await act(async () => bump());
+    await act(async () => bump());
+    expect(renders).toBe(settled);
+    await unmount();
+  });
+
   it('migrates legacy photos missing albumId', async () => {
     const legacy = { ...photo(), albumId: undefined };
     await AsyncStorage.setItem('@rewind/photos', JSON.stringify([legacy]));

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { needsFaceScan, scanPhoto } from '@/utils/faceScan';
 import type { PhotoEntry } from '@/types';
+import { throttledProgress } from '@/hooks/backfillProgress';
 
 export const FACE_SCAN_FLUSH_EVERY = 20;
 
@@ -44,6 +45,7 @@ export function useFaceScanBackfill(photos: PhotoEntry[], enabled: boolean): Fac
     let cancelled = false;
     let buffer: Record<string, Partial<PhotoEntry>> = {};
     let buffered = 0;
+    const reportProgress = throttledProgress(setProgress);
 
     const flush = () => {
       if (buffered === 0) return;
@@ -61,7 +63,7 @@ export function useFaceScanBackfill(photos: PhotoEntry[], enabled: boolean): Fac
           // Overall progress for these photos, counting scans saved on earlier visits:
           // everything not still queued is done (this visit's attempts included).
           const all = photosRef.current.length;
-          setProgress({ scanning: true, done: all - queue.length, total: all });
+          reportProgress({ scanning: true, done: all - queue.length, total: all });
           attemptedRef.current.add(next.id);
           try {
             const result = await scanPhoto(next.imageUri);

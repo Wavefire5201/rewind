@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import { useAppContext } from '@/context/AppContext';
 import { encodePhoto, encodedName, needsEncoding, PHOTO_ENCODING } from '@/utils/photoEncode';
 import type { PhotoEntry } from '@/types';
+import { throttledProgress } from '@/hooks/backfillProgress';
 
 export const ENCODE_FLUSH_EVERY = 5;
 
@@ -74,6 +75,7 @@ export function usePhotoEncodeBackfill(photos: PhotoEntry[], enabled: boolean): 
       return true;
     };
 
+    const reportProgress = throttledProgress(setProgress);
     setRunning((n) => n + 1);
     (async () => {
       try {
@@ -82,7 +84,7 @@ export function usePhotoEncodeBackfill(photos: PhotoEntry[], enabled: boolean): 
           const next = queue[0];
           if (!next) break;
           const all = photosRef.current.length;
-          setProgress({ encoding: true, done: all - queue.length, total: all });
+          reportProgress({ encoding: true, done: all - queue.length, total: all });
           attemptedRef.current.add(next.id);
           try {
             const uri = await encodePhoto(next.imageUri, encodedName(next.imageUri));

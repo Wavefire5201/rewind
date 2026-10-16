@@ -99,7 +99,10 @@ function AlbumDetailScreen() {
   const daysInMonth = new Date(currentMonth.year, currentMonth.month, 0).getDate();
   // The album's history starts at its earliest photo when imports predate its creation.
   // Split the string (not new Date(...)) so a UTC parse can't shift the day.
-  const startDate = trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date));
+  const startDate = useMemo(
+    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date)),
+    [album?.createdAt, profile.joinDate, photos],
+  );
   const [startYear, startMonth, startDayOfMonth] = startDate.split('-').map(Number);
   const isCurrentMonth = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1;
   const isPastMonth = currentMonth.year < today.getFullYear() || (currentMonth.year === today.getFullYear() && currentMonth.month < today.getMonth() + 1);
