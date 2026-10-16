@@ -165,6 +165,93 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  describe('photo files', () => {
+    let errorSpy: jest.SpyInstance;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => errorSpy.mockRestore());
+
+    it('deletePhoto keeps the file when the save fails, so the entry still has its photo', async () => {
+      fileStore.set('file:///document/p.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+      jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+      await act(async () => {
+        ctx!.deletePhoto('p1');
+      });
+      await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Storage write failed:', expect.any(Error)));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(deletedUris).not.toContain('file:///document/p.jpg');
+      await unmount();
+    });
+
+    it('deleteAlbum keeps its files when the save fails', async () => {
+      fileStore.set('file:///document/b.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addAlbum(album({ id: 'a1' }));
+        ctx!.addAlbum(album({ id: 'a2' }));
+        ctx!.addPhoto(photo({ id: 'p1', albumId: 'a2', imageUri: 'file:///document/b.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+      // Both saves fail: the albums and the photos.
+      jest.mocked(AsyncStorage.setItem)
+        .mockRejectedValueOnce(new Error('disk full'))
+        .mockRejectedValueOnce(new Error('disk full'));
+      await act(async () => {
+        ctx!.deleteAlbum('a2');
+      });
+      await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(deletedUris).not.toContain('file:///document/b.jpg');
+      await unmount();
+    });
+
+    it("addPhoto deletes the replaced photo's file once the replacement is saved", async () => {
+      fileStore.set('file:///document/old.jpg', 'QUJD');
+      fileStore.set('file:///document/new.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', date: '2026-03-09', imageUri: 'file:///document/old.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p2', date: '2026-03-09', imageUri: 'file:///document/new.jpg' }));
+      });
+      await waitFor(() => expect(deletedUris).toContain('file:///document/old.jpg'));
+      expect(deletedUris).not.toContain('file:///document/new.jpg');
+      await unmount();
+    });
+
+    it('addPhotos deletes the files of the entries it skips, but never a file still in use', async () => {
+      fileStore.set('file:///document/kept.jpg', 'QUJD');
+      fileStore.set('file:///document/dupe.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      const kept = photo({ id: 'p1', date: '2026-03-09', imageUri: 'file:///document/kept.jpg' });
+      await act(async () => {
+        ctx!.addPhotos([kept]);
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        // A fresh copy for a day that already has a photo, and the same entry again.
+        ctx!.addPhotos([photo({ id: 'p2', date: '2026-03-09', imageUri: 'file:///document/dupe.jpg' }), kept]);
+      });
+      await waitFor(() => expect(deletedUris).toContain('file:///document/dupe.jpg'));
+      expect(deletedUris).not.toContain('file:///document/kept.jpg');
+      await unmount();
+    });
+  });
+
   it('updatePhoto / updateProfile / updateSettings persist', async () => {
     const { unmount } = await renderProvider();
     await act(async () => {

@@ -31,6 +31,18 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
 
 const DEFAULT_ALBUMS: Album[] = [];
 
+const photoKey = (p: PhotoEntry) => `${p.albumId}:${p.date}`;
+
+// Deletes local photo files that no entry in `photos` points at. Only call it after the
+// save that dropped them succeeded: a failed save keeps the entries, which still need them.
+function deleteUnreferencedFiles(uris: (string | undefined)[], photos: PhotoEntry[]) {
+  const inUse = new Set(photos.map(p => p.imageUri));
+  for (const uri of new Set(uris)) {
+    if (!uri?.startsWith('file://') || inUse.has(uri)) continue;
+    try { new File(uri).delete(); } catch {}
+  }
+}
+
 // Unlocked albums lock again once the app has been in the background this long. Long
 // enough to survive a photo picker or share sheet, short enough that a phone picked up
 // later doesn't open them.
@@ -191,43 +203,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     init();
   }, []);
 
-  const addPhoto = useCallback((entry: PhotoEntry) => {
-    setPhotos(prev => {
-      // Replace if same date+album exists
-      const filtered = prev.filter(p => !(p.date === entry.date && p.albumId === entry.albumId));
-      const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-      fireAndSave(() => savePhotos(next));
-      return next;
+  // Applies one change to the photos and saves it. Resolves with whether the save reached
+  // storage; files an update removes are deleted only after that (see deleteUnreferencedFiles).
+  const commitPhotos = useCallback((change: (prev: PhotoEntry[]) => PhotoEntry[]): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      setPhotos(prev => {
+        const next = change(prev);
+        if (next === prev) {
+          resolve(true);
+          return prev;
+        }
+        // An updater can run twice (StrictMode); the first save to settle answers.
+        fireAndSave(() => savePhotos(next)).then(resolve);
+        return next;
+      });
     });
   }, []);
 
+  const addPhoto = useCallback((entry: PhotoEntry) => {
+    // Replaces any photo already on that day; its file goes once the replacement is saved.
+    let replaced: PhotoEntry[] = [];
+    commitPhotos(prev => {
+      replaced = prev.filter(p => photoKey(p) === photoKey(entry));
+      const kept = prev.filter(p => photoKey(p) !== photoKey(entry));
+      return [...kept, entry].sort((a, b) => a.date.localeCompare(b.date));
+    }).then(saved => {
+      if (saved) deleteUnreferencedFiles(replaced.map(p => p.imageUri), photosRef.current);
+    });
+  }, [commitPhotos]);
+
+  /**
+   * Adds photos, skipping any whose album and day already have one. The entries' files
+   * (fresh copies from an import) belong to the store from here on: a skipped entry's file
+   * is deleted, unless an existing photo uses it.
+   */
   const addPhotos = useCallback((entries: PhotoEntry[]): { added: number; skipped: number } => {
     // Dedup synchronously against the ref mirror so counts are deterministic.
-    // The setPhotos updater re-checks against prev as a guard for batched calls.
-    const seen = new Set(photosRef.current.map(p => `${p.albumId}:${p.date}`));
+    // The updater re-checks against prev as a guard for batched calls.
+    const seen = new Set(photosRef.current.map(photoKey));
     const toAdd: PhotoEntry[] = [];
-    let skipped = 0;
+    const skipped: PhotoEntry[] = [];
     for (const entry of entries) {
-      const key = `${entry.albumId}:${entry.date}`;
-      if (seen.has(key)) {
-        skipped++;
+      if (seen.has(photoKey(entry))) {
+        skipped.push(entry);
       } else {
-        seen.add(key);
+        seen.add(photoKey(entry));
         toAdd.push(entry);
       }
     }
+    deleteUnreferencedFiles(skipped.map(e => e.imageUri), [...photosRef.current, ...toAdd]);
     if (toAdd.length > 0) {
-      setPhotos(prev => {
-        const prevKeys = new Set(prev.map(p => `${p.albumId}:${p.date}`));
-        const fresh = toAdd.filter(e => !prevKeys.has(`${e.albumId}:${e.date}`));
+      let dropped: PhotoEntry[] = [];
+      commitPhotos(prev => {
+        const prevKeys = new Set(prev.map(photoKey));
+        dropped = toAdd.filter(e => prevKeys.has(photoKey(e)));
+        const fresh = toAdd.filter(e => !prevKeys.has(photoKey(e)));
         if (fresh.length === 0) return prev;
-        const next = [...prev, ...fresh].sort((a, b) => a.date.localeCompare(b.date));
-        fireAndSave(() => savePhotos(next));
-        return next;
-      });
+        return [...prev, ...fresh].sort((a, b) => a.date.localeCompare(b.date));
+      }).then(() => deleteUnreferencedFiles(dropped.map(e => e.imageUri), photosRef.current));
     }
-    return { added: toAdd.length, skipped };
-  }, []);
+    return { added: toAdd.length, skipped: skipped.length };
+  }, [commitPhotos]);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
     setPhotos(prev => {
@@ -243,29 +279,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // mid-scan) are ignored.
   const updatePhotos = useCallback((patches: Record<string, Partial<PhotoEntry>>): Promise<boolean> => {
     if (Object.keys(patches).length === 0) return Promise.resolve(true);
-    return new Promise<boolean>((resolve) => {
-      setPhotos(prev => {
-        const next = prev.map(p =>
-          Object.prototype.hasOwnProperty.call(patches, p.id) ? { ...p, ...patches[p.id] } : p
-        );
-        // An updater can run twice (StrictMode); the first save to settle answers.
-        fireAndSave(() => savePhotos(next)).then(resolve);
-        return next;
-      });
-    });
-  }, []);
+    return commitPhotos(prev =>
+      prev.map(p => (Object.prototype.hasOwnProperty.call(patches, p.id) ? { ...p, ...patches[p.id] } : p)),
+    );
+  }, [commitPhotos]);
 
   const deletePhoto = useCallback((id: string) => {
-    setPhotos(prev => {
-      const target = prev.find(p => p.id === id);
-      const next = prev.filter(p => p.id !== id);
-      fireAndSave(() => savePhotos(next));
-      if (target?.imageUri?.startsWith('file://')) {
-        setImmediate(() => { try { new File(target.imageUri).delete(); } catch {} });
-      }
-      return next;
+    let removed: PhotoEntry[] = [];
+    commitPhotos(prev => {
+      removed = prev.filter(p => p.id === id);
+      return removed.length > 0 ? prev.filter(p => p.id !== id) : prev;
+    }).then(saved => {
+      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
     });
-  }, []);
+  }, [commitPhotos]);
 
   const handleUpdateProfile = useCallback((updates: Partial<UserProfile>) => {
     setProfile(prev => {
@@ -310,18 +337,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     cancelAlbumReminder(id);
     forgetUnlock(id);
-    setPhotos(prev => {
-      const toDelete = prev.filter(p => p.albumId === id);
-      const next = prev.filter(p => p.albumId !== id);
-      fireAndSave(() => savePhotos(next));
-      for (const photo of toDelete) {
-        if (photo.imageUri?.startsWith('file://')) {
-          setImmediate(() => { try { new File(photo.imageUri).delete(); } catch {} });
-        }
-      }
-      return next;
+    let removed: PhotoEntry[] = [];
+    commitPhotos(prev => {
+      removed = prev.filter(p => p.albumId === id);
+      return removed.length > 0 ? prev.filter(p => p.albumId !== id) : prev;
+    }).then(saved => {
+      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
     });
-  }, [albums.length, forgetUnlock]);
+  }, [albums.length, forgetUnlock, commitPhotos]);
 
   const resetAllData = useCallback(async () => {
     const localUris = photos.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
