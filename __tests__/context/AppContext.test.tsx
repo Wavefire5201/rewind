@@ -92,6 +92,19 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it("starts a new profile's join date on today's local date", async () => {
+    // Only Date is faked: 20:00 on the 9th in Chicago (the test zone), already the 10th in UTC.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+    jest.setSystemTime(new Date('2026-03-10T01:00:00.000Z'));
+    try {
+      const { unmount } = await renderProvider();
+      expect(ctx!.profile.joinDate).toBe('2026-03-09');
+      await unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('migrates legacy photos missing albumId', async () => {
     const legacy = { ...photo(), albumId: undefined };
     await AsyncStorage.setItem('@rewind/photos', JSON.stringify([legacy]));

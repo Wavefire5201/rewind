@@ -108,6 +108,11 @@ describe('trackingStartDate', () => {
     expect(trackingStartDate('2026-10-15T18:00:00.000Z', '2026-01-01', ['2026-10-15'])).toBe('2026-10-15');
   });
 
+  it("uses the creation timestamp's local day", () => {
+    // Created at 20:00 on the 9th in Chicago (the test zone), already the 10th in UTC.
+    expect(trackingStartDate('2026-03-10T01:00:00.000Z', '2026-01-01', [])).toBe('2026-03-09');
+  });
+
   it('falls back to the profile join date without an album', () => {
     expect(trackingStartDate(undefined, '2026-03-01', [])).toBe('2026-03-01');
   });

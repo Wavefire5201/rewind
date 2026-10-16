@@ -17,6 +17,7 @@ import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import { createAlbum } from '@/utils/albums';
 import { scheduleAlbumReminder } from '@/utils/notifications';
+import { getToday } from '@/utils/dates';
 
 // ─── Step 1: Welcome ────────────────────────────────────────────────────────
 
@@ -204,7 +205,7 @@ export default function OnboardingScreen() {
   async function finalize(reminderEnabled: boolean, reminderTime: string) {
     const newAlbum = createAlbum(albumNameRef.current, { reminderEnabled, reminderTime });
     addAlbum(newAlbum);
-    updateProfile({ joinDate: new Date().toISOString().split('T')[0] });
+    updateProfile({ joinDate: getToday() });
     if (reminderEnabled) {
       try {
         await scheduleAlbumReminder(newAlbum);

@@ -7,6 +7,7 @@ import {
   getCalendarMonth,
   formatMonthYear,
   formatTime,
+  localDateOf,
 } from '@/utils/dates';
 
 describe('dates', () => {
@@ -93,5 +94,18 @@ describe('dates', () => {
     it('formats 24h when requested', () => {
       expect(formatTime('2026-03-09T14:30:00', true)).toBe('14:30');
     });
+  });
+});
+
+// Tests run in America/Chicago (jest.config.js).
+describe('localDateOf', () => {
+  it('gives the local calendar day a timestamp falls on, not the UTC one', () => {
+    expect(localDateOf('2026-03-10T01:00:00.000Z')).toBe('2026-03-09'); // 20:00 CDT on the 9th
+    expect(localDateOf('2026-03-10T15:00:00.000Z')).toBe('2026-03-10');
+  });
+
+  it('keeps bare dates, and dates older versions stored as UTC midnight, as written', () => {
+    expect(localDateOf('2026-03-09')).toBe('2026-03-09');
+    expect(localDateOf('2026-03-09T00:00:00.000Z')).toBe('2026-03-09');
   });
 });

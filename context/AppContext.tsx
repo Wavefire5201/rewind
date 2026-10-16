@@ -7,6 +7,7 @@ import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/const
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 import { useToday } from '@/hooks/useToday';
+import { getToday } from '@/utils/dates';
 
 function fireAndSave(saveFn: () => Promise<void>): Promise<boolean> {
   return enqueueSave(saveFn);
@@ -74,13 +75,14 @@ interface AppContextValue {
   unlockAlbum: (id: string) => void;
 }
 
-const defaultProfile: UserProfile = { name: 'You', avatarUri: null, joinDate: new Date().toISOString().split('T')[0] };
+// A function, not a constant: the join date is today's local date when the profile starts.
+const newProfile = (): UserProfile => ({ name: 'You', avatarUri: null, joinDate: getToday() });
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
-  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [profile, setProfile] = useState<UserProfile>(newProfile);
   const [settings, setSettings] = useState<AppSettings>(getDefaultSettings());
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,8 +152,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setPhotos(migratedPhotos);
           // Derive joinDate from earliest photo if no stored profile
           const fallbackProfile: UserProfile = storedProfile ?? {
-            ...defaultProfile,
-            joinDate: [...storedPhotos].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? defaultProfile.joinDate,
+            ...newProfile(),
+            joinDate: [...storedPhotos].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? getToday(),
           };
           if (!storedProfile) await saveProfile(fallbackProfile);
           setProfile(fallbackProfile);
@@ -359,7 +361,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // The albums are gone, so are their reminders.
     await cancelAllReminders();
     setPhotos([]);
-    setProfile(defaultProfile);
+    setProfile(newProfile());
     setSettings(getDefaultSettings());
     setAlbums([]);
     setUnlockedAlbumIds(new Set());
