@@ -1,4 +1,5 @@
 import React from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, waitFor, act } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
@@ -77,8 +78,31 @@ describe('AppContext', () => {
     expect(ctx!.profile.name).toBe('Ada');
     expect(ctx!.settings.mirrorSelfies).toBe(false);
     expect(ctx!.albums).toHaveLength(1);
-    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
     await unmount();
+  });
+
+  it('ignores and removes unlocks saved by older versions', async () => {
+    await AsyncStorage.multiSet([
+      ['@rewind/albums', JSON.stringify([album({ isLocked: true })])],
+      ['@rewind/unlocked-albums', JSON.stringify(['a1'])],
+    ]);
+    const { unmount } = await renderProvider();
+    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+    await waitFor(async () => expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull());
+    await unmount();
+  });
+
+  it("starts a new profile's join date on today's local date", async () => {
+    // Only Date is faked: 20:00 on the 9th in Chicago (the test zone), already the 10th in UTC.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'] });
+    jest.setSystemTime(new Date('2026-03-10T01:00:00.000Z'));
+    try {
+      const { unmount } = await renderProvider();
+      expect(ctx!.profile.joinDate).toBe('2026-03-09');
+      await unmount();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('migrates legacy photos missing albumId', async () => {
@@ -152,6 +176,93 @@ describe('AppContext', () => {
     });
     expect(deletedUris).not.toContain('https://remote/x.jpg');
     await unmount();
+  });
+
+  describe('photo files', () => {
+    let errorSpy: jest.SpyInstance;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => errorSpy.mockRestore());
+
+    it('deletePhoto keeps the file when the save fails, so the entry still has its photo', async () => {
+      fileStore.set('file:///document/p.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+      jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+      await act(async () => {
+        ctx!.deletePhoto('p1');
+      });
+      await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Storage write failed:', expect.any(Error)));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(deletedUris).not.toContain('file:///document/p.jpg');
+      await unmount();
+    });
+
+    it('deleteAlbum keeps its files when the save fails', async () => {
+      fileStore.set('file:///document/b.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addAlbum(album({ id: 'a1' }));
+        ctx!.addAlbum(album({ id: 'a2' }));
+        ctx!.addPhoto(photo({ id: 'p1', albumId: 'a2', imageUri: 'file:///document/b.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+      // Both saves fail: the albums and the photos.
+      jest.mocked(AsyncStorage.setItem)
+        .mockRejectedValueOnce(new Error('disk full'))
+        .mockRejectedValueOnce(new Error('disk full'));
+      await act(async () => {
+        ctx!.deleteAlbum('a2');
+      });
+      await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(deletedUris).not.toContain('file:///document/b.jpg');
+      await unmount();
+    });
+
+    it("addPhoto deletes the replaced photo's file once the replacement is saved", async () => {
+      fileStore.set('file:///document/old.jpg', 'QUJD');
+      fileStore.set('file:///document/new.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p1', date: '2026-03-09', imageUri: 'file:///document/old.jpg' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p2', date: '2026-03-09', imageUri: 'file:///document/new.jpg' }));
+      });
+      await waitFor(() => expect(deletedUris).toContain('file:///document/old.jpg'));
+      expect(deletedUris).not.toContain('file:///document/new.jpg');
+      await unmount();
+    });
+
+    it('addPhotos deletes the files of the entries it skips, but never a file still in use', async () => {
+      fileStore.set('file:///document/kept.jpg', 'QUJD');
+      fileStore.set('file:///document/dupe.jpg', 'QUJD');
+      const { unmount } = await renderProvider();
+      const kept = photo({ id: 'p1', date: '2026-03-09', imageUri: 'file:///document/kept.jpg' });
+      await act(async () => {
+        ctx!.addPhotos([kept]);
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+      await act(async () => {
+        // A fresh copy for a day that already has a photo, and the same entry again.
+        ctx!.addPhotos([photo({ id: 'p2', date: '2026-03-09', imageUri: 'file:///document/dupe.jpg' }), kept]);
+      });
+      await waitFor(() => expect(deletedUris).toContain('file:///document/dupe.jpg'));
+      expect(deletedUris).not.toContain('file:///document/kept.jpg');
+      await unmount();
+    });
   });
 
   it('updatePhoto / updateProfile / updateSettings persist', async () => {
@@ -301,27 +412,83 @@ describe('AppContext', () => {
     await unmount();
   });
 
-  it('unlockAlbum persists across mounts', async () => {
-    const first = await renderProvider();
-    await act(async () => {
-      ctx!.addAlbum(album({ id: 'a1', isLocked: true }));
-    });
-    await waitFor(() => expect(ctx!.albums).toHaveLength(1));
-    await act(async () => {
-      ctx!.unlockAlbum('a1');
-    });
-    await waitFor(() => expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true));
-    await waitFor(async () => {
-      expect(JSON.parse((await AsyncStorage.getItem('@rewind/unlocked-albums')) ?? '[]')).toEqual([
-        'a1',
-      ]);
-    });
-    await first.unmount();
+  describe('album unlocks', () => {
+    async function renderWithUnlockedAlbum() {
+      const utils = await renderProvider();
+      await act(async () => {
+        ctx!.addAlbum(album({ id: 'a1', isLocked: true }));
+        ctx!.addAlbum(album({ id: 'a2', isLocked: true }));
+      });
+      await waitFor(() => expect(ctx!.albums).toHaveLength(2));
+      await act(async () => {
+        ctx!.unlockAlbum('a1');
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
+      return utils;
+    }
 
-    // Remount reads the persisted unlock
-    const second = await renderProvider();
-    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
-    await second.unmount();
+    it('last only for this session: a remount starts locked and nothing is saved', async () => {
+      const first = await renderWithUnlockedAlbum();
+      await first.unmount();
+      expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull();
+
+      const second = await renderProvider();
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await second.unmount();
+    });
+
+    it('locking an album again drops its unlock', async () => {
+      const { unmount } = await renderWithUnlockedAlbum();
+      await act(async () => {
+        ctx!.updateAlbum('a1', { isLocked: false });
+      });
+      await act(async () => {
+        ctx!.updateAlbum('a1', { isLocked: true });
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await unmount();
+    });
+
+    it('deleting an album drops its unlock', async () => {
+      const { unmount } = await renderWithUnlockedAlbum();
+      await act(async () => {
+        ctx!.deleteAlbum('a1');
+      });
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+      await unmount();
+    });
+
+    it('re-lock after more than a minute in the background, but survive a short trip', async () => {
+      const listeners: ((state: AppStateStatus) => void)[] = [];
+      // Put the react-native mock's own implementation back afterwards (mockRestore on it
+      // would strip it, breaking every later unmount).
+      const addListener = jest.mocked(AppState.addEventListener);
+      const original = addListener.getMockImplementation();
+      addListener.mockImplementation((_type, listener) => {
+        listeners.push(listener as (state: AppStateStatus) => void);
+        return { remove: () => {} } as ReturnType<typeof AppState.addEventListener>;
+      });
+      const now = jest.spyOn(Date, 'now');
+      const { unmount } = await renderWithUnlockedAlbum();
+      const emit = (state: AppStateStatus) => act(async () => listeners.forEach((l) => l(state)));
+
+      // A picker or share sheet: back within the minute, still unlocked.
+      now.mockReturnValue(1_000_000);
+      await emit('background');
+      now.mockReturnValue(1_000_000 + 30_000);
+      await emit('active');
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(true);
+
+      now.mockReturnValue(2_000_000);
+      await emit('background');
+      now.mockReturnValue(2_000_000 + 61_000);
+      await emit('active');
+      expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
+
+      now.mockRestore();
+      await unmount();
+      addListener.mockImplementation(original);
+    });
   });
 
   it('resetAllData clears state, storage, and local files', async () => {
@@ -340,6 +507,8 @@ describe('AppContext', () => {
     expect(ctx!.albums).toEqual([]);
     expect(await AsyncStorage.getItem('@rewind/photos')).toBeNull();
     expect(deletedUris).toContain('file:///document/p.jpg');
+    // The deleted albums' daily reminders must stop too.
+    expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
     await unmount();
   });
 

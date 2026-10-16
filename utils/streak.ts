@@ -1,4 +1,4 @@
-import { getDayNumber } from '@/utils/dates';
+import { getDayNumber, localDateOf } from '@/utils/dates';
 import type { DayStatus } from '@/types';
 
 /**
@@ -101,7 +101,7 @@ export function trackingStartDate(
   joinDate: string,
   photoDates: Iterable<string>,
 ): string {
-  let start = (createdAt ?? joinDate).slice(0, 10);
+  let start = createdAt ? localDateOf(createdAt) : joinDate.slice(0, 10);
   for (const date of photoDates) {
     if (date < start) start = date;
   }

@@ -7,7 +7,7 @@ import { exportToBackup, exportToPhotoAlbum, shareFile } from '@/utils/export';
 import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/utils/import';
 import { getToday } from '@/utils/dates';
 import type { PhotoEntry } from '@/types';
-import { fileStore, deletedUris, openedHandles, base64Reads, resetFileSystemMock } from '../helpers/fileSystemMock';
+import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 
@@ -75,6 +75,35 @@ describe('exportToBackup', () => {
     expect(manifest.album).toBe('Daily');
     expect(manifest.photos).toHaveLength(2);
     expect(await zip.file('images/2026-03-08.jpg')!.async('base64')).toBe('QUJD');
+  });
+
+  it('streams the backup to disk one photo at a time, readable by the importer', async () => {
+    // Building the archive in memory (base64 + JSZip) needs several times the album's size,
+    // which a year of photos can't survive.
+    const photo = (seed: number) =>
+      Buffer.from(Array.from({ length: 50_000 }, (_, i) => (i * seed + 3) & 0xff)).toString('base64');
+    const days = ['2026-03-01', '2026-03-02', '2026-03-03'];
+    days.forEach((d, i) => fileStore.set(`file:///${d}.jpg`, photo(i + 7)));
+    const res = await exportToBackup(
+      days.map((d) => makePhoto({ imageUri: `file:///${d}.jpg`, date: d, caption: d })),
+      'Daily',
+      () => {},
+      { cancelled: false },
+    );
+
+    expect(base64Reads).toHaveLength(0);
+    const backupWrites = writeLog.filter((w) => w.uri === res.filePath);
+    expect(backupWrites.length).toBeGreaterThan(days.length);
+    expect(Math.max(...backupWrites.map((w) => w.bytes))).toBeLessThan(60_000);
+
+    // Restore it with the real importer.
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: res.filePath }],
+    });
+    const { photos } = await importFromBackup('album-2');
+    expect(photos.map((p) => [p.date, p.caption])).toEqual(days.map((d) => [d, d]));
+    photos.forEach((p, i) => expect(fileStore.get(p.imageUri)).toBe(fileStore.get(`file:///${days[i]}.jpg`)));
   });
 
   it('throws when there is nothing local to export', async () => {
@@ -151,7 +180,7 @@ describe('importFromBackup', () => {
       { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG' }
     );
     const progress: [number, number][] = [];
-    const photos = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
+    const { photos } = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
       cancelled: false,
     });
     expect(photos).toHaveLength(2);
@@ -175,7 +204,7 @@ describe('importFromBackup', () => {
     );
     const backupSize = Buffer.from(fileStore.get(uri)!, 'base64').length;
 
-    const photos = await importFromBackup('album-1');
+    const { photos } = await importFromBackup('album-1');
 
     expect(photos).toHaveLength(3);
     expect(base64Reads).not.toContain(uri);
@@ -189,13 +218,13 @@ describe('importFromBackup', () => {
       { photos: [{ id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },
       { 'images/a.jpg': 'QUJD' },
     );
-    const [entry] = await importFromBackup('album-1');
+    const { photos: [entry] } = await importFromBackup('album-1');
     expect(fileStore.get(entry.imageUri)).toBe('QUJD');
     expect(deletedUris).toContain(uri);
   });
 
-  it('returns [] when the picker is cancelled', async () => {
-    await expect(importFromBackup()).resolves.toEqual([]);
+  it('returns nothing when the picker is cancelled', async () => {
+    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0 });
   });
 
   it('rejects invalid backups', async () => {
@@ -214,6 +243,65 @@ describe('importFromBackup', () => {
     await expect(importFromBackup('album-1', undefined, { cancelled: true })).rejects.toThrow(
       'Cancelled'
     );
+  });
+
+  // Paths of the photos the import wrote (the picked backup itself lives in the cache).
+  const writtenPhotos = () => [...fileStore.keys()].filter((k) => k.includes('rewind_import_'));
+
+  it("skips days the album already has before writing them, and counts them", async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-03-02', caption: '', imageFile: 'images/b.jpg' },
+          { id: 'p3', date: '2026-03-02', caption: '', imageFile: 'images/c.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG', 'images/c.jpg': 'R0hJ' },
+    );
+    const result = await importFromBackup('album-1', undefined, undefined, new Set(['2026-03-01']));
+    expect(result.photos.map((p) => p.date)).toEqual(['2026-03-02']);
+    // 03-01 is already in the album; the second 03-02 repeats a day in the backup.
+    expect(result.skipped).toBe(2);
+    expect(writtenPhotos()).toHaveLength(1);
+  });
+
+  it('removes the photos it already wrote when cancelled partway', async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-03-02', caption: '', imageFile: 'images/b.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG' },
+    );
+    const signal = { cancelled: false };
+    await expect(
+      importFromBackup('album-1', () => { signal.cancelled = true; }, signal),
+    ).rejects.toThrow('Cancelled');
+    expect(writtenPhotos()).toHaveLength(0);
+  });
+
+  it('yields between photos, so a Cancel tap (or a progress render) can get in', async () => {
+    await seedBackupZip(
+      { photos: [1, 2, 3, 4].map((d) => ({ id: `p${d}`, date: `2026-03-0${d}`, caption: '', imageFile: `images/${d}.jpg` })) },
+      { 'images/1.jpg': 'QUJD', 'images/2.jpg': 'REVG', 'images/3.jpg': 'R0hJ', 'images/4.jpg': 'SktM' },
+    );
+    const signal = { cancelled: false };
+    // Arrives like a tap: as a separate task, not from inside the import's own callbacks.
+    setTimeout(() => { signal.cancelled = true; }, 0);
+    await expect(importFromBackup('album-1', undefined, signal)).rejects.toThrow('Cancelled');
+    expect(writtenPhotos().length).toBe(0);
+  });
+
+  it('skips malformed manifest entries instead of failing the whole import', async () => {
+    await seedBackupZip(
+      { photos: [null, 'x', { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },
+      { 'images/a.jpg': 'QUJD' },
+    );
+    const { photos } = await importFromBackup('album-1');
+    expect(photos.map((p) => p.date)).toEqual(['2026-03-01']);
   });
 });
 
@@ -238,18 +326,29 @@ describe('pickPhotosFromLibrary', () => {
     await expect(pickPhotosFromLibrary()).resolves.toEqual([]);
   });
 
-  it('parses EXIF dates and defaults to today', async () => {
+  it('parses EXIF dates and leaves the date empty when there is none', async () => {
+    // A missing date must stay missing: defaulting to today let a screenshot replace
+    // today's photo.
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
       canceled: false,
       assets: [
         { uri: 'file:///a.jpg', exif: { DateTimeOriginal: '2026:03:09 10:00:00' } },
         { uri: 'file:///b.jpg', exif: null },
+        { uri: 'file:///c.jpg', exif: { DateTimeOriginal: '0000:00:00 00:00:00' } },
       ],
     });
     const res = await pickPhotosFromLibrary();
     expect(res).toEqual([
       { uri: 'file:///a.jpg', date: '2026-03-09' },
-      { uri: 'file:///b.jpg', date: getToday() },
+      { uri: 'file:///b.jpg', date: null },
+      { uri: 'file:///c.jpg', date: null },
     ]);
+  });
+
+  it('can pick a single photo', async () => {
+    await pickPhotosFromLibrary({ multiple: false });
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowsMultipleSelection: false }),
+    );
   });
 });

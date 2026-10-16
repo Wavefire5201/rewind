@@ -27,8 +27,18 @@ import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import SectionLabel from '@/components/ui/SectionLabel';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
-export default function AlbumSettingsScreen() {
+export default function AlbumSettingsRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <AlbumSettingsScreen />
+    </AlbumLockGate>
+  );
+}
+
+function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { fonts, typography } = useFont();
@@ -238,18 +248,21 @@ export default function AlbumSettingsScreen() {
       setImportTotal(0);
       setImporting(true);
       try {
-        const entries = await importFromBackup(albumId, (current, total) => {
+        // Days this album already has are skipped before their photos are written.
+        const existingDates = new Set(photos.filter(p => p.albumId === albumId).map(p => p.date));
+        const result = await importFromBackup(albumId, (current, total) => {
           setImportCurrent(current);
           setImportTotal(total);
-        }, importCancelRef.current);
+        }, importCancelRef.current, existingDates);
         setImporting(false);
-        if (entries.length === 0) {
-          setImporting(false);
+        if (result.photos.length === 0 && result.skipped === 0) {
           Alert.alert('Import Complete', 'No photos found in the backup file.');
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
-        const { added, skipped } = addPhotos(entries);
+        const batch = addPhotos(result.photos);
+        const added = batch.added;
+        const skipped = batch.skipped + result.skipped;
         haptics.success();
         const msg = skipped > 0
           ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`
@@ -301,10 +314,19 @@ export default function AlbumSettingsScreen() {
   }
 
   // --- PIN / Lock ---
+  // Locked now, so this screen (behind the lock gate) would turn into the unlock prompt:
+  // leave for home instead.
+  function lockAndLeave() {
+    updateAlbum(albumId, { isLocked: true });
+    haptics.success();
+    if (router.canDismiss()) router.dismissAll();
+    else router.replace('/');
+  }
+
   function handlePinSuccess() {
     setShowPinModal(false);
     if (pendingLockAction === 'lock') {
-      updateAlbum(albumId, { isLocked: true });
+      lockAndLeave();
     } else if (pendingLockAction === 'unlock') {
       updateAlbum(albumId, { isLocked: false });
     }
@@ -385,8 +407,7 @@ export default function AlbumSettingsScreen() {
               } else {
                 const pinExists = await hasPin();
                 if (pinExists) {
-                  updateAlbum(albumId, { isLocked: true });
-                  haptics.success();
+                  lockAndLeave();
                 } else {
                   setPendingLockAction('lock');
                   setPinIntent('set');
