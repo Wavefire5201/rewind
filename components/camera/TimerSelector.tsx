@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { haptics } from '@/utils/haptics';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 
 const TIMER_OPTIONS: { label: string; value: number }[] = [
@@ -29,7 +29,11 @@ export default function TimerSelector({ selectedDuration, onSelect, visible }: T
           <Pressable
             key={option.value}
             onPress={() => { haptics.tap(); onSelect(option.value); }}
-            style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
+            style={({ pressed }) => [styles.pill, isActive ? styles.pillActive : styles.pillInactive, pressed && { opacity: Pressed.text }]}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={option.value === 0 ? 'Timer off' : `${option.value} second timer`}
+            accessibilityState={{ selected: isActive }}
           >
             <Text style={[styles.pillText, isActive ? styles.pillTextActive : styles.pillTextInactive, { fontFamily: fonts.regular }]}>
               {option.label}

@@ -201,7 +201,13 @@ export default function ImportPhotoModal({
               {currentIndex + 1} / {total}
             </Text>
           </View>
-          <Pressable onPress={handleCancel} hitSlop={12} style={styles.closeBtn}>
+          <Pressable
+            onPress={handleCancel}
+            hitSlop={12}
+            style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel import"
+          >
             <X size={20} color={Colors.textPrimary} weight="light" />
           </Pressable>
         </View>
@@ -231,6 +237,9 @@ export default function ImportPhotoModal({
               <Pressable
                 style={styles.dateButton}
                 onPress={() => { haptics.tap(); setShowDatePicker(prev => !prev); }}
+                accessibilityRole="button"
+                accessibilityLabel="Change date"
+                accessibilityValue={{ text: formatDisplayDate(date) }}
               >
                 <Text style={[styles.dateButtonText, { fontFamily: fonts.regular }]}>
                   {formatDisplayDate(date)}

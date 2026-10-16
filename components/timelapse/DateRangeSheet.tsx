@@ -22,6 +22,11 @@ interface DateRangeSheetProps {
   onClose: () => void;
 }
 
+/** "March 2, 2026", for screen readers (the list shows 03/02/26). */
+function formatLongDate(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 function formatMMDDYY(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -114,7 +119,13 @@ export default function DateRangeSheet({
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>Date Range</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>
@@ -124,6 +135,10 @@ export default function DateRangeSheet({
           <Pressable
             style={({ pressed }) => [styles.dateField, activeField === 'start' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleStartFieldTap}
+            accessibilityRole="button"
+            accessibilityLabel="Start date"
+            accessibilityValue={{ text: formatLongDate(selStart) }}
+            accessibilityState={{ expanded: activeField === 'start' }}
           >
             <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selStart)}
@@ -135,6 +150,10 @@ export default function DateRangeSheet({
           <Pressable
             style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleEndFieldTap}
+            accessibilityRole="button"
+            accessibilityLabel="End date"
+            accessibilityValue={{ text: formatLongDate(selEnd) }}
+            accessibilityState={{ expanded: activeField === 'end' }}
           >
             <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selEnd)}
@@ -158,6 +177,9 @@ export default function DateRangeSheet({
                   key={date}
                   style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: 0.7 }]}
                   onPress={() => handleDateSelect(date)}
+                  accessibilityRole="button"
+                  accessibilityLabel={formatLongDate(date)}
+                  accessibilityState={{ selected: isSelected }}
                 >
                   <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected, { fontFamily: fonts.regular }]}>
                     {formatMMDDYY(date)}
@@ -170,10 +192,20 @@ export default function DateRangeSheet({
 
         {/* Footer buttons */}
         <View style={styles.footer}>
-          <Pressable style={({ pressed }) => [styles.resetButton, pressed && { opacity: 0.7 }]} onPress={handleReset}>
+          <Pressable
+            style={({ pressed }) => [styles.resetButton, pressed && { opacity: 0.7 }]}
+            onPress={handleReset}
+            accessibilityRole="button"
+            accessibilityLabel="Show all dates"
+          >
             <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>Reset to all</Text>
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]} onPress={handleApply}>
+          <Pressable
+            style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]}
+            onPress={handleApply}
+            accessibilityRole="button"
+            accessibilityLabel="Apply date range"
+          >
             <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>Apply</Text>
           </Pressable>
         </View>

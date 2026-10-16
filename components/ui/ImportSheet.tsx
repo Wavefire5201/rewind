@@ -56,7 +56,13 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>import</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>

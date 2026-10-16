@@ -76,7 +76,13 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>Export</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>
@@ -86,6 +92,8 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
             key={option.format}
             style={({ pressed }) => [styles.row, option.comingSoon && styles.rowDisabled, pressed && { opacity: 0.7 }]}
             onPress={() => handlePress(option)}
+            accessibilityRole="button"
+            accessibilityLabel={option.comingSoon ? `${option.label}, coming soon` : option.label}
           >
             <View style={styles.iconContainer}>{option.icon}</View>
             <View style={styles.rowText}>
