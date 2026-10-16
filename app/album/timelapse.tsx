@@ -44,8 +44,8 @@ function AlbumTimelapseScreen() {
 
   if (timelapse.filteredPhotos.length < 2) {
     const message = timelapse.hasDateFilter
-      ? 'No photos in this date range — try a wider range'
-      : 'Take more photos to create your timelapse';
+      ? 'no photos in this date range — try a wider range'
+      : 'take more photos to create your timelapse';
     return (
       <View testID="timelapse-screen-root" style={[styles.safeArea, safe]}>
         <Stack.Screen options={{ headerShown: false, animation: 'slide_from_bottom' }} />

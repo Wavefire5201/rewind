@@ -155,7 +155,7 @@ export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPin
           <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPage }} edges={['top', 'bottom']}>
             <PinEntry
               title="passcode unavailable"
-              subtitle="The passcode data was cleared. This album will be unlocked."
+              subtitle="the passcode data was cleared. this album will be unlocked."
               error=""
               onComplete={() => {
                 // This shouldn't be called in no-pin state, but guard anyway

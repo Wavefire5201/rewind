@@ -15,9 +15,10 @@ import TimePicker from '@/components/ui/TimePicker';
 import { Colors, Fonts, Typography } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
-import { createAlbum } from '@/utils/albums';
+import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { scheduleAlbumReminder } from '@/utils/notifications';
 import { getToday } from '@/utils/dates';
+import PillButton from '@/components/ui/PillButton';
 
 // ─── Step 1: Welcome ────────────────────────────────────────────────────────
 
@@ -30,14 +31,12 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         <Text style={[styles.subtitle, { fontFamily: fonts.regular }]}>capture every day. watch yourself change.</Text>
       </View>
       <View style={styles.buttonGroup}>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
+        <PillButton
+          label="get started"
           onPress={onNext}
+          size="large"
           accessibilityLabel="Get started"
-          accessibilityRole="button"
-        >
-          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>get started</Text>
-        </Pressable>
+        />
       </View>
     </View>
   );
@@ -74,19 +73,17 @@ function StepNameAlbum({ onNext, initialValue }: { onNext: (name: string) => voi
           autoCorrect={false}
           returnKeyType="done"
           onSubmitEditing={handleContinue}
-          maxLength={50}
+          maxLength={ALBUM_NAME_MAX_LENGTH}
         />
         <Text style={[styles.hint, { fontFamily: fonts.regular }]}>you can create more albums later</Text>
       </View>
       <View style={styles.buttonGroup}>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
+        <PillButton
+          label="continue"
           onPress={handleContinue}
+          size="large"
           accessibilityLabel="Continue"
-          accessibilityRole="button"
-        >
-          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>continue</Text>
-        </Pressable>
+        />
       </View>
     </KeyboardAvoidingView>
   );
@@ -138,16 +135,12 @@ function StepReminder({
         )}
       </View>
       <View style={styles.buttonGroup}>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
+        <PillButton
+          label={permissionGranted ? 'set reminder' : 'enable reminder'}
           onPress={handleEnablePress}
+          size="large"
           accessibilityLabel={permissionGranted ? 'Set reminder' : 'Enable reminder'}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.primaryButtonText, { fontFamily: fonts.medium }]}>
-            {permissionGranted ? 'set reminder' : 'enable reminder'}
-          </Text>
-        </Pressable>
+        />
         <Pressable
           style={({ pressed }) => [styles.textButton, pressed && { opacity: 0.7 }]}
           onPress={onSkip}
@@ -313,17 +306,6 @@ const styles = StyleSheet.create({
   buttonGroup: {
     gap: 12,
     paddingTop: 24,
-  },
-  primaryButton: {
-    backgroundColor: Colors.accent,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    fontFamily: Fonts.mono.medium,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.bgPage,
   },
   topBar: {
     flexDirection: 'row',

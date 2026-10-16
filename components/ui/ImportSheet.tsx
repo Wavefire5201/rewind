@@ -45,6 +45,12 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
     onSelect(option.source);
   }
 
+  // Closing taps, like closing the photo viewer.
+  const dismiss = () => {
+    haptics.tap();
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -52,11 +58,17 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { fontFamily: fonts.medium }]}>import</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Pressable
+            onPress={dismiss}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>
@@ -86,7 +98,7 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     backgroundColor: Colors.bgCard,

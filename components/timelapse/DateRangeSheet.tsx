@@ -12,6 +12,7 @@ import { X } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
+import PillButton from '@/components/ui/PillButton';
 
 interface DateRangeSheetProps {
   visible: boolean;
@@ -20,6 +21,11 @@ interface DateRangeSheetProps {
   endDate: string;
   onApply: (start: string, end: string) => void;
   onClose: () => void;
+}
+
+/** "March 2, 2026", for screen readers (the list shows 03/02/26). */
+function formatLongDate(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 function formatMMDDYY(dateStr: string): string {
@@ -102,6 +108,12 @@ export default function DateRangeSheet({
 
   const sortedDates = useMemo(() => [...dates].sort(), [dates]);
 
+  // Closing taps, like closing the photo viewer.
+  const dismiss = () => {
+    haptics.tap();
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -109,12 +121,18 @@ export default function DateRangeSheet({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Date Range</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>date range</Text>
+          <Pressable
+            onPress={dismiss}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>
@@ -124,17 +142,25 @@ export default function DateRangeSheet({
           <Pressable
             style={({ pressed }) => [styles.dateField, activeField === 'start' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleStartFieldTap}
+            accessibilityRole="button"
+            accessibilityLabel="Start date"
+            accessibilityValue={{ text: formatLongDate(selStart) }}
+            accessibilityState={{ expanded: activeField === 'start' }}
           >
             <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selStart)}
             </Text>
           </Pressable>
 
-          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>TO</Text>
+          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>to</Text>
 
           <Pressable
             style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
             onPress={handleEndFieldTap}
+            accessibilityRole="button"
+            accessibilityLabel="End date"
+            accessibilityValue={{ text: formatLongDate(selEnd) }}
+            accessibilityState={{ expanded: activeField === 'end' }}
           >
             <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
               {formatMMDDYY(selEnd)}
@@ -158,6 +184,9 @@ export default function DateRangeSheet({
                   key={date}
                   style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: 0.7 }]}
                   onPress={() => handleDateSelect(date)}
+                  accessibilityRole="button"
+                  accessibilityLabel={formatLongDate(date)}
+                  accessibilityState={{ selected: isSelected }}
                 >
                   <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected, { fontFamily: fonts.regular }]}>
                     {formatMMDDYY(date)}
@@ -170,12 +199,23 @@ export default function DateRangeSheet({
 
         {/* Footer buttons */}
         <View style={styles.footer}>
-          <Pressable style={({ pressed }) => [styles.resetButton, pressed && { opacity: 0.7 }]} onPress={handleReset}>
-            <Text style={[styles.resetText, { fontFamily: fonts.regular }]}>Reset to all</Text>
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.applyButton, pressed && { opacity: 0.7 }]} onPress={handleApply}>
-            <Text style={[styles.applyText, { fontFamily: fonts.medium }]}>Apply</Text>
-          </Pressable>
+          <PillButton
+            label="reset to all"
+            variant="outlined"
+            size="medium"
+            onPress={handleReset}
+            haptic={false}
+            style={styles.footerButton}
+            accessibilityLabel="Show all dates"
+          />
+          <PillButton
+            label="apply"
+            size="medium"
+            onPress={handleApply}
+            haptic={false}
+            style={styles.footerButton}
+            accessibilityLabel="Apply date range"
+          />
         </View>
       </View>
     </Modal>
@@ -185,7 +225,7 @@ export default function DateRangeSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     backgroundColor: Colors.bgCard,
@@ -262,27 +302,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 4,
   },
-  resetButton: {
+  footerButton: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderPrimary,
-  },
-  resetText: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  applyButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: Colors.accent,
-  },
-  applyText: {
-    fontFamily: Fonts.mono.medium,
-    fontSize: 12,
-    color: Colors.bgPage,
   },
 });

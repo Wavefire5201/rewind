@@ -25,27 +25,27 @@ interface Option {
 const OPTIONS: Option[] = [
   {
     format: 'album',
-    label: 'Photo Album',
-    description: 'Save frames to camera roll',
+    label: 'photo album',
+    description: 'save frames to camera roll',
     icon: <FolderOpen size={22} color={Colors.textPrimary} weight="light" />,
   },
   {
     format: 'backup',
-    label: 'Rewind Backup',
-    description: 'Importable .rewind file',
+    label: 'rewind backup',
+    description: 'importable .rewind file',
     icon: <DownloadSimple size={22} color={Colors.textPrimary} weight="light" />,
   },
   {
     format: 'gif',
-    label: 'Animated GIF',
-    description: 'Coming soon',
+    label: 'animated gif',
+    description: 'coming soon',
     icon: <Images size={22} color={Colors.textTertiary} weight="light" />,
     comingSoon: true,
   },
   {
     format: 'mp4',
-    label: 'MP4 Video',
-    description: 'Coming soon',
+    label: 'mp4 video',
+    description: 'coming soon',
     icon: <FilmStrip size={22} color={Colors.textTertiary} weight="light" />,
     comingSoon: true,
   },
@@ -58,12 +58,18 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
   function handlePress(option: Option) {
     if (option.comingSoon) {
       haptics.tap();
-      Alert.alert('Coming Soon', `${option.label} export is not available yet.`);
+      Alert.alert('Coming soon', "This export isn't available yet.");
       return;
     }
     haptics.tap();
     onSelect(option.format);
   }
+
+  // Closing taps, like closing the photo viewer.
+  const dismiss = () => {
+    haptics.tap();
+    onClose();
+  };
 
   return (
     <Modal
@@ -72,11 +78,17 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>Export</Text>
-          <Pressable onPress={onClose} hitSlop={12} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <Text style={[styles.title, { fontFamily: fonts.medium }]}>export</Text>
+          <Pressable
+            onPress={dismiss}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <X size={20} color={Colors.textSecondary} weight="light" />
           </Pressable>
         </View>
@@ -86,6 +98,8 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
             key={option.format}
             style={({ pressed }) => [styles.row, option.comingSoon && styles.rowDisabled, pressed && { opacity: 0.7 }]}
             onPress={() => handlePress(option)}
+            accessibilityRole="button"
+            accessibilityLabel={option.comingSoon ? `${option.label}, coming soon` : option.label}
           >
             <View style={styles.iconContainer}>{option.icon}</View>
             <View style={styles.rowText}>
@@ -104,7 +118,7 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     backgroundColor: Colors.bgCard,

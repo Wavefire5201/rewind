@@ -18,6 +18,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
+import SectionLabel from '@/components/ui/SectionLabel';
+import PillButton from '@/components/ui/PillButton';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
@@ -43,7 +45,7 @@ function dateToStr(d: Date): string {
 
 function formatDisplayDate(str: string): string {
   const d = dateStrToDate(str);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
 }
 
 export default function ImportPhotoModal({
@@ -196,12 +198,18 @@ export default function ImportPhotoModal({
             <View style={styles.closeBtn} />
           )}
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>Import Photo</Text>
+            <Text style={[styles.headerTitle, { fontFamily: fonts.regular }]}>import photo</Text>
             <Text style={[styles.counter, { fontFamily: fonts.regular }]}>
               {currentIndex + 1} / {total}
             </Text>
           </View>
-          <Pressable onPress={handleCancel} hitSlop={12} style={styles.closeBtn}>
+          <Pressable
+            onPress={handleCancel}
+            hitSlop={12}
+            style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel import"
+          >
             <X size={20} color={Colors.textPrimary} weight="light" />
           </Pressable>
         </View>
@@ -227,10 +235,13 @@ export default function ImportPhotoModal({
           <View style={styles.fields}>
             {/* Date */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>DATE</Text>
+              <SectionLabel>date</SectionLabel>
               <Pressable
                 style={styles.dateButton}
                 onPress={() => { haptics.tap(); setShowDatePicker(prev => !prev); }}
+                accessibilityRole="button"
+                accessibilityLabel="Change date"
+                accessibilityValue={{ text: formatDisplayDate(date) }}
               >
                 <Text style={[styles.dateButtonText, { fontFamily: fonts.regular }]}>
                   {formatDisplayDate(date)}
@@ -250,7 +261,7 @@ export default function ImportPhotoModal({
 
             {/* Caption */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { fontFamily: fonts.regular }]}>CAPTION</Text>
+              <SectionLabel>caption</SectionLabel>
               <TextInput
                 style={[styles.input, styles.captionInput, { fontFamily: fonts.regular }]}
                 value={caption}
@@ -266,14 +277,12 @@ export default function ImportPhotoModal({
 
         {/* Footer */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable
-            style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed]}
+          <PillButton
+            label={isLast ? 'save' : 'save & next  →'}
             onPress={handleSaveNext}
-          >
-            <Text style={[styles.saveBtnText, { fontFamily: fonts.medium }]}>
-              {isLast ? 'Save' : 'Save & Next  →'}
-            </Text>
-          </Pressable>
+            size="large"
+            haptic={false}
+          />
           <Pressable
             style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
             onPress={handleSkip}
@@ -340,12 +349,6 @@ const styles = StyleSheet.create({
   fieldGroup: {
     gap: 8,
   },
-  fieldLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: Colors.textSecondary,
-  },
   dateButton: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderPrimary,
@@ -372,20 +375,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: Colors.borderDivider,
-  },
-  saveBtn: {
-    backgroundColor: Colors.accent,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveBtnPressed: {
-    backgroundColor: Colors.accentDeep,
-  },
-  saveBtnText: {
-    fontFamily: Fonts.mono.medium,
-    fontSize: 14,
-    color: Colors.bgPage,
-    letterSpacing: 0.5,
   },
   skipBtn: {
     paddingVertical: 12,

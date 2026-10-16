@@ -189,7 +189,7 @@ export default function PhotoModal({
     if (!currentPhoto) return;
     haptics.warning();
     Alert.alert(
-      'Delete Photo',
+      'Delete photo?',
       'This photo will be permanently deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -309,7 +309,7 @@ export default function PhotoModal({
                   {formatDateLabel(currentPhoto.date)}
                   {'  ·  '}
                   {formatTime(currentPhoto.capturedAt)}
-                  {'  ·  DAY '}
+                  {'  ·  day '}
                   {getDayNumber(joinDate, currentPhoto.date)}
                 </Text>
                 {currentReadout ? (
