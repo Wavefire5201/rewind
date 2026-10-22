@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import type { PhotoEntry } from '@/types';
 
@@ -10,10 +10,8 @@ export function usePhotos(albumId?: string) {
     [photos, albumId]
   );
 
-  const sortedPhotos = useMemo(
-    () => [...filteredPhotos].sort((a, b) => a.date.localeCompare(b.date)),
-    [filteredPhotos]
-  );
+  // AppContext keeps photos in date order, and filtering keeps it.
+  const sortedPhotos = filteredPhotos;
 
   const todayPhoto = useMemo(
     () => filteredPhotos.find(p => p.date === today) ?? null,
@@ -30,11 +28,18 @@ export function usePhotos(albumId?: string) {
   const getPhotoByDate = (date: string): PhotoEntry | null =>
     filteredPhotos.find(p => p.date === date) ?? null;
 
-  const getPhotosByMonth = (year: number, month: number): PhotoEntry[] =>
-    filteredPhotos.filter(p => {
-      const [y, m] = p.date.split('-').map(Number);
-      return y === year && m === month;
-    });
+  // One list per month, kept until the photos change: the album screen asks on every render,
+  // and an unchanged list lets the calendar and photo viewer skip work.
+  const monthCache = useMemo(() => new Map<string, PhotoEntry[]>(), [filteredPhotos]);
+  const getPhotosByMonth = useCallback((year: number, month: number): PhotoEntry[] => {
+    const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+    let list = monthCache.get(prefix);
+    if (!list) {
+      list = filteredPhotos.filter(p => p.date.startsWith(prefix));
+      monthCache.set(prefix, list);
+    }
+    return list;
+  }, [monthCache, filteredPhotos]);
 
   return {
     photos: sortedPhotos,

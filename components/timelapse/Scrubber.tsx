@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, useDerivedValue, runOnJS, type SharedValue } from 'react-native-reanimated';
@@ -52,39 +52,47 @@ function Scrubber({ currentIndex, total, startDate, endDate, onSeek, onScrubChan
 
   const reportScrub = useCallback((scrubbing: boolean) => onScrubChange?.(scrubbing), [onScrubChange]);
 
-  const pan = Gesture.Pan()
-    .onBegin((e) => {
-      isDragging.value = true;
-      runOnJS(reportScrub)(true);
-      const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
-      thumbX.value = clamped;
-      const idx = computeIndex(clamped, trackWidth.value);
-      runOnJS(doSeek)(idx);
-    })
-    .onUpdate((e) => {
-      const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
-      thumbX.value = clamped;
-      const idx = computeIndex(clamped, trackWidth.value);
-      runOnJS(doSeek)(idx);
-    })
-    .onEnd(() => {
-      isDragging.value = false;
-    })
-    .onFinalize(() => {
-      isDragging.value = false;
-      runOnJS(reportScrub)(false);
-    })
-    .minDistance(0);
+  // Built once, not per render: a new gesture object makes GestureDetector re-attach its
+  // native handlers.
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .onBegin((e) => {
+        isDragging.value = true;
+        runOnJS(reportScrub)(true);
+        const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
+        thumbX.value = clamped;
+        const idx = computeIndex(clamped, trackWidth.value);
+        runOnJS(doSeek)(idx);
+      })
+      .onUpdate((e) => {
+        const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
+        thumbX.value = clamped;
+        const idx = computeIndex(clamped, trackWidth.value);
+        runOnJS(doSeek)(idx);
+      })
+      .onEnd(() => {
+        isDragging.value = false;
+      })
+      .onFinalize(() => {
+        isDragging.value = false;
+        runOnJS(reportScrub)(false);
+      })
+      .minDistance(0);
 
-  const tap = Gesture.Tap()
-    .onEnd((e) => {
-      const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
-      thumbX.value = clamped;
-      const idx = computeIndex(clamped, trackWidth.value);
-      runOnJS(doSeek)(idx);
-    });
+    const tap = Gesture.Tap()
+      .onEnd((e) => {
+        const clamped = Math.min(Math.max(e.x, 0), trackWidth.value);
+        thumbX.value = clamped;
+        const idx = computeIndex(clamped, trackWidth.value);
+        runOnJS(doSeek)(idx);
+      });
 
-  const gesture = Gesture.Race(pan, tap);
+    return Gesture.Race(pan, tap);
+  }, [computeIndex, doSeek, reportScrub, isDragging, thumbX, trackWidth]);
+
+  // With a shared frame the position comes from it; currentIndex then only seeds the text,
+  // and leaving it out of the deps keeps the mappers from being rebuilt each update.
+  const indexDep = frame ? -1 : currentIndex;
 
   const thumbStyle = useAnimatedStyle(() => {
     if (isDragging.value) {
@@ -94,7 +102,7 @@ function Scrubber({ currentIndex, total, startDate, endDate, onSeek, onScrubChan
     const index = frame ? frame.value : currentIndex;
     const pos = (total > 1 ? index / (total - 1) : 0) * w;
     return { transform: [{ translateX: pos - THUMB_SIZE / 2 }] };
-  }, [currentIndex, total, frame]);
+  }, [indexDep, total, frame]);
 
   const fillStyle = useAnimatedStyle(() => {
     if (isDragging.value) {
@@ -103,7 +111,7 @@ function Scrubber({ currentIndex, total, startDate, endDate, onSeek, onScrubChan
     }
     const index = frame ? frame.value : currentIndex;
     return { width: `${(total > 1 ? index / (total - 1) : 0) * 100}%` };
-  }, [currentIndex, total, frame]);
+  }, [indexDep, total, frame]);
 
   return (
     <View style={styles.container}>

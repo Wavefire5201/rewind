@@ -24,6 +24,8 @@ jest.mock('@/hooks/useStreak', () => ({ useStreak: () => ({ currentStreak: 1, co
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
 jest.mock('@/hooks/usePhotoEncodeBackfill', () => ({ usePhotoEncodeBackfill: () => ({ encoding: false, done: 0, total: 0, pending: false }) }));
 jest.mock('@/hooks/useFaceScanBackfill', () => ({ useFaceScanBackfill: () => ({ scanning: false, done: 0, total: 0 }) }));
+const mockThumbs = jest.fn();
+jest.mock('@/hooks/useThumbnailBackfill', () => ({ useThumbnailBackfill: (...args: unknown[]) => mockThumbs(...args) }));
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: [{ id: 'a', name: 'daily', createdAt: '2026-01-01' }],
@@ -91,4 +93,10 @@ it('imports one photo onto the tapped empty day, whatever its EXIF date, without
   expect(mockCreateEntry).toHaveBeenCalledWith('file:///picked.jpg', '2026-09-15', '', 'a');
   expect(mockAddPhotos).toHaveBeenCalledWith([expect.objectContaining({ date: '2026-09-15' })]);
   expect(mockAddPhoto).not.toHaveBeenCalled();
+});
+
+it("makes the album's thumbnails while it's open and the q95 pass is done", async () => {
+  mockAvailable = false;
+  await renderScreen();
+  expect(mockThumbs).toHaveBeenLastCalledWith(photos, true);
 });

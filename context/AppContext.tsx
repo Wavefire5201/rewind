@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
@@ -7,7 +7,7 @@ import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/const
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { haptics } from '@/utils/haptics';
 import { useToday } from '@/hooks/useToday';
-import { getToday } from '@/utils/dates';
+import { getToday, byDate } from '@/utils/dates';
 
 function fireAndSave(saveFn: () => Promise<void>): Promise<boolean> {
   return enqueueSave(saveFn);
@@ -31,15 +31,49 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
   return done;
 }
 
+// Photo saves are latest-wins. Each one writes the whole array (about 1 MB at 1000 photos),
+// and the states in between are never read back, so while a write is in flight newer states
+// replace each other and only the newest is written next: a burst of N changes costs one or
+// two writes, not N. Each caller still hears whether a write including its change landed.
+let pendingPhotos: { photos: PhotoEntry[]; waiters: ((saved: boolean) => void)[] } | null = null;
+let writingPhotos = false;
+
+function savePhotosLatest(photos: PhotoEntry[]): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    if (pendingPhotos) {
+      pendingPhotos.photos = photos;
+      pendingPhotos.waiters.push(resolve);
+    } else {
+      pendingPhotos = { photos, waiters: [resolve] };
+    }
+    if (!writingPhotos) void writePendingPhotos();
+  });
+}
+
+async function writePendingPhotos() {
+  writingPhotos = true;
+  while (pendingPhotos) {
+    const { photos, waiters } = pendingPhotos;
+    pendingPhotos = null;
+    const saved = await enqueueSave(() => savePhotos(photos));
+    waiters.forEach((resolve) => resolve(saved));
+  }
+  writingPhotos = false;
+}
+
 const DEFAULT_ALBUMS: Album[] = [];
 
 const photoKey = (p: PhotoEntry) => `${p.albumId}:${p.date}`;
 
-// Deletes local photo files that no entry in `photos` points at. Only call it after the
-// save that dropped them succeeded: a failed save keeps the entries, which still need them.
-function deleteUnreferencedFiles(uris: (string | undefined)[], photos: PhotoEntry[]) {
-  const inUse = new Set(photos.map(p => p.imageUri));
-  for (const uri of new Set(uris)) {
+// A photo's files on disk: the photo itself and its thumbnail.
+const filesOf = (p: PhotoEntry) => [p.imageUri, p.thumbUri];
+
+// Deletes the files of `removed` entries that no entry in `photos` still points at. Only call
+// it after the save that dropped them succeeded: a failed save keeps the entries, which
+// still need them.
+function deleteUnreferencedFiles(removed: PhotoEntry[], photos: PhotoEntry[]) {
+  const inUse = new Set(photos.flatMap(filesOf));
+  for (const uri of new Set(removed.flatMap(filesOf))) {
     if (!uri?.startsWith('file://') || inUse.has(uri)) continue;
     try { new File(uri).delete(); } catch {}
   }
@@ -149,11 +183,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (needsMigration) {
             await savePhotos(migratedPhotos);
           }
-          setPhotos(migratedPhotos);
+          // Kept in date order from here on (every add sorts), so hooks never re-sort.
+          setPhotos([...migratedPhotos].sort(byDate));
           // Derive joinDate from earliest photo if no stored profile
           const fallbackProfile: UserProfile = storedProfile ?? {
             ...newProfile(),
-            joinDate: [...storedPhotos].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? getToday(),
+            joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
           };
           if (!storedProfile) await saveProfile(fallbackProfile);
           setProfile(fallbackProfile);
@@ -188,7 +223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAlbums(migratedAlbums);
         } else if (USE_MOCK_DATA) {
           // Seed default album for mock data mode
-          const earliestDate = [...MOCK_PHOTOS].sort((a, b) => a.date.localeCompare(b.date))[0]?.date;
+          const earliestDate = [...MOCK_PHOTOS].sort(byDate)[0]?.date;
           const mockAlbum: Album = {
             id: 'daily-selfie',
             name: 'daily selfie',
@@ -220,7 +255,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
         // An updater can run twice (StrictMode); the first save to settle answers.
-        fireAndSave(() => savePhotos(next)).then(resolve);
+        savePhotosLatest(next).then(resolve);
         return next;
       });
     });
@@ -232,9 +267,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     commitPhotos(prev => {
       replaced = prev.filter(p => photoKey(p) === photoKey(entry));
       const kept = prev.filter(p => photoKey(p) !== photoKey(entry));
-      return [...kept, entry].sort((a, b) => a.date.localeCompare(b.date));
+      return [...kept, entry].sort(byDate);
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(replaced.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(replaced, photosRef.current);
     });
   }, [commitPhotos]);
 
@@ -257,7 +292,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toAdd.push(entry);
       }
     }
-    deleteUnreferencedFiles(skipped.map(e => e.imageUri), [...photosRef.current, ...toAdd]);
+    deleteUnreferencedFiles(skipped, [...photosRef.current, ...toAdd]);
     if (toAdd.length > 0) {
       let dropped: PhotoEntry[] = [];
       commitPhotos(prev => {
@@ -265,19 +300,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dropped = toAdd.filter(e => prevKeys.has(photoKey(e)));
         const fresh = toAdd.filter(e => !prevKeys.has(photoKey(e)));
         if (fresh.length === 0) return prev;
-        return [...prev, ...fresh].sort((a, b) => a.date.localeCompare(b.date));
-      }).then(() => deleteUnreferencedFiles(dropped.map(e => e.imageUri), photosRef.current));
+        return [...prev, ...fresh].sort(byDate);
+      }).then(() => deleteUnreferencedFiles(dropped, photosRef.current));
     }
     return { added: toAdd.length, skipped: skipped.length };
   }, [commitPhotos]);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
-    setPhotos(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, ...updates } : p);
-      fireAndSave(() => savePhotos(next));
-      return next;
-    });
-  }, []);
+    commitPhotos(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+  }, [commitPhotos]);
 
   // Batched variant of updatePhoto: one state update + one save for many photos.
   // updatePhoto rewrites the whole array per call, so a 240-photo face-scan backfill
@@ -296,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removed = prev.filter(p => p.id === id);
       return removed.length > 0 ? prev.filter(p => p.id !== id) : prev;
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
   }, [commitPhotos]);
 
@@ -348,12 +379,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removed = prev.filter(p => p.albumId === id);
       return removed.length > 0 ? prev.filter(p => p.albumId !== id) : prev;
     }).then(saved => {
-      if (saved) deleteUnreferencedFiles(removed.map(p => p.imageUri), photosRef.current);
+      if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
   }, [albums.length, forgetUnlock, commitPhotos]);
 
   const resetAllData = useCallback(async () => {
-    const localUris = photos.filter(p => p.imageUri?.startsWith('file://')).map(p => p.imageUri);
+    const localUris = photosRef.current.flatMap(filesOf).filter((uri): uri is string => !!uri?.startsWith('file://'));
     await clearAllData();
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}
@@ -365,7 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(getDefaultSettings());
     setAlbums([]);
     setUnlockedAlbumIds(new Set());
-  }, [photos]);
+  }, []);
 
   const seedMockPhotos = useCallback((albumId?: string) => {
     // Generate 7 mock photos: today back through last 6 days
@@ -404,8 +435,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Don't overwrite existing photos for same date+album
       const existingDates = new Set(prev.map(p => `${p.date}:${p.albumId}`));
       const newPhotos = mockPhotos.filter(p => !existingDates.has(`${p.date}:${p.albumId}`));
-      const next = [...prev, ...newPhotos].sort((a, b) => a.date.localeCompare(b.date));
-      fireAndSave(() => savePhotos(next));
+      const next = [...prev, ...newPhotos].sort(byDate);
+      savePhotosLatest(next);
       return next;
     });
 
@@ -435,34 +466,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  return (
-    <AppContext.Provider
-      value={{
-        photos,
-        profile,
-        settings,
-        albums,
-        today,
-        isLoading,
-        addPhoto,
-        addPhotos,
-        updatePhoto,
-        updatePhotos,
-        deletePhoto,
-        updateProfile: handleUpdateProfile,
-        updateSettings: handleUpdateSettings,
-        addAlbum,
-        updateAlbum,
-        deleteAlbum,
-        resetAllData,
-        seedMockPhotos,
-        unlockedAlbumIds,
-        unlockAlbum,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  // Memoized so a provider render with nothing changed doesn't re-render every consumer.
+  const value = useMemo<AppContextValue>(() => ({
+    photos,
+    profile,
+    settings,
+    albums,
+    today,
+    isLoading,
+    addPhoto,
+    addPhotos,
+    updatePhoto,
+    updatePhotos,
+    deletePhoto,
+    updateProfile: handleUpdateProfile,
+    updateSettings: handleUpdateSettings,
+    addAlbum,
+    updateAlbum,
+    deleteAlbum,
+    resetAllData,
+    seedMockPhotos,
+    unlockedAlbumIds,
+    unlockAlbum,
+  }), [photos, profile, settings, albums, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useAppContext(): AppContextValue {

@@ -18,6 +18,7 @@ import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
 import { usePhotoEncodeBackfill } from '@/hooks/usePhotoEncodeBackfill';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
+import { useThumbnailBackfill } from '@/hooks/useThumbnailBackfill';
 import { isFaceScanAvailable, needsFaceScan } from '@/utils/faceScan';
 import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
 import FaceTrendCard from '@/components/face/FaceTrendCard';
@@ -61,6 +62,8 @@ function AlbumDetailScreen() {
   // encoder has just replaced would fail for this session.
   const faceAvailable = isFaceScanAvailable();
   const faceProgress = useFaceScanBackfill(photos, faceAvailable && focused && !encode.pending);
+  // Small copies for the calendar, filmstrip and album rows; made from the q95 files.
+  useThumbnailBackfill(photos, focused && !encode.pending);
   const faceTrend = useMemo(() => (faceAvailable ? buildFaceTrend(photos) : null), [faceAvailable, photos]);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -99,7 +102,10 @@ function AlbumDetailScreen() {
   const daysInMonth = new Date(currentMonth.year, currentMonth.month, 0).getDate();
   // The album's history starts at its earliest photo when imports predate its creation.
   // Split the string (not new Date(...)) so a UTC parse can't shift the day.
-  const startDate = trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date));
+  const startDate = useMemo(
+    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date)),
+    [album?.createdAt, profile.joinDate, photos],
+  );
   const [startYear, startMonth, startDayOfMonth] = startDate.split('-').map(Number);
   const isCurrentMonth = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1;
   const isPastMonth = currentMonth.year < today.getFullYear() || (currentMonth.year === today.getFullYear() && currentMonth.month < today.getMonth() + 1);

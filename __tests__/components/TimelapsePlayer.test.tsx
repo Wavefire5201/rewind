@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import { RING_AHEAD, RING_BEHIND } from '@/utils/playback';
 import TimelapsePlayer, { type TimelapsePlayerHandle } from '@/components/timelapse/TimelapsePlayer';
 import { FontProvider } from '@/context/FontContext';
+import * as dates from '@/utils/dates';
 import { frameClocks } from '../helpers/reanimatedMock';
 import type { FaceScan, PhotoEntry } from '@/types';
 
@@ -266,5 +267,30 @@ describe('TimelapsePlayer', () => {
   it('hides the aligning badge without progress', async () => {
     await renderPlayer({ align: true, scanProgress: null });
     expect(screen.queryByText(/aligning/)).toBeNull();
+  });
+});
+
+describe('date labels', () => {
+  it("formats the photos' dates once, not again on every render", async () => {
+    // The player re-renders about 10 times a second while playing; at 1000 photos,
+    // formatting every label each time saturated the JS thread.
+    const format = jest.spyOn(dates, 'formatBadgeDate');
+    const element = (
+      <FontProvider>
+        <TimelapsePlayer photos={FORTY} speed={1} />
+      </FontProvider>
+    );
+    const { rerender } = await render(element);
+    const afterMount = format.mock.calls.length;
+    expect(afterMount).toBeGreaterThanOrEqual(FORTY.length);
+    await rerender(element);
+    await rerender(element);
+    expect(format.mock.calls.length).toBe(afterMount);
+    format.mockRestore();
+  });
+
+  it('shows the date of the frame on screen', async () => {
+    await renderPlayer({ photos: FORTY });
+    expect(screen.getByTestId('player-date').props.defaultValue).toBe('mar 1, 2026');
   });
 });

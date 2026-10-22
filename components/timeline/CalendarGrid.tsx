@@ -4,7 +4,7 @@ import PhotoImage from '@/components/ui/PhotoImage';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { getCalendarMonth, getToday, getFirstWeekday } from '@/utils/dates';
-import { getImageSource } from '@/utils/imageSource';
+import { getImageSource, thumbnailUri } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
 import type { PhotoEntry } from '@/types';
 
@@ -85,7 +85,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
                   onPress={() => onDayPress(date)}
                 >
                   <PhotoImage
-                    source={getImageSource(photo.imageUri)}
+                    source={getImageSource(thumbnailUri(photo))}
                     style={styles.thumbnail}
                     contentFit="cover"
                     contentPosition={faceContentPosition(photo.faceScan, SQUARE)}
@@ -114,7 +114,7 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
                   onPress={() => onDayPress(date)}
                 >
                   <PhotoImage
-                    source={getImageSource(photo.imageUri)}
+                    source={getImageSource(thumbnailUri(photo))}
                     style={styles.thumbnail}
                     contentFit="cover"
                     contentPosition={faceContentPosition(photo.faceScan, SQUARE)}

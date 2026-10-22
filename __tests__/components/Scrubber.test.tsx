@@ -4,9 +4,13 @@ import { FontProvider } from '@/context/FontContext';
 
 jest.mock('react-native-reanimated', () => require('../helpers/reanimatedMock').reanimatedMock);
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...a: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
+const mockGestures: unknown[] = [];
 jest.mock('react-native-gesture-handler', () => {
   const chain = (): unknown => new Proxy({}, { get: (_t, prop) => (prop === 'then' ? undefined : () => chain()) });
-  return { GestureDetector: ({ children }: { children: unknown }) => children, Gesture: { Pan: chain, Tap: chain, Race: () => ({}) } };
+  return {
+    GestureDetector: ({ children, gesture }: { children: unknown; gesture: unknown }) => { mockGestures.push(gesture); return children; },
+    Gesture: { Pan: chain, Tap: chain, Race: () => ({}) },
+  };
 });
 
 describe('Scrubber', () => {
@@ -46,5 +50,22 @@ describe('Scrubber drag reporting', () => {
     expect(onScrubChange).toHaveBeenLastCalledWith(true);
     pan.onFinalize();
     expect(onScrubChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('Scrubber re-renders', () => {
+  it('keeps the same gesture between renders, so the native handlers stay attached', async () => {
+    const onSeek = jest.fn();
+    const frame = { value: 3 } as never;
+    const ui = (index: number) => (
+      <FontProvider>
+        <Scrubber currentIndex={index} total={10} startDate="2026-03-01" endDate="2026-03-10" onSeek={onSeek} frame={frame} />
+      </FontProvider>
+    );
+    mockGestures.length = 0;
+    const { rerender } = await render(ui(0));
+    await rerender(ui(1));
+    expect(mockGestures.length).toBeGreaterThanOrEqual(2);
+    expect(mockGestures.at(-1)).toBe(mockGestures[0]);
   });
 });

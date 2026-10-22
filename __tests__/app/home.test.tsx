@@ -13,8 +13,9 @@ const album = (id: string, name: string): Album => ({
   id, name, createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false,
 });
 
+let mockRecent: Record<string, unknown> | null = null;
 jest.mock('@/hooks/usePhotos', () => ({
-  usePhotos: () => ({ todayPhoto: null, mostRecentPhoto: null, totalPhotos: mockTotalPhotos }),
+  usePhotos: () => ({ todayPhoto: null, mostRecentPhoto: mockRecent, totalPhotos: mockTotalPhotos }),
 }));
 jest.mock('@/hooks/useStreak', () => ({ useStreak: () => ({ currentStreak: 0, weekStatus: [] }) }));
 jest.mock('@/hooks/useGreeting', () => ({ useGreeting: () => ({ greeting: 'hi', dayNumber: 1 }) }));
@@ -42,7 +43,8 @@ jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
 });
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
-jest.mock('@/components/ui/PhotoImage', () => () => null);
+const mockPhotoImage = jest.fn();
+jest.mock('@/components/ui/PhotoImage', () => (props: unknown) => { mockPhotoImage(props); return null; });
 jest.mock('@/components/ui/PinModal', () => () => null);
 const mockTextInputModal = jest.fn();
 jest.mock('@/components/ui/TextInputModal', () => (props: unknown) => { mockTextInputModal(props); return null; });
@@ -53,6 +55,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAlbums = [album('a', 'daily'), album('b', 'second')];
   mockTotalPhotos = 0;
+  mockRecent = null;
 });
 
 it('counts a single photo as "1 photo"', async () => {
@@ -84,4 +87,11 @@ it('taps when a swiped row is renamed', async () => {
   await renderHome();
   await act(async () => fireEvent.press(screen.getAllByLabelText('Rename album')[0]));
   expect(Haptics.impactAsync).toHaveBeenCalled();
+});
+
+it("shows each album's latest photo as its thumbnail file", async () => {
+  mockRecent = { id: 'r', imageUri: 'file:///document/r_q95.jpg', thumbUri: 'file:///document/r_q95_thumb.jpg' };
+  await renderHome();
+  const uris = mockPhotoImage.mock.calls.map(([p]) => (p as { source: { uri: string } }).source.uri);
+  expect(uris).toContain('file:///document/r_q95_thumb.jpg');
 });

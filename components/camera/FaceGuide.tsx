@@ -9,7 +9,9 @@ export interface FaceGuideProps {
   contourData?: SharedValue<number[]>;
 }
 
-const DOT_COUNT = 60;
+// ML Kit's FACE contour (the only one drawn) has 36 points. Every dot runs an animated
+// style on each face update, so spares that never show still cost.
+const DOT_COUNT = 36;
 
 function ContourDot({ index, contourData, containerWidth, containerHeight }: { index: number; contourData: SharedValue<number[]>; containerWidth: number; containerHeight: number }) {
   const dotStyle = useAnimatedStyle(() => {

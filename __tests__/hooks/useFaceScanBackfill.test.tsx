@@ -219,3 +219,23 @@ describe('useFaceScanBackfill', () => {
     expect(scannedUris()).toEqual([all[0].imageUri, all[3].imageUri]);
   });
 });
+
+describe('useFaceScanBackfill progress', () => {
+  it('updates its progress at most about once a second, not per photo', async () => {
+    // Each update re-renders the screen showing it; per-photo was ~2-3 renders a second
+    // for the minutes a first scan takes.
+    // Real scans take ~0.4 s, so each update gets its own render; a timer tick does that here.
+    scan.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(SCANNED), 1)));
+    jest.spyOn(Date, 'now').mockReturnValue(5_000_000);
+    const seen: string[] = [];
+    await renderHook(() => {
+      const p = useFaceScanBackfill(Array.from({ length: 8 }, (_, i) => makePhoto(i)), true);
+      seen.push(JSON.stringify(p));
+      return p;
+    });
+    await waitFor(() => expect(scan).toHaveBeenCalledTimes(8));
+    await waitFor(() => expect(seen.at(-1)).toBe(JSON.stringify(IDLE)));
+    const scanningStates = new Set(seen.filter((x) => x.includes('"scanning":true')));
+    expect(scanningStates.size).toBe(1);
+  });
+});

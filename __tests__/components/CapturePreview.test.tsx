@@ -5,7 +5,8 @@ import { FontProvider } from '@/context/FontContext';
 import { fileStore, resetFileSystemMock } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
-jest.mock('expo-image', () => ({ Image: () => null }));
+const mockImage = jest.fn();
+jest.mock('expo-image', () => ({ Image: (props: unknown) => { mockImage(props); return null; } }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View };
@@ -42,4 +43,9 @@ it('copies the photo into the documents directory and saves it once confirmed', 
   await act(async () => fireEvent.press(screen.getByText('save')));
   expect(savedCopies()).toHaveLength(1);
   expect(onSave).toHaveBeenCalledWith('', savedCopies()[0]);
+});
+
+it("keeps the full-size preview out of Glide's disk cache", async () => {
+  await renderPreview(async () => true);
+  expect(mockImage.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ cachePolicy: 'memory' }));
 });

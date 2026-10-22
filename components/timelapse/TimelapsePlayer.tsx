@@ -10,12 +10,8 @@ import PlayerFrame, { type FrameLayout } from '@/components/timelapse/PlayerFram
 import AnimatedText from '@/components/ui/AnimatedText';
 import { computeFaceTransform, medianEyeDistance, type Size } from '@/utils/faceAlign';
 import { frameInterval, playbackStep, ringWindow, RING_AHEAD, RING_BEHIND } from '@/utils/playback';
+import { formatBadgeDate } from '@/utils/dates';
 import type { PhotoEntry } from '@/types';
-
-function formatBadgeDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
-}
 
 /** How often the UI-thread clock tells JS where it is (ring refill, scrubber, badge). */
 const REPORT_MS = 100;
@@ -78,7 +74,11 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
     const dueAt = useSharedValue(0);
     const lastReport = useSharedValue(0);
     const interval = useSharedValue(frameInterval(speed));
-    const ids = useSharedValue<string[]>(photos.map((p) => p.id));
+    // Built once per photo list: this component re-renders ~10x a second while playing, and
+    // a useSharedValue argument is evaluated on every render even though only the first is used.
+    const idList = useMemo(() => photos.map((p) => p.id), [photos]);
+    const labelList = useMemo(() => photos.map((p) => formatBadgeDate(p.date)), [photos]);
+    const ids = useSharedValue<string[]>(idList);
     const loaded = useSharedValue<Record<string, true>>({});
     // JS-side source of truth. A JS write to a shared value lands on the UI thread
     // asynchronously while a JS read returns the UI copy, so read-modify-write from JS
@@ -89,11 +89,11 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
     const isPlayingRef = useRef(false);
 
     useEffect(() => { interval.value = frameInterval(speed); }, [speed, interval]);
-    useEffect(() => { ids.value = photos.map((p) => p.id); }, [photos, ids]);
+    useEffect(() => { ids.value = idList; }, [idList, ids]);
 
     // The date label follows the frame on screen on the UI thread, like the image.
-    const labels = useSharedValue<string[]>(photos.map((p) => formatBadgeDate(p.date)));
-    useEffect(() => { labels.value = photos.map((p) => formatBadgeDate(p.date)); }, [photos, labels]);
+    const labels = useSharedValue<string[]>(labelList);
+    useEffect(() => { labels.value = labelList; }, [labelList, labels]);
     const dateText = useDerivedValue(() => labels.value[shown.value] ?? '');
 
     const report = useCallback((f: number, s: number) => {
@@ -248,7 +248,7 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
       callbacks.current.onPlaybackEnd?.(target);
     };
 
-    const current = photos.length > 0 ? photos[Math.min(view.shown, photos.length - 1)] : undefined;
+    const currentLabel = labelList[Math.min(view.shown, labelList.length - 1)] ?? '';
 
     return (
       <View style={styles.wrapper}>
@@ -269,7 +269,7 @@ const TimelapsePlayer = forwardRef<TimelapsePlayerHandle, TimelapsePlayerProps>(
             <AnimatedText
               testID="player-date"
               text={dateText}
-              initial={current ? formatBadgeDate(current.date) : ''}
+              initial={currentLabel}
               style={[styles.badgeText, { fontFamily: fonts.regular }]}
             />
           </View>

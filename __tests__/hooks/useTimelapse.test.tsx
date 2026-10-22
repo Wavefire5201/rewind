@@ -78,7 +78,8 @@ describe('useTimelapse playback state', () => {
     now.mockReturnValue(10_100);
     await act(async () => { result.current.handleFrameChange(2); });
     expect(result.current.isPlaying).toBe(true);
-    expect(result.current.displayIndex).toBe(2);
+    // The index state waits for the pause; the player's shared frame drives the screen.
+    expect(result.current.displayIndex).toBe(0);
     expect(result.current.filmstripIndex).toBe(1);
 
     await act(async () => {
@@ -88,5 +89,37 @@ describe('useTimelapse playback state', () => {
     expect(result.current.isPlaying).toBe(false);
     expect(result.current.filmstripIndex).toBe(2);
     now.mockRestore();
+  });
+});
+
+describe('useTimelapse during playback', () => {
+  it("doesn't re-render the screen for every frame while playing, and catches up on pause", async () => {
+    let renders = 0;
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const { result } = await renderHook(() => {
+      renders++;
+      return useTimelapse({ photos });
+    });
+    await act(async () => result.current.handlePlayingChange(true));
+    await act(async () => result.current.handleFrameChange(1)); // the filmstrip may follow this one
+    const before = renders;
+    await act(async () => {
+      result.current.handleFrameChange(2);
+      result.current.handleFrameChange(1);
+      result.current.handleFrameChange(2);
+    });
+    // The picture, counter and scrubber follow the player's shared frame on the UI thread.
+    expect(renders).toBe(before);
+
+    await act(async () => result.current.handlePlayingChange(false));
+    expect(result.current.displayIndex).toBe(2);
+    expect(result.current.filmstripIndex).toBe(2);
+    now.mockRestore();
+  });
+
+  it('still follows every frame when paused (seeking, stepping)', async () => {
+    const { result } = await renderHook(() => useTimelapse({ photos }));
+    await act(async () => result.current.handleFrameChange(1));
+    expect(result.current.displayIndex).toBe(1);
   });
 });

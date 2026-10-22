@@ -1,5 +1,5 @@
 import { ImageManipulator } from 'expo-image-manipulator';
-import { encodePhoto, encodedName, needsEncoding, PHOTO_ENCODING } from '@/utils/photoEncode';
+import { encodePhoto, encodedName, needsEncoding, PHOTO_ENCODING, makeThumbnail, thumbnailName, needsThumbnail, THUMB_WIDTH } from '@/utils/photoEncode';
 import { fileStore, resetFileSystemMock } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
@@ -12,8 +12,9 @@ const TMP = 'file:///cache/ImageManipulator/out.jpg';
 
 function mockManipulator({ renderFails = false } = {}) {
   const ref = { saveAsync: jest.fn(async () => { fileStore.set(TMP, 'cTk1'); return { uri: TMP, width: 2448, height: 3264 }; }), release: jest.fn() };
-  const ctx = {
+  const ctx: { renderAsync: jest.Mock; resize: jest.Mock; release: jest.Mock } = {
     renderAsync: jest.fn(async () => { if (renderFails) throw new Error('decode failed'); return ref; }),
+    resize: jest.fn(() => ctx),
     release: jest.fn(),
   };
   jest.mocked(ImageManipulator.manipulate).mockReturnValue(ctx as never);
@@ -65,5 +66,34 @@ describe('needsEncoding', () => {
     expect(needsEncoding({ ...base, imageUri: 'file:///document/a.jpg' })).toBe(true);
     expect(needsEncoding({ ...base, imageUri: 'file:///document/a_q95.jpg', encoding: 'q95' })).toBe(false);
     expect(needsEncoding({ ...base, imageUri: 'https://example.com/a.jpg' })).toBe(false);
+  });
+});
+
+describe('makeThumbnail', () => {
+  it('writes a small JPEG copy into Documents and frees the native images', async () => {
+    const { ctx, ref } = mockManipulator();
+    const uri = await makeThumbnail('file:///document/a_q95.jpg', 'a_q95_thumb.jpg');
+    expect(ImageManipulator.manipulate).toHaveBeenCalledWith('file:///document/a_q95.jpg');
+    // Width only, so the thumbnail keeps the photo's shape and its face positions still apply.
+    expect(ctx.resize).toHaveBeenCalledWith({ width: THUMB_WIDTH });
+    expect(ref.saveAsync).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.8 });
+    expect(uri).toBe('file:///document/a_q95_thumb.jpg');
+    expect(ctx.release).toHaveBeenCalled();
+    expect(ref.release).toHaveBeenCalled();
+  });
+});
+
+describe('thumbnailName / needsThumbnail', () => {
+  it('names the thumbnail after its photo', () => {
+    expect(thumbnailName('file:///document/rewind_17_q95.jpg')).toBe('rewind_17_q95_thumb.jpg');
+  });
+
+  it('wants a thumbnail only for stored (q95) local photos without one', () => {
+    const local = 'file:///document/a_q95.jpg';
+    expect(needsThumbnail({ imageUri: local, encoding: 'q95' })).toBe(true);
+    expect(needsThumbnail({ imageUri: local, encoding: 'q95', thumbUri: 'file:///document/a_q95_thumb.jpg' })).toBe(false);
+    // Not yet re-encoded: its file is about to be replaced.
+    expect(needsThumbnail({ imageUri: 'file:///document/a.jpg' })).toBe(false);
+    expect(needsThumbnail({ imageUri: 'https://remote/a.jpg', encoding: 'q95' })).toBe(false);
   });
 });

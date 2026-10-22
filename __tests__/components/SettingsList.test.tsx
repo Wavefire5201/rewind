@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import SettingsList from '@/components/profile/SettingsList';
 import { FontProvider } from '@/context/FontContext';
 import { getDefaultSettings } from '@/utils/storage';
+import { MockDirectory } from '../helpers/fileSystemMock';
 
 const mockUpdateSettings = jest.fn();
 
@@ -41,4 +42,14 @@ it('shows the photo quality in lowercase, like the rest of the list', async () =
   expect(screen.getByText('medium')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByRole('button', { name: 'photo quality' })));
   expect(mockUpdateSettings).toHaveBeenCalledWith({ photoQuality: 'high' });
+});
+
+it("estimates storage from photos only, not their thumbnails", async () => {
+  const list = jest.spyOn(MockDirectory.prototype, 'list').mockReturnValue(
+    ['a_q95.jpg', 'a_q95_thumb.jpg', 'b_q95.jpg', 'b_q95_thumb.jpg'].map((name) => ({ name })) as never,
+  );
+  await renderList();
+  // Two photos at medium quality (~2 MB each).
+  expect(screen.getByText('~4 MB')).toBeTruthy();
+  list.mockRestore();
 });
