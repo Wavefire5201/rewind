@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, waitFor, act } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
@@ -164,6 +164,133 @@ describe('AppContext', () => {
     await waitFor(async () => {
       expect((await storedPhotos())[0].albumId).toBe('daily-selfie');
     });
+    await unmount();
+  });
+
+  describe("when the stored photos can't be read", () => {
+    const stored = JSON.stringify([photo({ id: 'p1', date: '2026-03-01' }), photo({ id: 'p2', date: '2026-03-02' })]);
+    const getItem = jest.mocked(AsyncStorage.getItem);
+    let realGetItem: NonNullable<ReturnType<typeof getItem.getMockImplementation>>;
+    let errorSpy: jest.SpyInstance;
+    let alertSpy: jest.SpyInstance;
+
+    beforeEach(async () => {
+      await AsyncStorage.multiSet([['@rewind/photos', stored], ['@rewind/albums', JSON.stringify([album()])]]);
+      // Android: a row past the 2 MB cursor window saves but won't read back.
+      realGetItem = getItem.getMockImplementation()!;
+      getItem.mockImplementation((key, ...rest) =>
+        key === '@rewind/photos' ? Promise.reject(new Error('Row too big to fit into CursorWindow')) : realGetItem(key, ...rest),
+      );
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      getItem.mockImplementation(realGetItem);
+      errorSpy.mockRestore();
+      alertSpy.mockRestore();
+    });
+
+    const photoWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/photos');
+
+    it('opens without them, says so, and never writes over them', async () => {
+      const { unmount } = await renderProvider();
+      expect(ctx!.photos).toEqual([]);
+      expect(ctx!.photosLoadFailed).toBe(true);
+      expect(ctx!.albums).toHaveLength(1); // the rest of the data still loads
+      expect(alertSpy).toHaveBeenCalledWith("Couldn't load your photos", expect.stringContaining('Nothing has been deleted'));
+      expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+
+      let updated: Promise<boolean> | undefined;
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'new', date: '2026-03-09' }));
+        ctx!.addPhotos([photo({ id: 'imported', date: '2026-03-08' })]);
+        updated = ctx!.updatePhotos({ p1: { caption: 'x' } });
+        ctx!.seedMockPhotos('a1');
+      });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+
+      expect(await updated).toBe(false);
+      expect(photoWrites()).toEqual([]);
+      expect(await realGetItem('@rewind/photos')).toBe(stored);
+      // Refused photos aren't shown either: they'd be gone on the next launch.
+      expect(ctx!.photos.filter((p) => p.id === 'new' || p.id === 'imported')).toEqual([]);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Photos not saved'));
+      await unmount();
+    });
+
+    it('saves photos again on the next launch that reads them', async () => {
+      const first = await renderProvider();
+      await first.unmount();
+      getItem.mockImplementation(realGetItem);
+
+      const { unmount } = await renderProvider();
+      expect(ctx!.photosLoadFailed).toBe(false);
+      expect(ctx!.photos.map((p) => p.id)).toEqual(['p1', 'p2']);
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p3', date: '2026-03-03' }));
+      });
+      await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p1', 'p2', 'p3']));
+      await unmount();
+    });
+
+    it('lets photos be saved again once the user clears all data', async () => {
+      const { unmount } = await renderProvider();
+      await act(async () => {
+        await ctx!.resetAllData();
+      });
+      expect(ctx!.photosLoadFailed).toBe(false);
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'fresh' }));
+      });
+      await waitFor(async () => {
+        const saved: PhotoEntry[] = JSON.parse((await realGetItem('@rewind/photos')) ?? '[]');
+        expect(saved.map((p) => p.id)).toEqual(['fresh']);
+      });
+      await unmount();
+    });
+  });
+
+  describe('when the stored photos are corrupt', () => {
+    let errorSpy: jest.SpyInstance;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => errorSpy.mockRestore());
+
+    it('keeps a copy, then starts over with no photos and saves normally', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await AsyncStorage.setItem('@rewind/photos', '[{"id":"p1",');
+      const { unmount } = await renderProvider();
+      expect(ctx!.photos).toEqual([]);
+      expect(ctx!.photosLoadFailed).toBe(false);
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
+
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p2' }));
+      });
+      await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p2']));
+      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
+      alertSpy.mockRestore();
+      await unmount();
+    });
+  });
+
+  it("still loads legacy photos when their migration can't be written", async () => {
+    // Before, the failed write left the photos out of state, so the next save replaced them.
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await AsyncStorage.multiSet([
+      ['@rewind/photos', JSON.stringify([{ ...photo({ id: 'old' }), albumId: undefined }])],
+      ['@rewind/albums', JSON.stringify([album()])],
+    ]);
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+    const { unmount } = await renderProvider();
+    expect(ctx!.photos.map((p) => [p.id, p.albumId])).toEqual([['old', 'daily-selfie']]);
+    expect(ctx!.albums).toHaveLength(1);
+    expect(errorSpy).toHaveBeenCalledWith('Photo migration not saved:', expect.any(Error));
+    errorSpy.mockRestore();
     await unmount();
   });
 

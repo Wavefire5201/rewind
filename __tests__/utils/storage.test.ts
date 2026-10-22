@@ -8,6 +8,7 @@ import {
   saveSettings,
   loadSettings,
   loadAlbums,
+  clearAllData,
   clearUnlockedAlbumIds,
 } from '@/utils/storage';
 import type { PhotoEntry } from '@/types';
@@ -33,9 +34,52 @@ describe('storage', () => {
     expect(await loadPhotos()).toEqual([photo]);
   });
 
-  it('falls back to [] on corrupt photo JSON', async () => {
-    await AsyncStorage.setItem('@rewind/photos', 'not-json{{{');
-    expect(await loadPhotos()).toEqual([]);
+  describe('loadPhotos when the photos are unreadable or corrupt', () => {
+    let errorSpy: jest.SpyInstance;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => errorSpy.mockRestore());
+
+    it('rejects when the stored value cannot be read, instead of reporting no photos', async () => {
+      await savePhotos([photo]);
+      jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('Row too big to fit into CursorWindow'));
+      await expect(loadPhotos()).rejects.toThrow('CursorWindow');
+    });
+
+    it('falls back to [] on corrupt photo JSON, after keeping a copy of it', async () => {
+      await AsyncStorage.setItem('@rewind/photos', 'not-json{{{');
+      expect(await loadPhotos()).toEqual([]);
+      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('not-json{{{');
+      // The photos key itself is left alone: the next save replaces it.
+      expect(await AsyncStorage.getItem('@rewind/photos')).toBe('not-json{{{');
+    });
+
+    it.each(['null', '{"id":"photo-1"}', '42'])('treats valid JSON that is not an array (%s) as corrupt', async (stored) => {
+      await AsyncStorage.setItem('@rewind/photos', stored);
+      expect(await loadPhotos()).toEqual([]);
+      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe(stored);
+    });
+
+    it('keeps the first backup: it holds the photos from before the reset', async () => {
+      await AsyncStorage.setItem('@rewind/photos-corrupt-backup', 'first');
+      await AsyncStorage.setItem('@rewind/photos', 'second{{{');
+      expect(await loadPhotos()).toEqual([]);
+      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('first');
+    });
+
+    it('rejects when the backup cannot be written, so nothing saves over the corrupt value', async () => {
+      await AsyncStorage.setItem('@rewind/photos', 'not-json{{{');
+      jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+      await expect(loadPhotos()).rejects.toThrow('disk full');
+    });
+
+    it('clearAllData removes the backup too', async () => {
+      await AsyncStorage.setItem('@rewind/photos', 'not-json{{{');
+      await loadPhotos();
+      await clearAllData();
+      expect(await AsyncStorage.getAllKeys()).toEqual([]);
+    });
   });
 
   it('round-trips profile and returns null when missing or corrupt', async () => {
