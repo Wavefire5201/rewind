@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
 import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, clearUnlockedAlbumIds } from '@/utils/storage';
@@ -38,7 +38,17 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
 let pendingPhotos: { photos: PhotoEntry[]; waiters: ((saved: boolean) => void)[] } | null = null;
 let writingPhotos = false;
 
+// Set when the stored photos couldn't be read at launch. The app then holds none of them, and
+// a photo save writes the whole array, so any save would replace them all: every photo save
+// is refused until the next launch reads them (or a reset clears them).
+let photoSavesBlocked = false;
+
 function savePhotosLatest(photos: PhotoEntry[]): Promise<boolean> {
+  if (photoSavesBlocked) {
+    console.error('Photos not saved: the stored photos could not be read, and saving would replace them.');
+    haptics.error();
+    return Promise.resolve(false);
+  }
   return new Promise<boolean>((resolve) => {
     if (pendingPhotos) {
       pendingPhotos.photos = photos;
@@ -92,6 +102,11 @@ interface AppContextValue {
   /** Today's local date, updated at midnight and on returning to the foreground. */
   today: string;
   isLoading: boolean;
+  /**
+   * The stored photos couldn't be read this launch. They're still stored, so nothing saves
+   * photos over them: adding photos is refused (see useCanAddPhotos) until the next launch.
+   */
+  photosLoadFailed: boolean;
   addPhoto: (entry: PhotoEntry) => void;
   addPhotos: (entries: PhotoEntry[]) => { added: number; skipped: number };
   updatePhoto: (id: string, updates: Partial<PhotoEntry>) => void;
@@ -120,6 +135,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(getDefaultSettings());
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
   const [isLoading, setIsLoading] = useState(true);
+  const [photosLoadFailed, setPhotosLoadFailed] = useState(false);
   const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
   const today = useToday();
 
@@ -169,10 +185,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             loadAlbums(),
             clearUnlockedAlbumIds(),
           ]);
+        // A failed read is not "no photos": they're still stored, and the first save would
+        // replace them all. Refuse photo saves for this launch and say so.
+        photoSavesBlocked = photosResult.status === 'rejected';
+        if (photosResult.status === 'rejected') {
+          console.error('Failed to load photos; not saving photos this launch:', photosResult.reason);
+          setPhotosLoadFailed(true);
+          haptics.error();
+          Alert.alert(
+            "Couldn't load your photos",
+            "Nothing has been deleted, but Rewind couldn't read your saved photos. To keep them safe, new photos can't be saved for now. Try restarting the app.",
+          );
+        }
         const storedPhotos = photosResult.status === 'fulfilled' ? photosResult.value : [];
         const storedProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
         const storedSettings = settingsResult.status === 'fulfilled' ? settingsResult.value : getDefaultSettings();
         const storedAlbums = albumsResult.status === 'fulfilled' ? albumsResult.value : null;
+
+        // The profile and settings load whatever the photo count: between onboarding and the
+        // first photo, or after deleting every photo, nothing is in the photos key but these are.
+        if (storedProfile) setProfile(storedProfile);
+        setSettings(storedSettings);
 
         if (storedPhotos.length > 0) {
           // Migrate legacy photos missing albumId
@@ -180,20 +213,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const migratedPhotos = needsMigration
             ? storedPhotos.map(p => p.albumId ? p : { ...p, albumId: 'daily-selfie' })
             : storedPhotos;
-          if (needsMigration) {
-            await savePhotos(migratedPhotos);
-          }
           // Kept in date order from here on (every add sorts), so hooks never re-sort.
           setPhotos([...migratedPhotos].sort(byDate));
-          // Derive joinDate from earliest photo if no stored profile
-          const fallbackProfile: UserProfile = storedProfile ?? {
-            ...newProfile(),
-            joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
-          };
-          if (!storedProfile) await saveProfile(fallbackProfile);
-          setProfile(fallbackProfile);
-          setSettings(storedSettings);
-        } else if (USE_MOCK_DATA) {
+          if (needsMigration) {
+            // The photos are in state first, so a failed write here can't leave the app empty
+            // over stored photos; the next photo save writes the migration.
+            await savePhotos(migratedPhotos).catch((e) => console.error('Photo migration not saved:', e));
+          }
+          // No profile stored: start one, joined on the earliest photo. Not when the profile
+          // failed to read, which would save over the one that's stored.
+          if (profileResult.status === 'fulfilled' && !storedProfile) {
+            const derivedProfile: UserProfile = {
+              ...newProfile(),
+              joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
+            };
+            await saveProfile(derivedProfile);
+            setProfile(derivedProfile);
+          }
+        } else if (USE_MOCK_DATA && !photoSavesBlocked) {
           // Seed with mock data on first launch
           setPhotos(MOCK_PHOTOS);
           setProfile(MOCK_PROFILE);
@@ -256,8 +293,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         // An updater can run twice (StrictMode); the first save to settle answers.
         savePhotosLatest(next).then(resolve);
-        return next;
+        // A change that can't be saved isn't shown either: it would be gone on the next launch.
+        return photoSavesBlocked ? prev : next;
       });
+    });
+  }, []);
+
+  // The join date can't be later than a photo the user has: adding older photos (a backup
+  // restore, a camera-roll import, a past day filled in) moves it back to the earliest of
+  // them. The camera's "day N" counts from it. Not while photo saves are refused: those
+  // photos never reach storage.
+  const moveJoinDateBack = useCallback((dates: string[]) => {
+    if (dates.length === 0 || photoSavesBlocked) return;
+    const earliest = dates.reduce((a, b) => (b < a ? b : a));
+    setProfile(prev => {
+      if (prev.joinDate && prev.joinDate <= earliest) return prev;
+      const next = { ...prev, joinDate: earliest };
+      fireAndSave(() => saveProfile(next));
+      return next;
     });
   }, []);
 
@@ -271,7 +324,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).then(saved => {
       if (saved) deleteUnreferencedFiles(replaced, photosRef.current);
     });
-  }, [commitPhotos]);
+    moveJoinDateBack([entry.date]);
+  }, [commitPhotos, moveJoinDateBack]);
 
   /**
    * Adds photos, skipping any whose album and day already have one. The entries' files
@@ -302,9 +356,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (fresh.length === 0) return prev;
         return [...prev, ...fresh].sort(byDate);
       }).then(() => deleteUnreferencedFiles(dropped, photosRef.current));
+      // Skipped entries don't count. One the re-check above drops still has its day covered
+      // by the photo already there, so every date here ends up in the album.
+      moveJoinDateBack(toAdd.map(e => e.date));
     }
     return { added: toAdd.length, skipped: skipped.length };
-  }, [commitPhotos]);
+  }, [commitPhotos, moveJoinDateBack]);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
     commitPhotos(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
@@ -386,6 +443,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetAllData = useCallback(async () => {
     const localUris = photosRef.current.flatMap(filesOf).filter((uri): uri is string => !!uri?.startsWith('file://'));
     await clearAllData();
+    // Nothing is stored now, unreadable photos included, so photos can be saved again.
+    photoSavesBlocked = false;
+    setPhotosLoadFailed(false);
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}
     }
@@ -474,6 +534,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     albums,
     today,
     isLoading,
+    photosLoadFailed,
     addPhoto,
     addPhotos,
     updatePhoto,
@@ -488,7 +549,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     seedMockPhotos,
     unlockedAlbumIds,
     unlockAlbum,
-  }), [photos, profile, settings, albums, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
+  }), [photos, profile, settings, albums, today, isLoading, photosLoadFailed, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

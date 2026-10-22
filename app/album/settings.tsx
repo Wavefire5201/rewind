@@ -14,6 +14,7 @@ import { CaretLeft, PencilSimple, LockSimple, BellSimple, Export, DownloadSimple
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
+import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
 import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
@@ -44,8 +45,9 @@ export default function AlbumSettingsRoute() {
 function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
+  const canAddPhotos = useCanAddPhotos();
   const { fonts } = useFont();
-  const { profile, albums, photos, settings, addPhotos, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
+  const { albums, photos, settings, addPhotos, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
 
@@ -229,6 +231,7 @@ function AlbumSettingsScreen() {
 
   // --- Import ---
   function handleImport() {
+    if (!canAddPhotos()) return;
     haptics.tap();
     setShowImportSheet(true);
   }
@@ -295,15 +298,9 @@ function AlbumSettingsScreen() {
       }
     }
 
-    // I3/I4: batch add with single save; addPhotos owns dedup (no stale pre-check here)
+    // I3/I4: batch add with single save; addPhotos owns dedup (no stale pre-check here) and
+    // moves the join date back to the earliest photo it adds
     const { added, skipped } = addPhotos(photoEntries);
-
-    // Update joinDate to earliest successfully imported date
-    let earliestDate = profile.joinDate;
-    for (const e of photoEntries) {
-      if (e.date < earliestDate) earliestDate = e.date;
-    }
-    if (earliestDate < profile.joinDate) updateProfile({ joinDate: earliestDate });
 
     setShowImportModal(false);
     setImportPhotos([]);
