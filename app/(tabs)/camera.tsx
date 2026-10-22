@@ -7,6 +7,7 @@ import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
+import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { useAppContext } from '@/context/AppContext';
 import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
@@ -52,6 +53,7 @@ function CameraScreen() {
   const focused = useIsFocused();
   const { albums, settings, updateAlbum, today } = useAppContext();
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
+  const canAddPhotos = useCanAddPhotos();
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
@@ -256,6 +258,10 @@ function CameraScreen() {
 
   // Asked before the preview copies the photo, so declining leaves nothing behind.
   const confirmSave = useCallback(() => new Promise<boolean>((resolve) => {
+    if (!canAddPhotos()) {
+      resolve(false);
+      return;
+    }
     if (!todayPhoto) {
       resolve(true);
       return;
@@ -269,7 +275,7 @@ function CameraScreen() {
       ],
       { cancelable: true, onDismiss: () => resolve(false) },
     );
-  }), [todayPhoto]);
+  }), [todayPhoto, canAddPhotos]);
 
   const handleSave = (caption: string, savedUri: string) => {
     const newPhoto: PhotoEntry = {
