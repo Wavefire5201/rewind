@@ -63,6 +63,8 @@ export const reanimatedMock = {
     return React.useRef<T | null>(null);
   },
   scrollTo: jest.fn(),
+  /** The system Reduce Motion setting; tests flip it with mockReturnValue(true). */
+  useReducedMotion: jest.fn(() => false),
   // UI → JS calls run inline: the mock has no separate UI runtime.
   runOnJS: <A extends unknown[]>(fn: (...args: A) => void) => fn,
   createAnimatedComponent<P extends object>(Component: React.ComponentType<P>) {
