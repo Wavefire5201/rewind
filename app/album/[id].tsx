@@ -16,6 +16,7 @@ import { usePhotos } from '@/hooks/usePhotos';
 import { trackingStartDate } from '@/utils/streak';
 import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
+import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { usePhotoEncodeBackfill } from '@/hooks/usePhotoEncodeBackfill';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { useThumbnailBackfill } from '@/hooks/useThumbnailBackfill';
@@ -49,6 +50,7 @@ function AlbumDetailScreen() {
   const insets = useSafeAreaInsets();
   const { photos, getPhotosByMonth } = usePhotos(id);
   const { profile, albums, addPhotos, updatePhoto, deletePhoto } = useAppContext();
+  const canAddPhotos = useCanAddPhotos();
   const album = albums.find(a => a.id === id);
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
@@ -158,6 +160,7 @@ function AlbumDetailScreen() {
   }
 
   function handleEmptyDayPress(date: string) {
+    if (!canAddPhotos()) return;
     haptics.tap();
     setImportTargetDate(date);
     setShowImportSheet(true);

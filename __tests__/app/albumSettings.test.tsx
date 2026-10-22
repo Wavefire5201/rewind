@@ -11,6 +11,8 @@ const mockDismissAll = jest.fn();
 const mockReplace = jest.fn();
 let mockHasPin = true;
 let mockAlbums: Album[] = [];
+let mockPhotosLoadFailed = false;
+const mockImportSheet = jest.fn();
 
 const album = (id: string, overrides: Partial<Album> = {}): Album => ({
   id, name: 'daily', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false, ...overrides,
@@ -20,6 +22,7 @@ jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: [], settings: { use24hClock: false },
     addPhotos: jest.fn(), updateProfile: jest.fn(), updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
+    photosLoadFailed: mockPhotosLoadFailed,
   }),
 }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
@@ -50,7 +53,7 @@ jest.mock('@/components/ui/TextInputModal', () => () => null);
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/timelapse/ExportProgress', () => () => null);
 jest.mock('@/components/ImportPhotoModal', () => () => null);
-jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockImportSheet(props); return null; } }));
 
 const renderSettings = () => render(<FontProvider><AlbumSettingsRoute /></FontProvider>);
 
@@ -58,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockHasPin = true;
   mockAlbums = [album('a'), album('b', { name: 'second' })];
+  mockPhotosLoadFailed = false;
 });
 
 it('locks the album and returns home when a PIN already exists', async () => {
@@ -81,4 +85,24 @@ it('deletes an album through the shared confirmation', async () => {
   await act(async () => fireEvent.press(screen.getByLabelText('Delete album')));
   expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
   alertSpy.mockRestore();
+});
+
+describe('import photos', () => {
+  const sheetVisible = () => (mockImportSheet.mock.calls.at(-1)?.[0] as { visible: boolean }).visible;
+
+  it('opens the import sheet', async () => {
+    await renderSettings();
+    await act(async () => fireEvent.press(screen.getByLabelText('Import photos')));
+    expect(sheetVisible()).toBe(true);
+  });
+
+  it("won't start when the stored photos couldn't be read, and says why", async () => {
+    mockPhotosLoadFailed = true;
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await renderSettings();
+    await act(async () => fireEvent.press(screen.getByLabelText('Import photos')));
+    expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.any(String));
+    expect(sheetVisible()).toBe(false);
+    alertSpy.mockRestore();
+  });
 });
