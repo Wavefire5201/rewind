@@ -4,6 +4,7 @@ import { File, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
 import type { PhotoEntry } from '@/types';
 import { readZipEntries, readZipEntry, type ByteSource, type ZipEntry } from '@/utils/zipReader';
+import { readPhotoDetails } from '@/utils/backupManifest';
 
 export async function pickPhotosFromLibrary(
   { multiple = true }: { multiple?: boolean } = {},
@@ -100,6 +101,8 @@ async function readBackupEntries(
     throw new Error('Invalid backup format: manifest.photos is missing or not an array');
   }
 
+  // Version 1 entries are read as they always were: the photo details came with version 2.
+  const withDetails = typeof manifest.version === 'number' && manifest.version >= 2;
   const photos: PhotoEntry[] = [];
   const total = manifest.photos.length;
   const takenDates = new Set(existingDates);
@@ -115,7 +118,7 @@ async function readBackupEntries(
       // so we stop before reading the next one).
       if (cancelSignal?.cancelled) throw new Error('Cancelled');
 
-      const restored = restoreEntry(src, entries, manifest.photos[i], i, albumId, takenDates);
+      const restored = restoreEntry(src, entries, manifest.photos[i], i, albumId, takenDates, withDetails);
       if (restored === 'skipped') skipped++;
       else if (restored === 'unreadable') unreadable++;
       else {
@@ -143,9 +146,10 @@ function restoreEntry(
   index: number,
   albumId: string,
   takenDates: ReadonlySet<string>,
+  withDetails: boolean,
 ): PhotoEntry | 'skipped' | 'unreadable' {
   if (!entry || typeof entry !== 'object') return 'unreadable';
-  const { date, imageFile, caption } = entry as { date?: unknown; imageFile?: unknown; caption?: unknown };
+  const { date, imageFile, caption } = entry as Record<string, unknown>;
 
   // No day to put it on. Moved to today, an old photo would take today's place.
   if (!isValidDate(date)) return 'unreadable';
@@ -175,6 +179,7 @@ function restoreEntry(
     caption: typeof caption === 'string' ? caption : '',
     capturedAt: new Date().toISOString(),
     cameraDirection: 'front',
+    ...(withDetails ? readPhotoDetails(entry as Record<string, unknown>) : {}),
   };
 }
 
