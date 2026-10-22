@@ -6,7 +6,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { exportToBackup, exportToPhotoAlbum, shareFile } from '@/utils/export';
 import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/utils/import';
 import { getToday } from '@/utils/dates';
-import type { PhotoEntry } from '@/types';
+import { FACE_SCAN_VERSION, needsFaceScan } from '@/utils/faceScan';
+import { needsEncoding } from '@/utils/photoEncode';
+import type { FaceLandmarks, FaceScan, PhotoEntry } from '@/types';
 import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock, MockFile } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
@@ -380,6 +382,162 @@ describe('importFromBackup', () => {
     expect(skipped).toBe(0);
     expect(unreadable).toBe(2);
     expect(progress).toEqual([[1, 3], [2, 3], [3, 3]]);
+  });
+});
+
+describe('photo details in a backup (manifest version 2)', () => {
+  const scan: FaceScan = {
+    v: FACE_SCAN_VERSION,
+    eyes: { left: { x: 0.41, y: 0.45 }, right: { x: 0.59, y: 0.452 } },
+    width: 1024,
+    height: 1365,
+    measure: {
+      ipd: 184.3, closeness: 0.18, jaw: 1.9, lowJaw: 1.5, cheek: 2.1,
+      yaw: 1.2, pitch: -3.4, roll: 0.5, smile: 0.12, jawOpen: 0.01,
+    },
+  };
+  const landmarks: FaceLandmarks = {
+    leftEye: { x: 300, y: 400 },
+    rightEye: { x: 500, y: 401 },
+    noseTip: { x: 400, y: 520 },
+    faceBounds: { x: 200, y: 250, width: 400, height: 500 },
+    rollAngle: 1.5,
+    yawAngle: -2,
+    isMirrored: true,
+  };
+
+  function pickBackup(uri: string) {
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({ canceled: false, assets: [{ uri }] });
+  }
+
+  async function restoreManifest(manifest: { version?: unknown; photos: Record<string, unknown>[] }) {
+    const zip = new JSZip();
+    zip.file('manifest.json', JSON.stringify(manifest));
+    manifest.photos.forEach((p) => zip.file(p.imageFile as string, 'QUJD', { base64: true }));
+    fileStore.set('file:///cache/backup.rewind', await zip.generateAsync({ type: 'base64' }));
+    pickBackup('file:///cache/backup.rewind');
+    return importFromBackup('album-1');
+  }
+
+  const entry = (date: string, details: Record<string, unknown> = {}) => ({
+    id: `p-${date}`, date, caption: '', imageFile: `images/${date}.jpg`, ...details,
+  });
+
+  it("restores each photo's q95 flag, face scan and capture details, so nothing is re-encoded or rescanned", async () => {
+    fileStore.set('file:///a.jpg', 'QUJD');
+    fileStore.set('file:///b.jpg', 'REVG');
+    const scanned = makePhoto({
+      imageUri: 'file:///a.jpg', date: '2026-03-01', capturedAt: '2026-03-01T07:15:00.000Z',
+      cameraDirection: 'back', encoding: 'q95', faceScan: scan, faceLandmarks: landmarks,
+      thumbUri: 'file:///document/a_thumb.jpg',
+    });
+    const fresh = makePhoto({ imageUri: 'file:///b.jpg', date: '2026-03-02', capturedAt: '2026-03-02T08:30:00.000Z' });
+    const { filePath } = await exportToBackup([scanned, fresh], 'Daily', () => {}, { cancelled: false });
+
+    const zip = await JSZip.loadAsync(fileStore.get(filePath)!, { base64: true });
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+    expect(manifest.version).toBe(2);
+    // Thumbnails stay out: the backfill rebuilds them from the restored file.
+    expect(manifest.photos[0]).not.toHaveProperty('thumbUri');
+    expect(Object.keys(manifest.photos[1]).sort()).toEqual(
+      ['cameraDirection', 'caption', 'capturedAt', 'date', 'id', 'imageFile'],
+    );
+
+    pickBackup(filePath);
+    const { photos: [a, b] } = await importFromBackup('album-2');
+    expect(a).toMatchObject({
+      date: '2026-03-01', capturedAt: '2026-03-01T07:15:00.000Z', cameraDirection: 'back',
+      encoding: 'q95', faceScan: scan, faceLandmarks: landmarks,
+    });
+    expect(a.thumbUri).toBeUndefined();
+    expect(fileStore.get(a.imageUri)).toBe('QUJD');
+    expect(needsEncoding(a)).toBe(false);
+    expect(needsFaceScan(a)).toBe(false);
+
+    expect(b).toMatchObject({ date: '2026-03-02', capturedAt: '2026-03-02T08:30:00.000Z', cameraDirection: 'front' });
+    expect(b).not.toHaveProperty('encoding');
+    expect(b).not.toHaveProperty('faceScan');
+    expect(b).not.toHaveProperty('faceLandmarks');
+    expect(needsEncoding(b)).toBe(true);
+  });
+
+  it('reads a version 1 backup as before, whatever else its entries hold', async () => {
+    const before = Date.now();
+    const { photos: [p] } = await restoreManifest({
+      version: 1,
+      photos: [entry('2026-03-01', {
+        encoding: 'q95', faceScan: scan, faceLandmarks: landmarks,
+        capturedAt: '2020-01-01T00:00:00.000Z', cameraDirection: 'back',
+      })],
+    });
+    expect(p).not.toHaveProperty('encoding');
+    expect(p).not.toHaveProperty('faceScan');
+    expect(p).not.toHaveProperty('faceLandmarks');
+    expect(p.cameraDirection).toBe('front');
+    expect(Date.parse(p.capturedAt)).toBeGreaterThanOrEqual(before);
+  });
+
+  it('restores a photo without the details that are malformed', async () => {
+    const before = Date.now();
+    const { photos, unreadable } = await restoreManifest({
+      version: 2,
+      photos: [
+        entry('2026-03-01', {
+          encoding: 'q90', capturedAt: 'yesterday', cameraDirection: 'sideways',
+          faceScan: { ...scan, eyes: { left: { x: 'a', y: 0 }, right: scan.eyes!.right } },
+          faceLandmarks: { ...landmarks, isMirrored: 'yes' },
+        }),
+        entry('2026-03-02', {
+          encoding: 'Q95', capturedAt: 12345,
+          // From a newer app: a format this one can't check.
+          faceScan: { ...scan, v: FACE_SCAN_VERSION + 1 },
+          faceLandmarks: { ...landmarks, faceBounds: { x: 0, y: 0, width: 1 } },
+        }),
+        entry('2026-03-03', {
+          encoding: true,
+          faceScan: { ...scan, measure: { ...scan.measure, jaw: null } },
+          faceLandmarks: { ...landmarks, noseTip: null },
+        }),
+        entry('2026-03-04', { faceScan: { ...scan, width: -1 }, faceLandmarks: [] }),
+        entry('2026-03-05', { faceScan: 'scan', faceLandmarks: { ...landmarks, rollAngle: '1' } }),
+        // A current scan without its measurements would never be rescanned for them.
+        entry('2026-03-06', { faceScan: { ...scan, measure: undefined } }),
+        entry('2026-03-07', { faceScan: { ...scan, eyes: undefined } }),
+        entry('2026-03-08', { faceScan: { ...scan, v: 1.5 } }),
+        entry('2026-03-09', { faceScan: { ...scan, measure: 'big' } }),
+      ],
+    });
+    expect(unreadable).toBe(0);
+    expect(photos).toHaveLength(9);
+    for (const p of photos) {
+      expect(p).not.toHaveProperty('encoding');
+      expect(p).not.toHaveProperty('faceScan');
+      expect(p).not.toHaveProperty('faceLandmarks');
+      expect(p.cameraDirection).toBe('front');
+      expect(Date.parse(p.capturedAt)).toBeGreaterThanOrEqual(before);
+    }
+  });
+
+  it('keeps only the fields it knows, and leaves old scans for the backfill to redo', async () => {
+    const { photos: [junk, old, noFace, offset] } = await restoreManifest({
+      version: 2,
+      photos: [
+        entry('2026-03-01', {
+          faceScan: { ...scan, junk: 'x'.repeat(100), eyes: { ...scan.eyes, extra: 1 } },
+          faceLandmarks: { ...landmarks, junk: 'x' },
+        }),
+        entry('2026-03-02', { faceScan: { v: 1, eyes: scan.eyes, width: 1024, height: 1365 } }),
+        entry('2026-03-03', { faceScan: { v: FACE_SCAN_VERSION, eyes: null, width: 1024, height: 1365, measure: null } }),
+        entry('2026-03-04', { capturedAt: '2026-03-04T07:15:00+02:00' }),
+      ],
+    });
+    expect(junk.faceScan).toEqual(scan);
+    expect(junk.faceLandmarks).toEqual(landmarks);
+    expect(old.faceScan).toEqual({ v: 1, eyes: scan.eyes, width: 1024, height: 1365 });
+    expect(needsFaceScan(old)).toBe(true);
+    expect(noFace.faceScan).toEqual({ v: FACE_SCAN_VERSION, eyes: null, width: 1024, height: 1365, measure: null });
+    expect(needsFaceScan(noFace)).toBe(false);
+    expect(offset.capturedAt).toBe('2026-03-04T05:15:00.000Z');
   });
 });
 

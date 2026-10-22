@@ -3,6 +3,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import type { PhotoEntry } from '@/types';
+import { BACKUP_VERSION, backupPhoto, type BackupPhoto } from '@/utils/backupManifest';
 
 type ProgressCallback = (current: number, total: number) => void;
 type CancelToken = { cancelled: boolean };
@@ -81,10 +82,10 @@ export async function exportToBackup(
   }
 
   const manifest = {
-    version: 1,
+    version: BACKUP_VERSION,
     exportDate: new Date().toISOString(),
     album: albumName,
-    photos: [] as { id: string; date: string; caption: string; imageFile: string }[],
+    photos: [] as BackupPhoto[],
   };
 
   // Streams the archive to disk one photo at a time. Building it in memory (base64 +
@@ -117,12 +118,7 @@ export async function exportToBackup(
       const photo = localPhotos[i];
       const filename = `${photo.date}.jpg`;
       addEntry(`images/${filename}`, await new File(photo.imageUri).bytes());
-      manifest.photos.push({
-        id: photo.id,
-        date: photo.date,
-        caption: photo.caption,
-        imageFile: `images/${filename}`,
-      });
+      manifest.photos.push(backupPhoto(photo, `images/${filename}`));
       onProgress(i + 1, localPhotos.length + 1);
     }
     addEntry('manifest.json', strToU8(JSON.stringify(manifest, null, 2)));
