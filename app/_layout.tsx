@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -6,8 +6,9 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppProvider } from '@/context/AppContext';
+import { AppProvider, useAppContext } from '@/context/AppContext';
 import { FontProvider } from '@/context/FontContext';
+import AnimatedSplash from '@/components/ui/AnimatedSplash';
 import { Colors, Fonts } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -33,6 +34,15 @@ const ebStyles = StyleSheet.create({
   title: { fontFamily: Fonts.mono.regular, fontSize: 16, color: Colors.textPrimary },
   subtitle: { fontFamily: Fonts.mono.regular, fontSize: 13, color: Colors.textSecondary },
 });
+
+// Over the app until the R has drawn itself and the app's data has loaded. The root layout
+// mounts once per launch, so this plays on a cold start, not on returning from the background.
+function SplashCover() {
+  const { isLoading } = useAppContext();
+  const [done, setDone] = useState(false);
+  if (done) return null;
+  return <AnimatedSplash ready={!isLoading} onDone={() => setDone(true)} />;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -67,6 +77,7 @@ export default function RootLayout() {
                   navigationBarColor: Colors.bgPage,
                 }}
               />
+              <SplashCover />
             </FontProvider>
           </AppProvider>
         </SafeAreaProvider>

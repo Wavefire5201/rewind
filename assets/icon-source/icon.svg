@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Source of assets/icon.png and favicon.png: rsvg-convert -w 1024 -h 1024 icon.svg | magick - -alpha off PNG24:../icon.png (favicon: -w 48 -h 48). The R: sage days, today in gold. -->
+  <rect width="1024" height="1024" fill="#1A1A1C"/>
+  <circle cx="328.0" cy="236.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="420.0" cy="236.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="512.0" cy="236.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="604.0" cy="236.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="328.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="696.0" cy="328.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="420.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="696.0" cy="420.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="512.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="420.0" cy="512.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="512.0" cy="512.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="604.0" cy="512.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="604.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="512.0" cy="604.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="696.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="604.0" cy="696.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="328.0" cy="788.0" r="35.0" fill="#8FA67A"/>
+  <circle cx="696.0" cy="788.0" r="35.0" fill="#C4A46C"/>
+</svg>
