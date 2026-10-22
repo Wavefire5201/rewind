@@ -301,9 +301,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // The join date can't be later than a photo the user has: adding older photos (a backup
   // restore, a camera-roll import, a past day filled in) moves it back to the earliest of
-  // them. The camera's "day N" counts from it.
+  // them. The camera's "day N" counts from it. Not while photo saves are refused: those
+  // photos never reach storage.
   const moveJoinDateBack = useCallback((dates: string[]) => {
-    if (dates.length === 0) return;
+    if (dates.length === 0 || photoSavesBlocked) return;
     const earliest = dates.reduce((a, b) => (b < a ? b : a));
     setProfile(prev => {
       if (prev.joinDate && prev.joinDate <= earliest) return prev;

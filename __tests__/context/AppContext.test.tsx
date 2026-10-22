@@ -238,6 +238,19 @@ describe('AppContext', () => {
 
     const photoWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/photos');
 
+    it("doesn't move the join date for photos it refused to save", async () => {
+      await AsyncStorage.setItem('@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-05' }));
+      const { unmount } = await renderProvider();
+      jest.mocked(AsyncStorage.setItem).mockClear();
+      await act(async () => {
+        ctx!.addPhotos([photo({ id: 'old', date: '2025-01-01' })]);
+        ctx!.addPhoto(photo({ id: 'older', date: '2024-01-01' }));
+      });
+      expect(ctx!.profile.joinDate).toBe('2026-03-05');
+      expect(jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/profile')).toEqual([]);
+      await unmount();
+    });
+
     it('opens without them, says so, and never writes over them', async () => {
       const { unmount } = await renderProvider();
       expect(ctx!.photos).toEqual([]);
