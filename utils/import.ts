@@ -4,7 +4,7 @@ import { File, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
 import type { PhotoEntry } from '@/types';
 import { getToday } from '@/utils/dates';
-import { readZipEntries, readZipEntry, type ByteSource } from '@/utils/zipReader';
+import { readZipEntries, readZipEntry, type ByteSource, type ZipEntry } from '@/utils/zipReader';
 
 export async function pickPhotosFromLibrary(
   { multiple = true }: { multiple?: boolean } = {},
@@ -46,7 +46,7 @@ export async function importFromBackup(
     type: '*/*',
     copyToCacheDirectory: true,
   });
-  if (result.canceled || !result.assets?.length) return { photos: [], skipped: 0 };
+  if (result.canceled || !result.assets?.length) return { photos: [], skipped: 0, unreadable: 0 };
   const srcFile = new File(result.assets[0].uri);
   // Random access through a file handle: read the zip's directory, then one photo at a
   // time. Loading the whole backup (base64 + JSZip) needs several times its size in JS
@@ -73,6 +73,8 @@ export interface BackupImport {
   photos: PhotoEntry[];
   /** Entries for a day the album, or an earlier entry in the backup, already has. */
   skipped: number;
+  /** Entries that couldn't be restored: malformed, missing their image, or failing to write. */
+  unreadable: number;
 }
 
 // Lets queued work run: a Cancel tap, the progress count re-rendering.
@@ -99,6 +101,7 @@ async function readBackupEntries(
   const total = manifest.photos.length;
   const takenDates = new Set(existingDates);
   let skipped = 0;
+  let unreadable = 0;
   try {
     for (let i = 0; i < total; i++) {
       // Each photo is read and written synchronously; without a yield between them the
@@ -109,48 +112,15 @@ async function readBackupEntries(
       // so we stop before reading the next one).
       if (cancelSignal?.cancelled) throw new Error('Cancelled');
 
-      const entry: unknown = manifest.photos[i];
-      if (!entry || typeof entry !== 'object') continue;
-      const { date, imageFile, caption } = entry as { date?: unknown; imageFile?: unknown; caption?: unknown };
-
-      // I1: validate each entry's date
-      const entryDate: string = isValidDate(date) ? date : getToday();
-      // A day the album already has (or an earlier entry here filled): don't write it at all.
-      if (takenDates.has(entryDate)) {
-        skipped++;
-        if (onProgress) onProgress(i + 1, total);
-        continue;
+      const restored = restoreEntry(src, entries, manifest.photos[i], i, albumId, takenDates);
+      if (restored === 'skipped') skipped++;
+      else if (restored === 'unreadable') unreadable++;
+      else {
+        takenDates.add(restored.date);
+        photos.push(restored);
       }
-
-      const imageEntry = typeof imageFile === 'string' ? entries.get(imageFile) : undefined;
-      if (!imageEntry) continue;
-      const imageBytes = readZipEntry(src, imageEntry);
-
-      // I1: append loop index to avoid same-millisecond filename collisions
-      const filename = `rewind_import_${Date.now()}_${i}_${entryDate}.jpg`;
-      const destFile = new File(Paths.document, filename);
-
-      // I2: treat a failed write as a hard failure for this entry (skip it)
-      try {
-        destFile.write(imageBytes);
-      } catch {
-        if (onProgress) onProgress(i + 1, total);
-        continue;
-      }
-
-      takenDates.add(entryDate);
-      photos.push({
-        id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
-        albumId,
-        date: entryDate,
-        imageUri: destFile.uri,
-        caption: typeof caption === 'string' ? caption : '',
-        capturedAt: new Date().toISOString(),
-        cameraDirection: 'front',
-      });
-
-      // I1: surface progress after each photo is processed
-      if (onProgress) onProgress(i + 1, total);
+      // Every entry moves the bar, whatever became of it.
+      onProgress?.(i + 1, total);
     }
   } catch (e) {
     // Cancelled or failed: nothing will reference what was written so far.
@@ -159,7 +129,50 @@ async function readBackupEntries(
     }
     throw e;
   }
-  return { photos, skipped };
+  return { photos, skipped, unreadable };
+}
+
+/** One manifest entry: its photo, or why it wasn't restored. */
+function restoreEntry(
+  src: ByteSource,
+  entries: ReadonlyMap<string, ZipEntry>,
+  entry: unknown,
+  index: number,
+  albumId: string,
+  takenDates: ReadonlySet<string>,
+): PhotoEntry | 'skipped' | 'unreadable' {
+  if (!entry || typeof entry !== 'object') return 'unreadable';
+  const { date, imageFile, caption } = entry as { date?: unknown; imageFile?: unknown; caption?: unknown };
+
+  // I1: validate each entry's date
+  const entryDate: string = isValidDate(date) ? date : getToday();
+  // A day the album already has (or an earlier entry here filled): don't write it at all.
+  if (takenDates.has(entryDate)) return 'skipped';
+
+  const imageEntry = typeof imageFile === 'string' ? entries.get(imageFile) : undefined;
+  if (!imageEntry) return 'unreadable';
+  const imageBytes = readZipEntry(src, imageEntry);
+
+  // I1: append the entry index to avoid same-millisecond filename collisions
+  const filename = `rewind_import_${Date.now()}_${index}_${entryDate}.jpg`;
+  const destFile = new File(Paths.document, filename);
+  try {
+    destFile.write(imageBytes);
+  } catch {
+    // Don't leave a partial file that nothing points at.
+    try { destFile.delete(); } catch {}
+    return 'unreadable';
+  }
+
+  return {
+    id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
+    albumId,
+    date: entryDate,
+    imageUri: destFile.uri,
+    caption: typeof caption === 'string' ? caption : '',
+    capturedAt: new Date().toISOString(),
+    cameraDirection: 'front',
+  };
 }
 
 // I2: createPhotoEntry treats a failed copy as a HARD failure - throws instead of

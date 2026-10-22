@@ -146,7 +146,7 @@ describe('importing older photos', () => {
 
   it('hands a backup restore to addPhotos the same way', async () => {
     const restored = [{ id: 'r1', albumId: 'a', date: '2025-03-10' }] as PhotoEntry[];
-    mockImportFromBackup.mockResolvedValue({ photos: restored, skipped: 0 });
+    mockImportFromBackup.mockResolvedValue({ photos: restored, skipped: 0, unreadable: 0 });
     await renderSettings();
     await act(async () => {
       await sheetProps().onSelect('backup');
@@ -154,5 +154,40 @@ describe('importing older photos', () => {
     expect(mockAddPhotos).toHaveBeenCalledWith(restored);
     expect(mockUpdateProfile).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith('Import complete', '1 photo restored from backup.');
+  });
+});
+
+describe('restoring a backup', () => {
+  const restored = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, date: `2026-03-0${i + 1}` }));
+
+  async function restore(result: { photos: unknown[]; skipped: number; unreadable: number }) {
+    mockImportFromBackup.mockResolvedValueOnce(result);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await renderSettings();
+    await act(async () => sheetProps().onSelect('backup'));
+    const call = alertSpy.mock.calls.at(-1);
+    alertSpy.mockRestore();
+    return call?.slice(0, 2);
+  }
+
+  it("says how many entries couldn't be read", async () => {
+    await expect(restore({ photos: restored(2), skipped: 1, unreadable: 3 })).resolves.toEqual([
+      'Import complete',
+      "2 photos restored. 1 skipped (already exist). 3 couldn't be read.",
+    ]);
+  });
+
+  it("reports a backup none of whose entries could be read, instead of calling it empty", async () => {
+    await expect(restore({ photos: [], skipped: 0, unreadable: 1 })).resolves.toEqual([
+      'Import complete',
+      "0 photos restored. 1 couldn't be read.",
+    ]);
+  });
+
+  it('keeps the short message when every entry was restored', async () => {
+    await expect(restore({ photos: restored(1), skipped: 0, unreadable: 0 })).resolves.toEqual([
+      'Import complete',
+      '1 photo restored from backup.',
+    ]);
   });
 });
