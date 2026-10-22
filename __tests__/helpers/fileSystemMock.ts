@@ -11,12 +11,15 @@ export const deletedUris: string[] = [];
 export const openedHandles: { uri: string; reads: number[]; closed: boolean }[] = [];
 /** URIs whose whole contents were read with File#base64(). */
 export const base64Reads: string[] = [];
+/** Every write, in order: which file, how many bytes, and whether it appended. */
+export const writeLog: { uri: string; bytes: number; append: boolean }[] = [];
 
 export function resetFileSystemMock(): void {
   fileStore.clear();
   deletedUris.length = 0;
   openedHandles.length = 0;
   base64Reads.length = 0;
+  writeLog.length = 0;
 }
 
 function joinUri(parts: unknown[]): string {
@@ -50,8 +53,17 @@ export class MockFile {
     return v;
   }
 
-  write(content: string | Uint8Array): void {
-    fileStore.set(this.uri, typeof content === 'string' ? content : Buffer.from(content).toString('base64'));
+  write(content: string | Uint8Array, options: { append?: boolean } = {}): void {
+    const bytes = typeof content === 'string' ? Buffer.from(content, 'base64') : Buffer.from(content);
+    const before = options.append ? Buffer.from(fileStore.get(this.uri) ?? '', 'base64') : Buffer.alloc(0);
+    writeLog.push({ uri: this.uri, bytes: bytes.length, append: !!options.append });
+    fileStore.set(this.uri, Buffer.concat([before, bytes]).toString('base64'));
+  }
+
+  async bytes(): Promise<Uint8Array> {
+    const v = fileStore.get(this.uri);
+    if (v === undefined) throw new Error(`missing file: ${this.uri}`);
+    return new Uint8Array(Buffer.from(v, 'base64'));
   }
 
   /** Random-access handle like expo-file-system's FileHandle (reads from `offset`). */

@@ -11,10 +11,20 @@ import { buildFaceTrend, compareDays } from '@/utils/faceTrend';
 import { coverEyeDistance, type Size } from '@/utils/faceAlign';
 import ComparePane from '@/components/face/ComparePane';
 import Scrubber from '@/components/timelapse/Scrubber';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 const fmt = (pct: number | null) => (pct === null ? '—' : `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`);
 
-export default function CompareScreen() {
+export default function CompareRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <CompareScreen />
+    </AlbumLockGate>
+  );
+}
+
+function CompareScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { fonts } = useFont();

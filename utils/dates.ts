@@ -36,8 +36,22 @@ export function getDayNumber(joinDate: string, currentDate?: string): number {
 }
 
 export function getToday(): string {
-  const d = new Date();
+  return toLocalDate(new Date());
+}
+
+function toLocalDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * The local calendar day a timestamp (e.g. an album's createdAt) falls on. Slicing the ISO
+ * string gives the UTC day instead, a day off for anyone far enough from UTC. A bare date,
+ * or one older versions stored as UTC midnight, is already a calendar day and is kept.
+ */
+export function localDateOf(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(value)) return value.slice(0, 10);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value.slice(0, 10) : toLocalDate(d);
 }
 
 // Sun-origin label array; rotated at use-time by getFirstWeekday()

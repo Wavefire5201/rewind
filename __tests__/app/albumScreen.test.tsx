@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 import AlbumDetailScreen from '@/app/album/[id]';
 import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
@@ -6,6 +6,14 @@ import type { PhotoEntry } from '@/types';
 let mockAvailable = true;
 const mockCard = jest.fn();
 const mockModal = jest.fn();
+const mockGrid = jest.fn();
+const mockSheet = jest.fn();
+const mockAddPhoto = jest.fn();
+const mockAddPhotos = jest.fn(() => ({ added: 1, skipped: 0 }));
+const mockPick = jest.fn();
+const mockCreateEntry = jest.fn(async (uri: string, date: string, caption: string, albumId: string) => ({
+  id: 'new', albumId, date, imageUri: uri, caption, capturedAt: '', cameraDirection: 'front',
+}));
 const photos: PhotoEntry[] = [{ id: 'p1', albumId: 'a', date: '2026-10-01', imageUri: 'file:///1.jpg', caption: '', capturedAt: '', cameraDirection: 'front' }];
 
 jest.mock('@/utils/faceScan', () => ({ isFaceScanAvailable: () => mockAvailable, needsFaceScan: () => false }));
@@ -19,7 +27,7 @@ jest.mock('@/hooks/useFaceScanBackfill', () => ({ useFaceScanBackfill: () => ({ 
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: [{ id: 'a', name: 'daily', createdAt: '2026-01-01' }],
-    addPhoto: jest.fn(), updatePhoto: jest.fn(), deletePhoto: jest.fn(), updateProfile: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
+    addPhoto: mockAddPhoto, addPhotos: mockAddPhotos, updatePhoto: jest.fn(), deletePhoto: jest.fn(), updateProfile: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
   }),
 }));
 jest.mock('expo-router', () => ({
@@ -34,12 +42,15 @@ jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@/components/ui/MonthPicker', () => () => null);
 jest.mock('@/components/ui/PinModal', () => () => null);
-jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockSheet(props); return null; } }));
 jest.mock('@/components/timeline/MonthHeader', () => () => null);
 jest.mock('@/components/timeline/CalendarStats', () => () => null);
-jest.mock('@/components/timeline/CalendarGrid', () => () => null);
+jest.mock('@/components/timeline/CalendarGrid', () => (props: unknown) => { mockGrid(props); return null; });
 jest.mock('@/components/ui/EmptyState', () => () => null);
-jest.mock('@/utils/import', () => ({ pickPhotosFromLibrary: jest.fn() }));
+jest.mock('@/utils/import', () => ({
+  pickPhotosFromLibrary: (...args: unknown[]) => mockPick(...args),
+  createPhotoEntry: (uri: string, date: string, caption: string, albumId: string) => mockCreateEntry(uri, date, caption, albumId),
+}));
 
 const renderScreen = () => render(<FontProvider><AlbumDetailScreen /></FontProvider>);
 
@@ -57,4 +68,20 @@ it('hides the face card and the readout without the face scanner (Expo Go, unbui
   await renderScreen();
   expect(mockCard).not.toHaveBeenCalled();
   expect((mockModal.mock.calls.at(-1)?.[0] as { readout?: unknown }).readout).toBeUndefined();
+});
+
+it('imports one photo onto the tapped empty day, whatever its EXIF date, without replacing anything', async () => {
+  mockAvailable = false;
+  // The picked image's EXIF says 2026-10-01, a day that already has a photo.
+  mockPick.mockResolvedValueOnce([{ uri: 'file:///picked.jpg', date: '2026-10-01' }]);
+  await renderScreen();
+  const grid = mockGrid.mock.calls.at(-1)?.[0] as { onEmptyDayPress: (d: string) => void };
+  await act(async () => grid.onEmptyDayPress('2026-09-15'));
+  const sheet = mockSheet.mock.calls.at(-1)?.[0] as { onSelect: (s: string) => Promise<void> };
+  await act(async () => sheet.onSelect('camera-roll'));
+
+  expect(mockPick).toHaveBeenCalledWith({ multiple: false });
+  expect(mockCreateEntry).toHaveBeenCalledWith('file:///picked.jpg', '2026-09-15', '', 'a');
+  expect(mockAddPhotos).toHaveBeenCalledWith([expect.objectContaining({ date: '2026-09-15' })]);
+  expect(mockAddPhoto).not.toHaveBeenCalled();
 });

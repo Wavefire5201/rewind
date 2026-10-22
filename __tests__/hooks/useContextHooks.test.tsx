@@ -38,6 +38,7 @@ describe('usePhotos', () => {
   beforeEach(() => {
     mockUseAppContext.mockReturnValue({
       photos,
+      today: getToday(),
       addPhoto: jest.fn(),
       updatePhoto: jest.fn(),
       deletePhoto: jest.fn(),
@@ -50,6 +51,16 @@ describe('usePhotos', () => {
     expect(result.current.totalPhotos).toBe(2);
   });
 
+  it("follows the context's day, so today's photo isn't stale after midnight", async () => {
+    const ctx = { photos, today: '2026-03-09', addPhoto: jest.fn(), updatePhoto: jest.fn(), deletePhoto: jest.fn() };
+    mockUseAppContext.mockImplementation(() => ctx);
+    const { result, rerender } = await renderHook(() => usePhotos('a1'));
+    expect(result.current.todayPhoto?.id).toBe('p2');
+    ctx.today = '2026-03-10';
+    await rerender({});
+    expect(result.current.todayPhoto).toBeNull();
+  });
+
   it('returns everything without an album filter', async () => {
     const { result } = await renderHook(() => usePhotos());
     expect(result.current.totalPhotos).toBe(3);
@@ -59,6 +70,7 @@ describe('usePhotos', () => {
     const today = getToday();
     mockUseAppContext.mockReturnValue({
       photos: [...photos, photo('pt', today)],
+      today,
       addPhoto: jest.fn(),
       updatePhoto: jest.fn(),
       deletePhoto: jest.fn(),
@@ -127,5 +139,21 @@ describe('useAlbumLock', () => {
     });
     const { result } = await renderHook(() => useAlbumLock());
     expect(result.current.isAlbumLocked('locked')).toBe(true);
+  });
+});
+
+describe('useStreak', () => {
+  it("recomputes the streak and week when the context's day changes", async () => {
+    const { useStreak } = require('@/hooks/useStreak') as typeof import('@/hooks/useStreak');
+    const photos = [photo('p1', '2026-03-08'), photo('p2', '2026-03-09')];
+    const ctx = { photos, profile: { joinDate: '2026-03-01' }, today: '2026-03-09' };
+    mockUseAppContext.mockImplementation(() => ctx);
+    const { result, rerender } = await renderHook(() => useStreak('a1', '2026-03-01T12:00:00.000Z'));
+    expect(result.current.currentStreak).toBe(2);
+    ctx.today = '2026-03-11';
+    await rerender({});
+    // Nothing on the 10th or 11th: the run is over.
+    expect(result.current.currentStreak).toBe(0);
+    expect(result.current.weekStatus.find((d) => d.date === '2026-03-09')?.status).not.toBe('today-done');
   });
 });

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useIsFocused, Stack } from 'expo-router';
-import { CaretLeft, Camera, Play, GearSix, LockSimple } from 'phosphor-react-native';
+import { CaretLeft, Camera, Play, GearSix } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,14 +10,12 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import MonthPicker from '@/components/ui/MonthPicker';
-import PinModal from '@/components/ui/PinModal';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { trackingStartDate } from '@/utils/streak';
 import { useStreak } from '@/hooks/useStreak';
 import { useAppContext } from '@/context/AppContext';
-import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { usePhotoEncodeBackfill } from '@/hooks/usePhotoEncodeBackfill';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { isFaceScanAvailable, needsFaceScan } from '@/utils/faceScan';
@@ -25,37 +23,44 @@ import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
 import FaceTrendCard from '@/components/face/FaceTrendCard';
 import type { PhotoEntry } from '@/types';
 import { haptics } from '@/utils/haptics';
-import { pickPhotosFromLibrary } from '@/utils/import';
+import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
 import PhotoModal from '@/components/timeline/PhotoModal';
 import EmptyState from '@/components/ui/EmptyState';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
-export default function AlbumDetailScreen() {
+export default function AlbumDetailRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <AlbumLockGate albumId={id}>
+      <AlbumDetailScreen />
+    </AlbumLockGate>
+  );
+}
+
+function AlbumDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { photos, getPhotosByMonth } = usePhotos(id);
-  const { profile, albums, addPhoto, updatePhoto, deletePhoto, updateAlbum } = useAppContext();
+  const { profile, albums, addPhotos, updatePhoto, deletePhoto } = useAppContext();
   const album = albums.find(a => a.id === id);
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
   const { fonts, typography } = useFont();
 
-  const { isAlbumLocked, unlockAlbum } = useAlbumLock();
-  const locked = isAlbumLocked(id);
   const focused = useIsFocused();
   // Store photos as q95 (fresh captures and imports land here right after saving). Only
   // while this screen is in front, so playback and the camera get the CPU.
-  const encode = usePhotoEncodeBackfill(photos, focused && !locked);
+  const encode = usePhotoEncodeBackfill(photos, focused);
   // Face measurements for the trend card. Waits for the q95 pass: a scan reading a file the
   // encoder has just replaced would fail for this session.
   const faceAvailable = isFaceScanAvailable();
-  const faceProgress = useFaceScanBackfill(photos, faceAvailable && focused && !locked && !encode.pending);
+  const faceProgress = useFaceScanBackfill(photos, faceAvailable && focused && !encode.pending);
   const faceTrend = useMemo(() => (faceAvailable ? buildFaceTrend(photos) : null), [faceAvailable, photos]);
-  const [showPinModal, setShowPinModal] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -153,23 +158,17 @@ export default function AlbumDetailScreen() {
 
   async function handleImportSource(source: ImportSource) {
     setShowImportSheet(false);
+    const date = importTargetDate;
+    setImportTargetDate(null);
     if (source === 'camera-roll') {
+      // Fills the tapped empty day: one photo, on that day whatever its EXIF date says,
+      // and never replacing a photo that's already there.
       try {
-        const picked = await pickPhotosFromLibrary();
-        if (picked.length === 0) return;
-        const { createPhotoEntry } = await import('@/utils/import');
-        const entries = [];
-        for (const p of picked) {
-          try {
-            entries.push(await createPhotoEntry(p.uri, p.date ?? importTargetDate ?? '', '', id));
-          } catch { /* copy failure — skip this file */ }
-        }
-        if (entries.length > 0) {
-          for (const entry of entries) addPhoto(entry);
-          haptics.success();
-        } else {
-          haptics.error();
-        }
+        const [picked] = await pickPhotosFromLibrary({ multiple: false });
+        if (!picked || !date) return;
+        const { added } = addPhotos([await createPhotoEntry(picked.uri, date, '', id)]);
+        if (added > 0) haptics.success();
+        else haptics.error();
       } catch {
         haptics.error();
       }
@@ -177,7 +176,6 @@ export default function AlbumDetailScreen() {
       // Redirect to album settings for full backup import
       router.push({ pathname: '/album/settings', params: { albumId: id } });
     }
-    setImportTargetDate(null);
   }
 
   function handleRetake(albumId: string) {
@@ -185,50 +183,6 @@ export default function AlbumDetailScreen() {
   }
 
   const albumName = album?.name ?? id ?? 'album';
-
-  if (locked) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <Stack.Screen options={{ contentStyle: { backgroundColor: Colors.bgPage }, animation: 'slide_from_right' }} />
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => { haptics.tap(); router.canGoBack() ? router.back() : router.replace('/'); }}
-            hitSlop={12}
-            style={styles.backBtn}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
-          </Pressable>
-          <Text style={[styles.title, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
-          <View style={styles.headerBtn} />
-        </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <LockSimple size={48} color={Colors.textTertiary} weight="light" />
-          <Text style={[typography.body, { color: Colors.textTertiary }]}>this album is locked</Text>
-          <Pressable
-            style={({ pressed }) => [{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: Colors.accent }, pressed && { opacity: 0.85 }]}
-            onPress={() => setShowPinModal(true)}
-            accessibilityLabel="Unlock album"
-            accessibilityRole="button"
-          >
-            <Text style={[typography.body, { color: Colors.bgPage, fontFamily: fonts.medium }]}>unlock</Text>
-          </Pressable>
-        </View>
-        <PinModal
-          visible={showPinModal}
-          intent="unlock"
-          onSuccess={() => { setShowPinModal(false); unlockAlbum(id); }}
-          onCancel={() => { setShowPinModal(false); router.canGoBack() ? router.back() : router.replace('/'); }}
-          onNoPinFound={() => {
-            // PIN data gone — auto-clear the lock so the user is not permanently locked out
-            updateAlbum(id, { isLocked: false });
-            setShowPinModal(false);
-          }}
-        />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

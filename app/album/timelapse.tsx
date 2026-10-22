@@ -11,8 +11,18 @@ import { useTimelapse } from '@/hooks/useTimelapse';
 import { haptics } from '@/utils/haptics';
 import TimelapseView, { TimelapseEmpty } from '@/components/timelapse/TimelapseView';
 import DateRangeSheet from '@/components/timelapse/DateRangeSheet';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
-export default function AlbumTimelapseScreen() {
+export default function AlbumTimelapseRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <AlbumTimelapseScreen />
+    </AlbumLockGate>
+  );
+}
+
+function AlbumTimelapseScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { albums } = useAppContext();

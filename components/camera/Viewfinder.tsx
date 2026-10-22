@@ -43,6 +43,8 @@ interface ViewfinderProps {
   onSilence?: (silent: boolean) => void;
   showDebug?: boolean;
   photoQuality?: 'low' | 'medium' | 'high';
+  /** False stops the camera (preview open, screen not in front). */
+  active?: boolean;
 }
 
 export interface ViewfinderRef {
@@ -51,7 +53,7 @@ export interface ViewfinderRef {
 }
 
 const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
-  ({ ghostImageUri, ghostPlacement, ghostFlip, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, onSilence, showDebug = false, photoQuality = 'medium' }, ref) => {
+  ({ ghostImageUri, ghostPlacement, ghostFlip, facing, ghostOpacity, onGhostOpacityChange, isMirrored, showFaceGuide, onFaceState, onAvailabilityChange, onSilence, showDebug = false, photoQuality = 'medium', active = true }, ref) => {
     const { typography } = useFont();
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice(facing);
@@ -349,7 +351,7 @@ const Viewfinder = forwardRef<ViewfinderRef, ViewfinderProps>(
           ref={cameraRef}
           style={[StyleSheet.absoluteFill, { transform: [{ scaleX: flipPreview ? -1 : 1 }] }]}
           device={device}
-          isActive={true}
+          isActive={active}
           photo={true}
           // Android frame processors read their own analysis stream (VisionCamera is patched not
           // to add a video output for them, which forced a blurry GL-shared preview).

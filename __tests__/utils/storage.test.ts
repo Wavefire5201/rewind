@@ -8,8 +8,7 @@ import {
   saveSettings,
   loadSettings,
   loadAlbums,
-  saveUnlockedAlbumIds,
-  loadUnlockedAlbumIds,
+  clearUnlockedAlbumIds,
 } from '@/utils/storage';
 import type { PhotoEntry } from '@/types';
 
@@ -75,11 +74,9 @@ describe('storage', () => {
     expect(await loadAlbums()).toBeNull();
   });
 
-  it('round-trips unlocked album ids with corrupt fallback', async () => {
-    expect(await loadUnlockedAlbumIds()).toEqual([]);
-    await saveUnlockedAlbumIds(['a', 'b']);
-    expect(await loadUnlockedAlbumIds()).toEqual(['a', 'b']);
-    await AsyncStorage.setItem('@rewind/unlocked-albums', 'corrupt');
-    expect(await loadUnlockedAlbumIds()).toEqual([]);
+  it('clearUnlockedAlbumIds removes unlocks saved by older versions', async () => {
+    await AsyncStorage.setItem('@rewind/unlocked-albums', JSON.stringify(['a', 'b']));
+    await clearUnlockedAlbumIds();
+    expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull();
   });
 });

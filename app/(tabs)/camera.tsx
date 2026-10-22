@@ -2,13 +2,13 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation, useIsFocused } from 'expo-router';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
 import { useAppContext } from '@/context/AppContext';
-import { getToday, formatDateLabel } from '@/utils/dates';
+import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
 import Viewfinder, { type FaceState, type ViewfinderRef } from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
@@ -22,11 +22,21 @@ import type { Size } from '@/utils/faceAlign';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
 import type { PhotoEntry, FaceLandmarks } from '@/types';
+import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 /** Room the top row and shutter row need under the viewfinder. */
 const CONTROLS_MIN_HEIGHT = 200;
 
-export default function CameraScreen() {
+export default function CameraRoute() {
+  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  return (
+    <AlbumLockGate albumId={albumId}>
+      <CameraScreen />
+    </AlbumLockGate>
+  );
+}
+
+function CameraScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   // Photos are 4:3 (the whole sensor), so the viewfinder is too: it shows exactly what gets
@@ -39,7 +49,8 @@ export default function CameraScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
-  const { albums, settings, updateAlbum } = useAppContext();
+  const focused = useIsFocused();
+  const { albums, settings, updateAlbum, today } = useAppContext();
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
@@ -60,6 +71,9 @@ export default function CameraScreen() {
   const [showTimer, setShowTimer] = useState(false);
   const [timerDuration, setTimerDuration] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
+  // Read by doCapture, which may be called from a stale closure (auto-capture, the timer).
+  const previewOpenRef = useRef(false);
+  previewOpenRef.current = showPreview;
   const [capturedUri, setCapturedUri] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFaceGuide, setShowFaceGuide] = useState(false);
@@ -95,11 +109,11 @@ export default function CameraScreen() {
     setViewfinderSize((prev) => (prev && prev.w === width && prev.h === height ? prev : { w: width, h: height }));
   }, []);
 
-  const today = getToday();
   const dateLabel = `${formatDateLabel(today)} — day ${dayNumber}`;
 
   const doCapture = useCallback(async () => {
-    if (isCapturingRef.current) return;
+    // One photo at a time, and none while one is being reviewed.
+    if (isCapturingRef.current || previewOpenRef.current) return;
     isCapturingRef.current = true;
     setIsCapturing(true);
     try {
@@ -120,6 +134,7 @@ export default function CameraScreen() {
         }
         setCapturedUri(uri);
         setCapturedLandmarks(landmarks ? { ...landmarks, isMirrored } : null);
+        previewOpenRef.current = true;
         setShowPreview(true);
       }
     } catch {
@@ -212,7 +227,8 @@ export default function CameraScreen() {
   // Note: face-state ticks arrive throttled at ~10Hz (see Viewfinder), so
   // requiredFrames doubles as a hold duration: 15 ≈ 1.5s, 10 ≈ 1s.
   const { progress: autoCaptureProgress, isInCooldown: autoCaptureCooldown } = useAutoCapture({
-    enabled: showFaceGuide && faceState.hasFace,
+    // Not while the preview is open: a second auto-capture would replace the photo under review.
+    enabled: showFaceGuide && faceState.hasFace && !showPreview && focused,
     alignmentScore,
     alignmentThreshold,
     requiredFrames: 15,
@@ -238,36 +254,38 @@ export default function CameraScreen() {
     setGhostOpacity(value);
   }, []);
 
-  const handleSave = (caption: string, savedUri: string) => {
-    const doSave = () => {
-      const newPhoto: PhotoEntry = {
-        id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        albumId: albumId,
-        date: today,
-        imageUri: savedUri,
-        caption,
-        capturedAt: new Date().toISOString(),
-        cameraDirection: facing,
-        ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
-      };
-      addPhoto(newPhoto);
-      setShowPreview(false);
-      setCapturedUri('');
-      router.replace({ pathname: '/album/[id]', params: { id: albumId } });
-    };
-
-    if (todayPhoto) {
-      Alert.alert(
-        'Replace Photo',
-        "You've already captured today. Replace it with this one?",
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Replace', style: 'destructive', onPress: doSave },
-        ],
-      );
-    } else {
-      doSave();
+  // Asked before the preview copies the photo, so declining leaves nothing behind.
+  const confirmSave = useCallback(() => new Promise<boolean>((resolve) => {
+    if (!todayPhoto) {
+      resolve(true);
+      return;
     }
+    Alert.alert(
+      'Replace Photo',
+      "You've already captured today. Replace it with this one?",
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  }), [todayPhoto]);
+
+  const handleSave = (caption: string, savedUri: string) => {
+    const newPhoto: PhotoEntry = {
+      id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      albumId: albumId,
+      date: today,
+      imageUri: savedUri,
+      caption,
+      capturedAt: new Date().toISOString(),
+      cameraDirection: facing,
+      ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
+    };
+    addPhoto(newPhoto);
+    setShowPreview(false);
+    setCapturedUri('');
+    router.replace({ pathname: '/album/[id]', params: { id: albumId } });
   };
 
   const handleRetake = () => {
@@ -307,6 +325,7 @@ export default function CameraScreen() {
           onSilence={handleSilence}
           showDebug={showDebugOverlay}
           photoQuality={settings.photoQuality}
+          active={focused && !showPreview}
         />
         {status || hint ? (
           // Over the viewfinder rather than below it, so the preview keeps the space.
@@ -399,6 +418,7 @@ export default function CameraScreen() {
         imageUri={capturedUri}
         onSave={handleSave}
         onRetake={handleRetake}
+        confirmSave={confirmSave}
       />
     </SafeAreaView>
   );

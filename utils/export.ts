@@ -1,7 +1,7 @@
 import { File, Directory, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
-import JSZip from 'jszip';
+import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import type { PhotoEntry } from '@/types';
 
 type ProgressCallback = (current: number, total: number) => void;
@@ -80,8 +80,6 @@ export async function exportToBackup(
     exportDir.create({ intermediates: true, idempotent: true });
   }
 
-  const zip = new JSZip();
-  const imagesFolder = zip.folder('images')!;
   const manifest = {
     version: 1,
     exportDate: new Date().toISOString(),
@@ -89,30 +87,51 @@ export async function exportToBackup(
     photos: [] as { id: string; date: string; caption: string; imageFile: string }[],
   };
 
-  for (let i = 0; i < localPhotos.length; i++) {
-    if (cancel.cancelled) {
-      cleanupExportDir();
-      throw new Error('Cancelled');
-    }
-    const photo = localPhotos[i];
-    const filename = `${photo.date}.jpg`;
-    const file = new File(photo.imageUri);
-    const base64 = await file.base64();
-    imagesFolder.file(filename, base64, { base64: true });
-    manifest.photos.push({
-      id: photo.id,
-      date: photo.date,
-      caption: photo.caption,
-      imageFile: `images/${filename}`,
-    });
-    onProgress(i + 1, localPhotos.length + 1);
-  }
-
-  zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-  const content = await zip.generateAsync({ type: 'base64' });
-
+  // Streams the archive to disk one photo at a time. Building it in memory (base64 +
+  // JSZip) took several times the album's size, which a year of photos (1+ GB) can't
+  // survive. Entries are stored, not deflated: JPEGs don't compress.
   const outputFile = new File(exportDir, `rewind-backup-${Date.now()}.rewind`);
-  outputFile.write(content, { encoding: 'base64' });
+  let writeError: unknown = null;
+  const zip = new Zip((err, chunk) => {
+    if (err) {
+      writeError = err;
+      return;
+    }
+    try {
+      outputFile.write(chunk, { append: true });
+    } catch (e) {
+      writeError = e;
+    }
+  });
+  const addEntry = (name: string, bytes: Uint8Array) => {
+    const entry = new ZipPassThrough(name);
+    zip.add(entry);
+    entry.push(bytes, true);
+    if (writeError) throw writeError;
+  };
+
+  try {
+    outputFile.write(new Uint8Array(0));
+    for (let i = 0; i < localPhotos.length; i++) {
+      if (cancel.cancelled) throw new Error('Cancelled');
+      const photo = localPhotos[i];
+      const filename = `${photo.date}.jpg`;
+      addEntry(`images/${filename}`, await new File(photo.imageUri).bytes());
+      manifest.photos.push({
+        id: photo.id,
+        date: photo.date,
+        caption: photo.caption,
+        imageFile: `images/${filename}`,
+      });
+      onProgress(i + 1, localPhotos.length + 1);
+    }
+    addEntry('manifest.json', strToU8(JSON.stringify(manifest, null, 2)));
+    zip.end();
+    if (writeError) throw writeError;
+  } catch (e) {
+    cleanupExportDir();
+    throw e;
+  }
 
   onProgress(localPhotos.length + 1, localPhotos.length + 1);
   return { filePath: outputFile.uri, exported: localPhotos.length, skipped };
