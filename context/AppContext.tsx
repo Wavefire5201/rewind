@@ -299,6 +299,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // The join date can't be later than a photo the user has: adding older photos (a backup
+  // restore, a camera-roll import, a past day filled in) moves it back to the earliest of
+  // them. The camera's "day N" counts from it. Not while photo saves are refused: those
+  // photos never reach storage.
+  const moveJoinDateBack = useCallback((dates: string[]) => {
+    if (dates.length === 0 || photoSavesBlocked) return;
+    const earliest = dates.reduce((a, b) => (b < a ? b : a));
+    setProfile(prev => {
+      if (prev.joinDate && prev.joinDate <= earliest) return prev;
+      const next = { ...prev, joinDate: earliest };
+      fireAndSave(() => saveProfile(next));
+      return next;
+    });
+  }, []);
+
   const addPhoto = useCallback((entry: PhotoEntry) => {
     // Replaces any photo already on that day; its file goes once the replacement is saved.
     let replaced: PhotoEntry[] = [];
@@ -309,7 +324,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).then(saved => {
       if (saved) deleteUnreferencedFiles(replaced, photosRef.current);
     });
-  }, [commitPhotos]);
+    moveJoinDateBack([entry.date]);
+  }, [commitPhotos, moveJoinDateBack]);
 
   /**
    * Adds photos, skipping any whose album and day already have one. The entries' files
@@ -340,9 +356,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (fresh.length === 0) return prev;
         return [...prev, ...fresh].sort(byDate);
       }).then(() => deleteUnreferencedFiles(dropped, photosRef.current));
+      // Skipped entries don't count. One the re-check above drops still has its day covered
+      // by the photo already there, so every date here ends up in the album.
+      moveJoinDateBack(toAdd.map(e => e.date));
     }
     return { added: toAdd.length, skipped: skipped.length };
-  }, [commitPhotos]);
+  }, [commitPhotos, moveJoinDateBack]);
 
   const updatePhoto = useCallback((id: string, updates: Partial<PhotoEntry>) => {
     commitPhotos(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));

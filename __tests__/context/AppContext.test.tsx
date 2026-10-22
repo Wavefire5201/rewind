@@ -238,6 +238,19 @@ describe('AppContext', () => {
 
     const photoWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/photos');
 
+    it("doesn't move the join date for photos it refused to save", async () => {
+      await AsyncStorage.setItem('@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-05' }));
+      const { unmount } = await renderProvider();
+      jest.mocked(AsyncStorage.setItem).mockClear();
+      await act(async () => {
+        ctx!.addPhotos([photo({ id: 'old', date: '2025-01-01' })]);
+        ctx!.addPhoto(photo({ id: 'older', date: '2024-01-01' }));
+      });
+      expect(ctx!.profile.joinDate).toBe('2026-03-05');
+      expect(jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/profile')).toEqual([]);
+      await unmount();
+    });
+
     it('opens without them, says so, and never writes over them', async () => {
       const { unmount } = await renderProvider();
       expect(ctx!.photos).toEqual([]);
@@ -370,6 +383,96 @@ describe('AppContext', () => {
     expect(r2).toEqual({ added: 1, skipped: 1 });
     await waitFor(() => expect(ctx!.photos).toHaveLength(3));
     await unmount();
+  });
+
+  describe('join date', () => {
+    async function storedJoinDate(): Promise<string | undefined> {
+      return JSON.parse((await AsyncStorage.getItem('@rewind/profile')) ?? '{}').joinDate;
+    }
+
+    async function renderWith(joinDate: string, existing: PhotoEntry[]) {
+      await AsyncStorage.multiSet([
+        ['@rewind/photos', JSON.stringify(existing)],
+        ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate })],
+      ]);
+      return renderProvider();
+    }
+
+    it('moves back to the earliest photo a backup restore adds, so the camera does not say "day 1"', async () => {
+      // A fresh install starts the join date today; the backup holds older photos, in any order.
+      const { unmount } = await renderProvider();
+      expect(ctx!.profile.joinDate > '2025-03-10').toBe(true);
+      await act(async () => {
+        ctx!.addPhotos([
+          photo({ id: 'p2', date: '2025-06-01' }),
+          photo({ id: 'p1', date: '2025-03-10' }),
+          photo({ id: 'p3', date: '2025-09-01' }),
+        ]);
+      });
+      expect(ctx!.profile.joinDate).toBe('2025-03-10');
+      await waitFor(async () => expect(await storedJoinDate()).toBe('2025-03-10'));
+      await unmount();
+    });
+
+    it('counts only the photos addPhotos adds, not the ones it skips', async () => {
+      // A photo from before the join date already on 03-01 (restored before this was fixed):
+      // the skipped copy of it doesn't count, the new 03-05 does.
+      const { unmount } = await renderWith('2026-03-10', [photo({ id: 'old', date: '2026-03-01' })]);
+      await act(async () => {
+        ctx!.addPhotos([photo({ id: 'dupe', date: '2026-03-01' }), photo({ id: 'new', date: '2026-03-05' })]);
+      });
+      expect(ctx!.profile.joinDate).toBe('2026-03-05');
+      await waitFor(async () => expect(await storedJoinDate()).toBe('2026-03-05'));
+      await unmount();
+    });
+
+    it('stays put, without a profile write, when nothing earlier is added', async () => {
+      const { unmount } = await renderWith('2026-03-01', [photo({ id: 'old', date: '2026-03-01' })]);
+      const setItem = jest.mocked(AsyncStorage.setItem);
+      setItem.mockClear();
+      await act(async () => {
+        ctx!.addPhotos([photo({ id: 'later', date: '2026-03-09' })]);
+        ctx!.addPhotos([photo({ id: 'dupe', date: '2026-03-01' })]);
+        ctx!.addPhoto(photo({ id: 'today', date: '2026-03-10' }));
+      });
+      await waitFor(async () => expect(await storedPhotos()).toHaveLength(3));
+      expect(ctx!.profile.joinDate).toBe('2026-03-01');
+      expect(setItem.mock.calls.filter(([key]) => key === '@rewind/profile')).toHaveLength(0);
+      await unmount();
+    });
+
+    it('moves back for a single photo added on an earlier day too', async () => {
+      const { unmount } = await renderWith('2026-03-10', [photo({ id: 'p1', date: '2026-03-10' })]);
+      await act(async () => {
+        ctx!.addPhoto(photo({ id: 'p0', date: '2026-03-02' }));
+      });
+      expect(ctx!.profile.joinDate).toBe('2026-03-02');
+      await waitFor(async () => expect(await storedJoinDate()).toBe('2026-03-02'));
+      await unmount();
+    });
+
+    it('keeps the earlier join date in state when its save fails (log + haptic, no throw)', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const { unmount } = await renderWith('2026-03-10', [photo({ id: 'p1', date: '2026-03-10' })]);
+      const setItem = jest.mocked(AsyncStorage.setItem);
+      const realSetItem = setItem.getMockImplementation()!;
+      setItem.mockImplementation((key, value) =>
+        key === '@rewind/profile' ? Promise.reject(new Error('disk full')) : realSetItem(key, value),
+      );
+      try {
+        await act(async () => {
+          ctx!.addPhotos([photo({ id: 'p0', date: '2026-03-02' })]);
+        });
+        await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Storage write failed:', expect.any(Error)));
+        expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+        expect(ctx!.profile.joinDate).toBe('2026-03-02');
+        expect(ctx!.photos.map((p) => p.id)).toEqual(['p0', 'p1']);
+      } finally {
+        setItem.mockImplementation(realSetItem);
+        errorSpy.mockRestore();
+      }
+      await unmount();
+    });
   });
 
   it('deletePhoto removes state, storage, and the local file (not remote)', async () => {

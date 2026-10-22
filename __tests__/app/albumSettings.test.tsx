@@ -3,16 +3,24 @@ import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import AlbumSettingsRoute from '@/app/album/settings';
 import { FontProvider } from '@/context/FontContext';
-import type { Album } from '@/types';
+import type { Album, PhotoEntry } from '@/types';
 
 const mockUpdateAlbum = jest.fn();
 const mockDeleteAlbum = jest.fn();
+const mockAddPhotos = jest.fn((entries: PhotoEntry[]) => ({ added: entries.length, skipped: 0 }));
+const mockUpdateProfile = jest.fn();
+const mockImportFromBackup = jest.fn();
+type ImportSaveEntry = { uri: string; date: string; caption: string };
+let mockImportModal: { onSave: (entries: ImportSaveEntry[]) => Promise<void> } | null = null;
 const mockDismissAll = jest.fn();
 const mockReplace = jest.fn();
 let mockHasPin = true;
 let mockAlbums: Album[] = [];
 let mockPhotosLoadFailed = false;
+// Called with ImportSheet's props on every render.
 const mockImportSheet = jest.fn();
+type ImportSheetProps = { visible: boolean; onSelect: (source: 'camera-roll' | 'backup') => Promise<void> };
+const sheetProps = () => mockImportSheet.mock.calls.at(-1)?.[0] as ImportSheetProps;
 
 const album = (id: string, overrides: Partial<Album> = {}): Album => ({
   id, name: 'daily', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false, ...overrides,
@@ -21,7 +29,7 @@ const album = (id: string, overrides: Partial<Album> = {}): Album => ({
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: [], settings: { use24hClock: false },
-    addPhotos: jest.fn(), updateProfile: jest.fn(), updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
+    addPhotos: mockAddPhotos, updateProfile: mockUpdateProfile, updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
     photosLoadFailed: mockPhotosLoadFailed,
   }),
 }));
@@ -45,14 +53,18 @@ jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }
 jest.mock('expo-media-library', () => ({}));
 jest.mock('expo-sharing', () => ({}));
 jest.mock('@/utils/export', () => ({}));
-jest.mock('@/utils/import', () => ({}));
+jest.mock('@/utils/import', () => ({
+  importFromBackup: (...args: unknown[]) => mockImportFromBackup(...args),
+  createPhotoEntry: async (uri: string, date: string, caption: string, albumId: string) =>
+    ({ id: `imported-${date}`, albumId, date, imageUri: uri, caption, capturedAt: `${date}T12:00:00.000Z`, cameraDirection: 'front' }),
+}));
 jest.mock('@/utils/notifications', () => ({}));
 jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('@/components/ui/TimePicker', () => () => null);
 jest.mock('@/components/ui/TextInputModal', () => () => null);
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/timelapse/ExportProgress', () => () => null);
-jest.mock('@/components/ImportPhotoModal', () => () => null);
+jest.mock('@/components/ImportPhotoModal', () => (props: typeof mockImportModal) => { mockImportModal = props; return null; });
 jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockImportSheet(props); return null; } }));
 
 const renderSettings = () => render(<FontProvider><AlbumSettingsRoute /></FontProvider>);
@@ -88,7 +100,7 @@ it('deletes an album through the shared confirmation', async () => {
 });
 
 describe('import photos', () => {
-  const sheetVisible = () => (mockImportSheet.mock.calls.at(-1)?.[0] as { visible: boolean }).visible;
+  const sheetVisible = () => sheetProps().visible;
 
   it('opens the import sheet', async () => {
     await renderSettings();
@@ -104,5 +116,43 @@ describe('import photos', () => {
     expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.any(String));
     expect(sheetVisible()).toBe(false);
     alertSpy.mockRestore();
+  });
+});
+
+// The join date moves back in AppContext's addPhotos, so both import paths get it.
+describe('importing older photos', () => {
+  let alertSpy: jest.SpyInstance;
+  beforeEach(() => {
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+  afterEach(() => alertSpy.mockRestore());
+
+  it('hands a camera-roll import to addPhotos and leaves the join date to it', async () => {
+    await renderSettings();
+    await act(async () => {
+      await mockImportModal!.onSave([
+        { uri: 'content://b', date: '2025-06-01', caption: '' },
+        { uri: 'content://a', date: '2025-03-10', caption: 'first' },
+      ]);
+    });
+    expect(mockAddPhotos).toHaveBeenCalledTimes(1);
+    expect(mockAddPhotos.mock.calls[0][0].map((p) => [p.albumId, p.date, p.caption])).toEqual([
+      ['a', '2025-06-01', ''],
+      ['a', '2025-03-10', 'first'],
+    ]);
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Import complete', '2 photos added.');
+  });
+
+  it('hands a backup restore to addPhotos the same way', async () => {
+    const restored = [{ id: 'r1', albumId: 'a', date: '2025-03-10' }] as PhotoEntry[];
+    mockImportFromBackup.mockResolvedValue({ photos: restored, skipped: 0 });
+    await renderSettings();
+    await act(async () => {
+      await sheetProps().onSelect('backup');
+    });
+    expect(mockAddPhotos).toHaveBeenCalledWith(restored);
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Import complete', '1 photo restored from backup.');
   });
 });

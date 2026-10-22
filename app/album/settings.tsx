@@ -47,7 +47,7 @@ function AlbumSettingsScreen() {
   const router = useRouter();
   const canAddPhotos = useCanAddPhotos();
   const { fonts } = useFont();
-  const { profile, albums, photos, settings, addPhotos, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
+  const { albums, photos, settings, addPhotos, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
 
@@ -297,15 +297,9 @@ function AlbumSettingsScreen() {
       }
     }
 
-    // I3/I4: batch add with single save; addPhotos owns dedup (no stale pre-check here)
+    // I3/I4: batch add with single save; addPhotos owns dedup (no stale pre-check here) and
+    // moves the join date back to the earliest photo it adds
     const { added, skipped } = addPhotos(photoEntries);
-
-    // Update joinDate to earliest successfully imported date
-    let earliestDate = profile.joinDate;
-    for (const e of photoEntries) {
-      if (e.date < earliestDate) earliestDate = e.date;
-    }
-    if (earliestDate < profile.joinDate) updateProfile({ joinDate: earliestDate });
 
     setShowImportModal(false);
     setImportPhotos([]);
