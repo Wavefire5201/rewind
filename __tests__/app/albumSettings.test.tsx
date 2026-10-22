@@ -11,6 +11,9 @@ const mockDismissAll = jest.fn();
 const mockReplace = jest.fn();
 let mockHasPin = true;
 let mockAlbums: Album[] = [];
+const mockAddPhotos = jest.fn((added: unknown[]) => ({ added: added.length, skipped: 0 }));
+const mockImportFromBackup = jest.fn();
+let mockImportSheet: { onSelect: (source: string) => void } | null = null;
 
 const album = (id: string, overrides: Partial<Album> = {}): Album => ({
   id, name: 'daily', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false, ...overrides,
@@ -19,7 +22,7 @@ const album = (id: string, overrides: Partial<Album> = {}): Album => ({
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: [], settings: { use24hClock: false },
-    addPhotos: jest.fn(), updateProfile: jest.fn(), updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
+    addPhotos: mockAddPhotos, updateProfile: jest.fn(), updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
   }),
 }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
@@ -42,7 +45,7 @@ jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }
 jest.mock('expo-media-library', () => ({}));
 jest.mock('expo-sharing', () => ({}));
 jest.mock('@/utils/export', () => ({}));
-jest.mock('@/utils/import', () => ({}));
+jest.mock('@/utils/import', () => ({ importFromBackup: (...args: unknown[]) => mockImportFromBackup(...args) }));
 jest.mock('@/utils/notifications', () => ({}));
 jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('@/components/ui/TimePicker', () => () => null);
@@ -50,7 +53,10 @@ jest.mock('@/components/ui/TextInputModal', () => () => null);
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/timelapse/ExportProgress', () => () => null);
 jest.mock('@/components/ImportPhotoModal', () => () => null);
-jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/components/ui/ImportSheet', () => ({
+  __esModule: true,
+  default: (props: { onSelect: (source: string) => void }) => { mockImportSheet = props; return null; },
+}));
 
 const renderSettings = () => render(<FontProvider><AlbumSettingsRoute /></FontProvider>);
 
@@ -81,4 +87,39 @@ it('deletes an album through the shared confirmation', async () => {
   await act(async () => fireEvent.press(screen.getByLabelText('Delete album')));
   expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
   alertSpy.mockRestore();
+});
+
+describe('restoring a backup', () => {
+  const restored = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, date: `2026-03-0${i + 1}` }));
+
+  async function restore(result: { photos: unknown[]; skipped: number; unreadable: number }) {
+    mockImportFromBackup.mockResolvedValueOnce(result);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await renderSettings();
+    await act(async () => mockImportSheet!.onSelect('backup'));
+    const call = alertSpy.mock.calls.at(-1);
+    alertSpy.mockRestore();
+    return call?.slice(0, 2);
+  }
+
+  it("says how many entries couldn't be read", async () => {
+    await expect(restore({ photos: restored(2), skipped: 1, unreadable: 3 })).resolves.toEqual([
+      'Import complete',
+      "2 photos restored. 1 skipped (already exist). 3 couldn't be read.",
+    ]);
+  });
+
+  it("reports a backup none of whose entries could be read, instead of calling it empty", async () => {
+    await expect(restore({ photos: [], skipped: 0, unreadable: 1 })).resolves.toEqual([
+      'Import complete',
+      "0 photos restored. 1 couldn't be read.",
+    ]);
+  });
+
+  it('keeps the short message when every entry was restored', async () => {
+    await expect(restore({ photos: restored(1), skipped: 0, unreadable: 0 })).resolves.toEqual([
+      'Import complete',
+      '1 photo restored from backup.',
+    ]);
+  });
 });

@@ -7,7 +7,7 @@ import { exportToBackup, exportToPhotoAlbum, shareFile } from '@/utils/export';
 import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/utils/import';
 import { getToday } from '@/utils/dates';
 import type { PhotoEntry } from '@/types';
-import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock } from '../helpers/fileSystemMock';
+import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock, MockFile } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 
@@ -168,7 +168,7 @@ describe('importFromBackup', () => {
     return 'file:///cache/backup.rewind';
   }
 
-  it('imports entries, falls back for bad dates, skips missing images', async () => {
+  it('imports entries, falls back for bad dates, counts missing images', async () => {
     await seedBackupZip(
       {
         photos: [
@@ -180,7 +180,7 @@ describe('importFromBackup', () => {
       { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG' }
     );
     const progress: [number, number][] = [];
-    const { photos } = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
+    const { photos, skipped, unreadable } = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
       cancelled: false,
     });
     expect(photos).toHaveLength(2);
@@ -188,8 +188,54 @@ describe('importFromBackup', () => {
     expect(photos[0].caption).toBe('one');
     expect(photos[1].date).toBe(getToday());
     expect(photos.every((p) => p.albumId === 'album-1')).toBe(true);
-    // Progress counts processed entries (the missing image is skipped silently)
-    expect(progress[progress.length - 1]).toEqual([2, 3]);
+    // The missing image is counted, not dropped, and the bar still reaches the total.
+    expect(skipped).toBe(0);
+    expect(unreadable).toBe(1);
+    expect(progress).toEqual([[1, 3], [2, 3], [3, 3]]);
+  });
+
+  it('counts a photo whose write fails and removes what it left behind', async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-03-02', caption: '', imageFile: 'images/b.jpg' },
+          { id: 'p3', date: '2026-03-03', caption: '', imageFile: 'images/c.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG', 'images/c.jpg': 'R0hJ' },
+    );
+    const realWrite = MockFile.prototype.write;
+    const write = jest.spyOn(MockFile.prototype, 'write').mockImplementation(function (this: MockFile, ...args) {
+      if (this.uri.endsWith('_2026-03-02.jpg')) throw new Error('disk full');
+      return realWrite.apply(this, args);
+    });
+    try {
+      const progress: [number, number][] = [];
+      const result = await importFromBackup('album-1', (c, t) => progress.push([c, t]));
+      expect(result.photos.map((p) => p.date)).toEqual(['2026-03-01', '2026-03-03']);
+      expect(result.unreadable).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(progress.at(-1)).toEqual([3, 3]);
+      expect(deletedUris.some((u) => u.endsWith('_2026-03-02.jpg'))).toBe(true);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it('can restore a day whose earlier entry could not be read', async () => {
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: '2026-03-01', caption: 'gone', imageFile: 'images/missing.jpg' },
+          { id: 'p2', date: '2026-03-01', caption: 'here', imageFile: 'images/a.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD' },
+    );
+    const result = await importFromBackup('album-1');
+    expect(result.photos.map((p) => p.caption)).toEqual(['here']);
+    expect(result).toMatchObject({ skipped: 0, unreadable: 1 });
   });
 
   it('streams the backup through a file handle instead of loading it whole', async () => {
@@ -224,7 +270,7 @@ describe('importFromBackup', () => {
   });
 
   it('returns nothing when the picker is cancelled', async () => {
-    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0 });
+    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0, unreadable: 0 });
   });
 
   it('rejects invalid backups', async () => {
@@ -295,13 +341,17 @@ describe('importFromBackup', () => {
     expect(writtenPhotos().length).toBe(0);
   });
 
-  it('skips malformed manifest entries instead of failing the whole import', async () => {
+  it('counts malformed manifest entries instead of failing the whole import', async () => {
     await seedBackupZip(
       { photos: [null, 'x', { id: 'p1', date: '2026-03-01', caption: '', imageFile: 'images/a.jpg' }] },
       { 'images/a.jpg': 'QUJD' },
     );
-    const { photos } = await importFromBackup('album-1');
+    const progress: [number, number][] = [];
+    const { photos, skipped, unreadable } = await importFromBackup('album-1', (c, t) => progress.push([c, t]));
     expect(photos.map((p) => p.date)).toEqual(['2026-03-01']);
+    expect(skipped).toBe(0);
+    expect(unreadable).toBe(2);
+    expect(progress).toEqual([[1, 3], [2, 3], [3, 3]]);
   });
 });
 

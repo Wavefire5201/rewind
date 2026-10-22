@@ -258,7 +258,7 @@ function AlbumSettingsScreen() {
           setImportTotal(total);
         }, importCancelRef.current, existingDates);
         setImporting(false);
-        if (result.photos.length === 0 && result.skipped === 0) {
+        if (result.photos.length === 0 && result.skipped === 0 && result.unreadable === 0) {
           Alert.alert('Import complete', 'No photos found in the backup file.');
           return;
         }
@@ -267,9 +267,10 @@ function AlbumSettingsScreen() {
         const added = batch.added;
         const skipped = batch.skipped + result.skipped;
         haptics.success();
-        const msg = skipped > 0
-          ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`
-          : `${added} photo${added !== 1 ? 's' : ''} restored from backup.`;
+        const parts = [`${added} photo${added !== 1 ? 's' : ''} restored`];
+        if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
+        if (result.unreadable > 0) parts.push(`${result.unreadable} couldn't be read`);
+        const msg = parts.length > 1 ? `${parts.join('. ')}.` : `${parts[0]} from backup.`;
         Alert.alert('Import complete', msg);
       } catch (e: unknown) {
         setImporting(false);
