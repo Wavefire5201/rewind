@@ -6,7 +6,7 @@ import type { FaceMeasure, PhotoEntry } from '@/types';
 let mockPhotos: PhotoEntry[] = [];
 jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ photos: mockPhotos }) }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ albumId: 'a' }), useRouter: () => ({ back: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ albumId: 'a' }), useRouter: () => ({ back: jest.fn(), canGoBack: () => true, replace: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View };
@@ -29,6 +29,9 @@ it('says there is nothing to compare until enough photos are measured', async ()
   mockPhotos = [photo(0, 1)];
   await renderScreen();
   expect(screen.getByText('not enough measured photos to compare yet')).toBeTruthy();
+  // Still a way out, and the same header as every other state.
+  expect(screen.getByLabelText('Go back')).toBeTruthy();
+  expect(screen.getByText('compare')).toBeTruthy();
 });
 
 it('compares the first and last day by default', async () => {

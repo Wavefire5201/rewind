@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { render, screen, fireEvent } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 import { FontProvider } from '@/context/FontContext';
 
@@ -69,6 +70,7 @@ it('shows the lock screen instead of the album while it is locked', async () => 
 it('unlocks the album once the PIN is entered', async () => {
   await renderGate();
   await fireEvent.press(screen.getByLabelText('Unlock album'));
+  expect(Haptics.impactAsync).toHaveBeenCalled();
   await fireEvent.press(screen.getByText('pin ok'));
   expect(mockUnlockAlbum).toHaveBeenCalledWith('a');
 });

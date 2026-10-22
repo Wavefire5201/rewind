@@ -180,6 +180,7 @@ export default function TimePicker({ value, onChange, use24h = false }: TimePick
               selectedIndex={periodIndex}
               onSelect={handlePeriodSelect}
               width={44}
+              formatItem={(p) => String(p).toLowerCase()}
             />
           </>
         )}

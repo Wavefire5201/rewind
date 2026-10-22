@@ -9,6 +9,7 @@ import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
 import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
+import PillButton from '@/components/ui/PillButton';
 
 interface AlbumLockGateProps {
   albumId: string | undefined;
@@ -54,14 +55,7 @@ function LockedAlbum({ albumId }: { albumId: string }) {
       <View style={styles.body}>
         <LockSimple size={48} color={Colors.textTertiary} weight="light" />
         <Text style={[typography.body, { color: Colors.textTertiary }]}>this album is locked</Text>
-        <Pressable
-          style={({ pressed }) => [styles.unlockBtn, pressed && { opacity: 0.85 }]}
-          onPress={() => setShowPinModal(true)}
-          accessibilityLabel="Unlock album"
-          accessibilityRole="button"
-        >
-          <Text style={[typography.body, { color: Colors.bgPage, fontFamily: fonts.medium }]}>unlock</Text>
-        </Pressable>
+        <PillButton label="unlock" size="medium" onPress={() => setShowPinModal(true)} accessibilityLabel="Unlock album" />
       </View>
       <PinModal
         visible={showPinModal}
@@ -107,10 +101,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
-  },
-  unlockBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: Colors.accent,
   },
 });

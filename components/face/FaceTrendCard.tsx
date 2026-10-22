@@ -87,7 +87,7 @@ export default function FaceTrendCard({ photos, trend, waiting, progress, onSele
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.bgCard, padding: Spacing.lg, gap: Spacing.sm },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { fontFamily: Fonts.mono.regular, fontSize: 10, letterSpacing: 2, color: Colors.textSecondary, textTransform: 'uppercase' },
+  label: { fontFamily: Fonts.mono.regular, fontSize: 10, letterSpacing: 2, color: Colors.textSecondary },
   link: { fontFamily: Fonts.mono.regular, fontSize: 12, color: Colors.accent },
   headline: { fontFamily: Fonts.mono.regular, fontSize: 14, color: Colors.textPrimary },
   note: { fontFamily: Fonts.mono.regular, fontSize: 12, color: Colors.textTertiary },

@@ -16,6 +16,8 @@ import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
+import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
+import { confirmDeleteAlbum } from '@/utils/albumDialogs';
 import { getToday } from '@/utils/dates';
 import { requestNotificationPermission, syncAllReminders } from '@/utils/notifications';
 import { pickPhotosFromLibrary, importFromBackup, createPhotoEntry } from '@/utils/import';
@@ -27,6 +29,7 @@ import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import SectionLabel from '@/components/ui/SectionLabel';
+import SettingsRow from '@/components/ui/SettingsRow';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 export default function AlbumSettingsRoute() {
@@ -41,7 +44,7 @@ export default function AlbumSettingsRoute() {
 function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
-  const { fonts, typography } = useFont();
+  const { fonts } = useFont();
   const { profile, albums, photos, settings, addPhotos, updateProfile, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
@@ -109,7 +112,7 @@ function AlbumSettingsScreen() {
     if (newEnabled) {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        Alert.alert('Permission Required', 'Enable notifications in Settings to use reminders.');
+        Alert.alert('Permission required', 'Enable notifications in Settings to use reminders.');
         return;
       }
     }
@@ -153,7 +156,7 @@ function AlbumSettingsScreen() {
       if (skipped > 0) {
         await new Promise<void>(resolve => {
           Alert.alert(
-            'Remote Photos',
+            'Remote photos',
             `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
             [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
           );
@@ -174,14 +177,14 @@ function AlbumSettingsScreen() {
         setExporting(false);
         haptics.success();
         const skippedMsg = result.skipped > 0 ? ` Skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.` : '';
-        Alert.alert('Export Complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
+        Alert.alert('Export complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
       } catch (err: unknown) {
         setExporting(false);
         const message = err instanceof Error ? err.message : 'Unknown error';
         if (message !== 'Cancelled') {
           haptics.error();
           const detail = lastSaved > 0 ? `Saved ${lastSaved} of ${localCount} before failing.\n\n${message}` : message;
-          Alert.alert('Export Failed', detail);
+          Alert.alert('Export failed', detail);
         }
       }
     } else if (format === 'backup') {
@@ -190,7 +193,7 @@ function AlbumSettingsScreen() {
       if (skipped > 0) {
         await new Promise<void>(resolve => {
           Alert.alert(
-            'Remote Photos',
+            'Remote photos',
             `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
             [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
           );
@@ -213,13 +216,13 @@ function AlbumSettingsScreen() {
         await shareFile(result.filePath);
         await cleanupExportDir();
         if (result.skipped > 0) {
-          Alert.alert('Export Complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
+          Alert.alert('Export complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
         }
       } catch (err: unknown) {
         setExporting(false);
         await cleanupExportDir();
         const message = err instanceof Error ? err.message : 'Unknown error';
-        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export Failed', message); }
+        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export failed', message); }
       }
     }
   }
@@ -240,7 +243,7 @@ function AlbumSettingsScreen() {
         setShowImportModal(true);
       } catch (e: unknown) {
         haptics.error();
-        Alert.alert('Import Failed', e instanceof Error ? e.message : 'Unknown error');
+        Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
       }
     } else if (source === 'backup') {
       importCancelRef.current = { cancelled: false };
@@ -256,7 +259,7 @@ function AlbumSettingsScreen() {
         }, importCancelRef.current, existingDates);
         setImporting(false);
         if (result.photos.length === 0 && result.skipped === 0) {
-          Alert.alert('Import Complete', 'No photos found in the backup file.');
+          Alert.alert('Import complete', 'No photos found in the backup file.');
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
@@ -267,13 +270,13 @@ function AlbumSettingsScreen() {
         const msg = skipped > 0
           ? `${added} photo${added !== 1 ? 's' : ''} restored. ${skipped} skipped (already exist).`
           : `${added} photo${added !== 1 ? 's' : ''} restored from backup.`;
-        Alert.alert('Import Complete', msg);
+        Alert.alert('Import complete', msg);
       } catch (e: unknown) {
         setImporting(false);
         const message = e instanceof Error ? e.message : 'Unknown error';
         if (message !== 'Cancelled') {
           haptics.error();
-          Alert.alert('Import Failed', message);
+          Alert.alert('Import failed', message);
         }
       }
     }
@@ -310,7 +313,7 @@ function AlbumSettingsScreen() {
     if (added > 0) parts.push(`${added} photo${added !== 1 ? 's' : ''} added`);
     if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
     if (copyFailed > 0) parts.push(`${copyFailed} failed to copy`);
-    Alert.alert('Import Complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
+    Alert.alert('Import complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
   }
 
   // --- PIN / Lock ---
@@ -319,6 +322,11 @@ function AlbumSettingsScreen() {
   function lockAndLeave() {
     updateAlbum(albumId, { isLocked: true });
     haptics.success();
+    leaveForHome();
+  }
+
+  // Back to the album list, not to an album screen that's now locked or gone.
+  function leaveForHome() {
     if (router.canDismiss()) router.dismissAll();
     else router.replace('/');
   }
@@ -335,26 +343,10 @@ function AlbumSettingsScreen() {
 
   // --- Delete ---
   function handleDelete() {
-    haptics.tap();
-    if (albums.length <= 1) {
-      Alert.alert("Can't Delete", 'You need at least one album.');
-      return;
-    }
-    Alert.alert(
-      'Delete Album?',
-      'This will permanently delete all photos in this album. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Album',
-          style: 'destructive',
-          onPress: () => {
-            deleteAlbum(albumId);
-            router.replace('/');
-          },
-        },
-      ],
-    );
+    confirmDeleteAlbum({ name: albumName }, albums.length, () => {
+      deleteAlbum(albumId);
+      leaveForHome();
+    });
   }
 
   return (
@@ -383,21 +375,20 @@ function AlbumSettingsScreen() {
         {/* ALBUM section */}
         <SectionLabel>album</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<PencilSimple size={20} color={Colors.textSecondary} weight="light" />}
+            label="rename"
+            value={albumName}
+            chevron
             onPress={() => { haptics.tap(); setShowRenameModal(true); }}
             accessibilityLabel="Rename album"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <PencilSimple size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>rename</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>{albumName} ›</Text>
-          </Pressable>
+          />
           <View style={styles.divider} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<LockSimple size={20} color={album.isLocked ? Colors.streak : Colors.textSecondary} weight="light" />}
+            label="lock album"
+            value={album.isLocked ? 'on' : 'off'}
+            highlight={album.isLocked}
             onPress={async () => {
               haptics.tap();
               if (album.isLocked) {
@@ -416,61 +407,33 @@ function AlbumSettingsScreen() {
               }
             }}
             accessibilityLabel={album.isLocked ? 'Unlock album' : 'Lock album'}
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <LockSimple
-                size={20}
-                color={album.isLocked ? Colors.streak : Colors.textSecondary}
-                weight="light"
-              />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>lock album</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: album.isLocked ? Colors.streak : Colors.textTertiary }]}>
-              {album.isLocked ? 'on' : 'off'}
-            </Text>
-          </Pressable>
+          />
         </View>
 
         {/* REMINDERS section */}
         <SectionLabel style={{ marginTop: 24 }}>reminders</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<BellSimple size={20} color={album.reminderEnabled ? Colors.streak : Colors.textSecondary} weight="light" />}
+            label="daily reminder"
+            value={album.reminderEnabled ? 'on' : 'off'}
+            highlight={album.reminderEnabled}
             onPress={handleReminderToggle}
             accessibilityLabel={album.reminderEnabled ? 'Disable daily reminder' : 'Enable daily reminder'}
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <BellSimple
-                size={20}
-                color={album.reminderEnabled ? Colors.streak : Colors.textSecondary}
-                weight="light"
-              />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>daily reminder</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: album.reminderEnabled ? Colors.streak : Colors.textTertiary }]}>
-              {album.reminderEnabled ? 'on' : 'off'}
-            </Text>
-          </Pressable>
+          />
 
           {album.reminderEnabled && (
             <>
               <View style={styles.divider} />
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              <SettingsRow
+                icon={<View style={{ width: 20 }} />}
+                label="reminder time"
+                muted
+                value={formatReminderTime(album.reminderTime)}
+                highlight
                 onPress={() => { haptics.tap(); setShowTimePicker(prev => !prev); }}
                 accessibilityLabel="Change reminder time"
-                accessibilityRole="button"
-              >
-                <View style={styles.rowLeft}>
-                  <View style={{ width: 20 }} />
-                  <Text style={[typography.body, { fontFamily: fonts.regular, color: Colors.textSecondary }]}>reminder time</Text>
-                </View>
-                <Text style={[styles.rowValue, { fontFamily: fonts.regular, color: Colors.streak }]}>
-                  {formatReminderTime(album.reminderTime)}
-                </Text>
-              </Pressable>
+              />
 
               <Animated.View style={[styles.pickerContainer, pickerAnimatedStyle]}>
                 <TimePicker
@@ -486,33 +449,23 @@ function AlbumSettingsScreen() {
         {/* DATA section */}
         <SectionLabel style={{ marginTop: 24 }}>data</SectionLabel>
         <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<Export size={20} color={Colors.textSecondary} weight="light" />}
+            label="export album"
+            chevron
             onPress={() => { haptics.tap(); setShowExportSheet(true); }}
             accessibilityLabel="Export album"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <Export size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>export album</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>›</Text>
-          </Pressable>
+          />
 
           <View style={styles.divider} />
 
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          <SettingsRow
+            icon={<DownloadSimple size={20} color={Colors.textSecondary} weight="light" />}
+            label="import photos"
+            chevron
             onPress={handleImport}
             accessibilityLabel="Import photos"
-            accessibilityRole="button"
-          >
-            <View style={styles.rowLeft}>
-              <DownloadSimple size={20} color={Colors.textSecondary} weight="light" />
-              <Text style={[typography.body, { fontFamily: fonts.regular }]}>import photos</Text>
-            </View>
-            <Text style={[styles.rowValue, { fontFamily: fonts.regular }]}>›</Text>
-          </Pressable>
+          />
         </View>
 
         {/* Delete (only if more than 1 album) */}
@@ -520,17 +473,13 @@ function AlbumSettingsScreen() {
           <>
             <View style={{ marginTop: 24 }} />
             <View style={styles.card}>
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              <SettingsRow
+                icon={<Trash size={20} color={Colors.danger} weight="light" />}
+                label="delete album"
+                danger
                 onPress={handleDelete}
                 accessibilityLabel="Delete album"
-                accessibilityRole="button"
-              >
-                <View style={styles.rowLeft}>
-                  <Trash size={20} color={Colors.danger} weight="light" />
-                  <Text style={[typography.body, { fontFamily: fonts.regular, color: Colors.danger }]}>delete album</Text>
-                </View>
-              </Pressable>
+              />
             </View>
           </>
         )}
@@ -539,11 +488,12 @@ function AlbumSettingsScreen() {
       {/* Modals */}
       <TextInputModal
         visible={showRenameModal}
-        title="Rename Album"
-        message="Enter a new name"
-        placeholder="Album name"
+        title="rename album"
+        message="enter a new name"
+        placeholder="album name"
         defaultValue={albumName}
-        confirmLabel="Rename"
+        confirmLabel="rename"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setShowRenameModal(false)}
       />
@@ -624,23 +574,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     backgroundColor: Colors.bgCard,
     overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rowValue: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 13,
-    color: Colors.textTertiary,
   },
   divider: {
     height: 1,

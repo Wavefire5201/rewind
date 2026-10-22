@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, Pressable, View, Alert, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, Text, Pressable, View, useWindowDimensions } from 'react-native';
 import TextInputModal from '@/components/ui/TextInputModal';
 import PinModal from '@/components/ui/PinModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +18,9 @@ import { useAlbumLock } from '@/hooks/useAlbumLock';
 import { haptics } from '@/utils/haptics';
 import { getImageSource } from '@/utils/imageSource';
 import { faceContentPosition } from '@/utils/faceAlign';
-import { createAlbum } from '@/utils/albums';
+import { createAlbum, ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
+import { plural } from '@/utils/text';
+import { confirmDeleteAlbum } from '@/utils/albumDialogs';
 import type { Album } from '@/types';
 
 const CONTENT_PADDING = 28;
@@ -127,7 +129,7 @@ function RightActions({ onRename, onDelete }: { onRename: () => void; onDelete: 
     <View style={styles.actionsContainer}>
       <Pressable
         style={[styles.actionBtn, styles.actionRename]}
-        onPress={onRename}
+        onPress={() => { haptics.tap(); onRename(); }}
         accessibilityLabel="Rename album"
         accessibilityRole="button"
       >
@@ -219,7 +221,7 @@ function AlbumRow({ album, onUnlockRequest, onRenameRequest, onDeleteRequest }: 
           <View style={styles.rowInfo}>
             <Text style={typography.body} numberOfLines={1}>{album.name}</Text>
             <Text style={[typography.small, { color: Colors.textTertiary }]}>
-              {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : `${totalPhotos} photos`}
+              {locked ? 'locked' : currentStreak > 0 ? `${currentStreak} day streak` : plural(totalPhotos, 'photo')}
             </Text>
           </View>
           <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
@@ -272,19 +274,7 @@ export default function HomeScreen() {
   }
 
   function handleDeleteRequest(album: Album) {
-    if (albums.length <= 1) {
-      haptics.error();
-      Alert.alert('Cannot Delete', 'You must keep at least one album.');
-      return;
-    }
-    Alert.alert(
-      'Delete Album',
-      `Delete "${album.name}" and all its photos? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { haptics.warning(); deleteAlbum(album.id); } },
-      ],
-    );
+    confirmDeleteAlbum(album, albums.length, () => deleteAlbum(album.id));
   }
 
   function handleUnlockRequest(albumId: string) {
@@ -406,19 +396,21 @@ export default function HomeScreen() {
       </ScrollView>
       <TextInputModal
         visible={showNewAlbumModal}
-        title="New Album"
-        message="Enter a name for the album"
-        placeholder="Album name"
-        confirmLabel="Create"
+        title="new album"
+        message="enter a name for the album"
+        placeholder="album name"
+        confirmLabel="create"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmNewAlbum}
         onCancel={() => setShowNewAlbumModal(false)}
       />
       <TextInputModal
         visible={renameTarget !== null}
-        title="Rename Album"
-        placeholder="Album name"
+        title="rename album"
+        placeholder="album name"
         defaultValue={renameTarget?.name ?? ''}
-        confirmLabel="Rename"
+        confirmLabel="rename"
+        maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setRenameTarget(null)}
       />

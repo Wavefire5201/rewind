@@ -16,11 +16,21 @@ interface MonthHeaderProps {
   disableNext?: boolean;
 }
 
+// The arrows are drawn 36 dp; this makes them 44 dp to touch.
+const NAV_SLOP = (44 - Sizes.navButton) / 2;
+
 export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress, disablePrev, disableNext }: MonthHeaderProps) {
   const { typography } = useFont();
   return (
     <View style={styles.row}>
-      <Pressable onPress={() => { haptics.tap(); onTitlePress?.(); }} style={({ pressed }) => [pressed && { opacity: 0.7 }]} disabled={!onTitlePress}>
+      <Pressable
+        onPress={() => { haptics.tap(); onTitlePress?.(); }}
+        style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        disabled={!onTitlePress}
+        accessibilityRole={onTitlePress ? 'button' : 'header'}
+        accessibilityLabel={onTitlePress ? 'Choose month' : undefined}
+        accessibilityValue={onTitlePress ? { text: formatMonthYear(year, month) } : undefined}
+      >
         <Text style={typography.displayTitle}>{formatMonthYear(year, month)}</Text>
       </Pressable>
       <View style={styles.navRow}>
@@ -28,6 +38,10 @@ export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress,
           style={({ pressed }) => [styles.navButton, pressed && !disablePrev && { opacity: 0.7 }]}
           onPress={() => { if (!disablePrev) { haptics.tap(); onPrev(); } }}
           disabled={disablePrev}
+          hitSlop={NAV_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          accessibilityState={{ disabled: !!disablePrev }}
         >
           <CaretLeft size={18} color={disablePrev ? Colors.textTertiary : Colors.textPrimary} weight="regular" />
         </Pressable>
@@ -35,6 +49,10 @@ export default function MonthHeader({ year, month, onPrev, onNext, onTitlePress,
           style={({ pressed }) => [styles.navButton, pressed && !disableNext && { opacity: 0.7 }]}
           onPress={() => { if (!disableNext) { haptics.tap(); onNext(); } }}
           disabled={disableNext}
+          hitSlop={NAV_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          accessibilityState={{ disabled: !!disableNext }}
         >
           <CaretRight size={18} color={disableNext ? Colors.textTertiary : Colors.textPrimary} weight="regular" />
         </Pressable>

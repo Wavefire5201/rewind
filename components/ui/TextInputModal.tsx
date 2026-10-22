@@ -20,6 +20,7 @@ interface TextInputModalProps {
   placeholder?: string;
   defaultValue?: string;
   confirmLabel?: string;
+  maxLength?: number;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }
@@ -30,7 +31,8 @@ export default function TextInputModal({
   message,
   placeholder = '',
   defaultValue = '',
-  confirmLabel = 'Confirm',
+  confirmLabel = 'confirm',
+  maxLength = 100,
   onConfirm,
   onCancel,
 }: TextInputModalProps) {
@@ -45,6 +47,11 @@ export default function TextInputModal({
     }
   }, [visible, defaultValue]);
 
+  function cancel() {
+    haptics.tap();
+    onCancel();
+  }
+
   function handleConfirm() {
     const trimmed = value.trim();
     if (trimmed.length === 0) {
@@ -53,6 +60,7 @@ export default function TextInputModal({
       return;
     }
     setShowEmptyError(false);
+    haptics.tap();
     onConfirm(trimmed);
   }
 
@@ -67,7 +75,7 @@ export default function TextInputModal({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={cancel} accessible={false} />
         <View style={styles.card}>
           <Text style={[styles.title, { fontFamily: fonts.regular }]}>{title}</Text>
           {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
@@ -80,7 +88,7 @@ export default function TextInputModal({
             autoFocus
             returnKeyType="done"
             onSubmitEditing={handleConfirm}
-            maxLength={100}
+            maxLength={maxLength}
             accessibilityLabel={placeholder || title}
           />
           {showEmptyError ? (
@@ -89,11 +97,11 @@ export default function TextInputModal({
           <View style={styles.row}>
             <Pressable
               style={styles.btn}
-              onPress={onCancel}
+              onPress={cancel}
               accessibilityLabel="Cancel"
               accessibilityRole="button"
             >
-              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>Cancel</Text>
+              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>cancel</Text>
             </Pressable>
             <Pressable
               style={styles.btn}
@@ -113,7 +121,7 @@ export default function TextInputModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: Colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -148,7 +156,7 @@ const styles = StyleSheet.create({
   errorHint: {
     fontFamily: Fonts.mono.regular,
     fontSize: 12,
-    color: '#E05A5A',
+    color: Colors.danger,
     marginTop: -8,
   },
   row: {

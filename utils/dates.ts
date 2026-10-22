@@ -20,9 +20,9 @@ export function getGreeting(): string {
 }
 
 export function formatDateLabel(date: string): string {
-  // "MARCH 9, 2026" format
+  // "march 9, 2026": lowercase, like the rest of the app's copy
   const d = new Date(date + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase();
 }
 
 export function getDayNumber(joinDate: string, currentDate?: string): number {
@@ -124,6 +124,6 @@ export function formatMonthYear(year: number, month: number): string {
 
 export function formatTime(iso: string, use24h: boolean = false): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: !use24h });
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: !use24h }).toLowerCase();
 }
 

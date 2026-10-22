@@ -1,4 +1,4 @@
-import { render, act } from '@testing-library/react-native';
+import { render, act, screen } from '@testing-library/react-native';
 import AlbumDetailScreen from '@/app/album/[id]';
 import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
@@ -68,6 +68,13 @@ it('hides the face card and the readout without the face scanner (Expo Go, unbui
   await renderScreen();
   expect(mockCard).not.toHaveBeenCalled();
   expect((mockModal.mock.calls.at(-1)?.[0] as { readout?: unknown }).readout).toBeUndefined();
+});
+
+it('labels a one-photo album "photo", not "photos"', async () => {
+  mockAvailable = false;
+  await renderScreen();
+  expect(screen.getByText('photo')).toBeTruthy();
+  expect(screen.queryByText('photos')).toBeNull();
 });
 
 it('imports one photo onto the tapped empty day, whatever its EXIF date, without replacing anything', async () => {
