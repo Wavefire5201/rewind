@@ -168,7 +168,7 @@ describe('importFromBackup', () => {
     return 'file:///cache/backup.rewind';
   }
 
-  it('imports entries, falls back for bad dates, counts missing images', async () => {
+  it('imports entries and counts bad dates and missing images', async () => {
     await seedBackupZip(
       {
         photos: [
@@ -183,15 +183,43 @@ describe('importFromBackup', () => {
     const { photos, skipped, unreadable } = await importFromBackup('album-1', (c, t) => progress.push([c, t]), {
       cancelled: false,
     });
-    expect(photos).toHaveLength(2);
+    expect(photos).toHaveLength(1);
     expect(photos[0].date).toBe('2026-03-01');
     expect(photos[0].caption).toBe('one');
-    expect(photos[1].date).toBe(getToday());
     expect(photos.every((p) => p.albumId === 'album-1')).toBe(true);
-    // The missing image is counted, not dropped, and the bar still reaches the total.
+    // Neither is dropped silently, and the bar still reaches the total.
     expect(skipped).toBe(0);
-    expect(unreadable).toBe(1);
+    expect(unreadable).toBe(2);
     expect(progress).toEqual([[1, 3], [2, 3], [3, 3]]);
+  });
+
+  it('never puts an entry with an invalid date on today', async () => {
+    // Moved to today, an old photo sat on today's empty day, and every later bad entry was
+    // counted as "already exists".
+    await seedBackupZip(
+      {
+        photos: [
+          { id: 'p1', date: 'not-a-date', caption: '', imageFile: 'images/a.jpg' },
+          { id: 'p2', date: '2026-3-2', caption: '', imageFile: 'images/b.jpg' },
+          { id: 'p3', caption: '', imageFile: 'images/c.jpg' },
+          { id: 'p4', date: 20260304, caption: '', imageFile: 'images/d.jpg' },
+          { id: 'p5', date: '2026-02-30', caption: '', imageFile: 'images/e.jpg' },
+        ],
+      },
+      { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG', 'images/c.jpg': 'R0hJ', 'images/d.jpg': 'SktM', 'images/e.jpg': 'Tk9Q' },
+    );
+    const result = await importFromBackup('album-1');
+    expect(result).toEqual({ photos: [], skipped: 0, unreadable: 5 });
+    expect(writtenPhotos()).toHaveLength(0);
+  });
+
+  it("restores today's photo from the backup when its date is valid", async () => {
+    await seedBackupZip(
+      { photos: [{ id: 'p1', date: getToday(), caption: 'today', imageFile: 'images/a.jpg' }] },
+      { 'images/a.jpg': 'QUJD' },
+    );
+    const { photos } = await importFromBackup('album-1');
+    expect(photos.map((p) => [p.date, p.caption])).toEqual([[getToday(), 'today']]);
   });
 
   it('counts a photo whose write fails and removes what it left behind', async () => {
@@ -385,6 +413,7 @@ describe('pickPhotosFromLibrary', () => {
         { uri: 'file:///a.jpg', exif: { DateTimeOriginal: '2026:03:09 10:00:00' } },
         { uri: 'file:///b.jpg', exif: null },
         { uri: 'file:///c.jpg', exif: { DateTimeOriginal: '0000:00:00 00:00:00' } },
+        { uri: 'file:///d.jpg', exif: { DateTimeOriginal: '2026:02:30 10:00:00' } },
       ],
     });
     const res = await pickPhotosFromLibrary();
@@ -392,6 +421,7 @@ describe('pickPhotosFromLibrary', () => {
       { uri: 'file:///a.jpg', date: '2026-03-09' },
       { uri: 'file:///b.jpg', date: null },
       { uri: 'file:///c.jpg', date: null },
+      { uri: 'file:///d.jpg', date: null },
     ]);
   });
 

@@ -3,7 +3,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
 import type { PhotoEntry } from '@/types';
-import { getToday } from '@/utils/dates';
 import { readZipEntries, readZipEntry, type ByteSource, type ZipEntry } from '@/utils/zipReader';
 
 export async function pickPhotosFromLibrary(
@@ -31,8 +30,12 @@ function exifDate(raw: unknown): string | null {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A real day as YYYY-MM-DD: '2026-02-30' has the shape but isn't one. */
 function isValidDate(s: unknown): s is string {
-  return typeof s === 'string' && DATE_RE.test(s);
+  if (typeof s !== 'string' || !DATE_RE.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d));
+  return day.getUTCFullYear() === y && day.getUTCMonth() === m - 1 && day.getUTCDate() === d;
 }
 
 export async function importFromBackup(
@@ -73,7 +76,7 @@ export interface BackupImport {
   photos: PhotoEntry[];
   /** Entries for a day the album, or an earlier entry in the backup, already has. */
   skipped: number;
-  /** Entries that couldn't be restored: malformed, missing their image, or failing to write. */
+  /** Entries that couldn't be restored: malformed, without a valid date, missing their image, or failing to write. */
   unreadable: number;
 }
 
@@ -144,17 +147,17 @@ function restoreEntry(
   if (!entry || typeof entry !== 'object') return 'unreadable';
   const { date, imageFile, caption } = entry as { date?: unknown; imageFile?: unknown; caption?: unknown };
 
-  // I1: validate each entry's date
-  const entryDate: string = isValidDate(date) ? date : getToday();
+  // No day to put it on. Moved to today, an old photo would take today's place.
+  if (!isValidDate(date)) return 'unreadable';
   // A day the album already has (or an earlier entry here filled): don't write it at all.
-  if (takenDates.has(entryDate)) return 'skipped';
+  if (takenDates.has(date)) return 'skipped';
 
   const imageEntry = typeof imageFile === 'string' ? entries.get(imageFile) : undefined;
   if (!imageEntry) return 'unreadable';
   const imageBytes = readZipEntry(src, imageEntry);
 
   // I1: append the entry index to avoid same-millisecond filename collisions
-  const filename = `rewind_import_${Date.now()}_${index}_${entryDate}.jpg`;
+  const filename = `rewind_import_${Date.now()}_${index}_${date}.jpg`;
   const destFile = new File(Paths.document, filename);
   try {
     destFile.write(imageBytes);
@@ -165,9 +168,9 @@ function restoreEntry(
   }
 
   return {
-    id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${entryDate}`,
+    id: `import_${Date.now()}-${Math.random().toString(36).slice(2, 8)}_${date}`,
     albumId,
-    date: entryDate,
+    date,
     imageUri: destFile.uri,
     caption: typeof caption === 'string' ? caption : '',
     capturedAt: new Date().toISOString(),
