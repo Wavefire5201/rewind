@@ -3,7 +3,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { exportToBackup, exportToPhotoAlbum, shareFile } from '@/utils/export';
+import { exportToBackup, exportToPhotoAlbum, shareFile, MAX_BACKUP_BYTES } from '@/utils/export';
 import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/utils/import';
 import { getToday } from '@/utils/dates';
 import { FACE_SCAN_VERSION, needsFaceScan } from '@/utils/faceScan';
@@ -121,6 +121,53 @@ describe('exportToBackup', () => {
     await expect(
       exportToBackup([makePhoto()], 'Daily', () => {}, { cancelled: true })
     ).rejects.toThrow('Cancelled');
+  });
+
+  describe('size limit', () => {
+    // Without ZIP64 every offset is 32 bits: past 4 GiB they wrapped, and export reported
+    // success for a backup that couldn't be restored. The tests lower the limit.
+    const days = ['2026-03-01', '2026-03-02', '2026-03-03'];
+    const photos = () => days.map((d) => makePhoto({ imageUri: `file:///${d}.jpg`, date: d }));
+    const backups = () => [...fileStore.keys()].filter((k) => k.includes('rewind-backup-'));
+    const bytesWritten = (uri: string) => writeLog.filter((w) => w.uri === uri).reduce((n, w) => n + w.bytes, 0);
+
+    beforeEach(() => {
+      days.forEach((d, i) => fileStore.set(`file:///${d}.jpg`, Buffer.alloc(1000, i).toString('base64')));
+    });
+
+    it('holds the whole archive, manifest and directory included, to the limit', async () => {
+      const { filePath } = await exportToBackup(photos(), 'Daily', () => {}, { cancelled: false });
+      const size = Buffer.from(fileStore.get(filePath)!, 'base64').length;
+      fileStore.delete(filePath);
+
+      // Exactly at the limit is fine; one byte over fails before the manifest is written.
+      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, size)).resolves.toMatchObject({ exported: 3 });
+      writeLog.length = 0;
+      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, size - 1)).rejects.toThrow(
+        'too large for one backup',
+      );
+      expect(backups()).toEqual([]);
+      const failed = [...new Set(writeLog.map((w) => w.uri))].filter((u) => u.includes('rewind-backup-'));
+      expect(failed).toHaveLength(1);
+      expect(bytesWritten(failed[0])).toBeLessThan(size - 1);
+    });
+
+    it('stops before the photo that would cross the limit and removes the partial backup', async () => {
+      const progress: number[] = [];
+      await expect(
+        exportToBackup(photos(), 'Daily', (c) => progress.push(c), { cancelled: false }, 2500),
+      ).rejects.toThrow('This album is too large for one backup file');
+      // Two photos fit, the third would not.
+      expect(progress).toEqual([1, 2]);
+      const [uri] = [...new Set(writeLog.map((w) => w.uri))];
+      expect(bytesWritten(uri)).toBeGreaterThan(2000);
+      expect(bytesWritten(uri)).toBeLessThanOrEqual(2500);
+      expect(backups()).toEqual([]);
+    });
+
+    it('defaults to the 32-bit zip limit', () => {
+      expect(MAX_BACKUP_BYTES).toBe(0xffffffff);
+    });
   });
 });
 

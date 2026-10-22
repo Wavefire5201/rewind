@@ -61,11 +61,27 @@ export async function exportToPhotoAlbum(
   return { exported: localPhotos.length, skipped };
 }
 
+/**
+ * A backup can't pass 4 GiB. fflate's Zip writes no ZIP64, so every size and offset in the
+ * archive is a 32-bit field (past the limit they wrap and the backup can't be restored), and
+ * the reader rejects ZIP64 anyway.
+ */
+export const MAX_BACKUP_BYTES = 0xffffffff;
+const BACKUP_TOO_LARGE = 'This album is too large for one backup file, which can hold up to 4 GB.';
+
+// What fflate's Zip writes around each stored entry's name and data, and after the last one.
+const LOCAL_HEADER = 30;
+const DATA_DESCRIPTOR = 16;
+const DIRECTORY_RECORD = 46;
+const END_OF_DIRECTORY = 22;
+
 export async function exportToBackup(
   photos: PhotoEntry[],
   albumName: string,
   onProgress: ProgressCallback,
-  cancel: CancelToken
+  cancel: CancelToken,
+  /** The archive's size limit (tests lower it). */
+  maxBytes: number = MAX_BACKUP_BYTES,
 ): Promise<{ filePath: string; exported: number; skipped: number }> {
   const localPhotos = photos.filter(p => isLocalFile(p.imageUri));
   const skipped = photos.length - localPhotos.length;
@@ -93,6 +109,9 @@ export async function exportToBackup(
   // survive. Entries are stored, not deflated: JPEGs don't compress.
   const outputFile = new File(exportDir, `rewind-backup-${Date.now()}.rewind`);
   let writeError: unknown = null;
+  let written = 0;
+  // The central directory closing the archive: a record per entry, then its end record.
+  let directoryBytes = END_OF_DIRECTORY;
   const zip = new Zip((err, chunk) => {
     if (err) {
       writeError = err;
@@ -100,11 +119,19 @@ export async function exportToBackup(
     }
     try {
       outputFile.write(chunk, { append: true });
+      written += chunk.length;
     } catch (e) {
       writeError = e;
     }
   });
   const addEntry = (name: string, bytes: Uint8Array) => {
+    const nameLength = strToU8(name).length;
+    directoryBytes += DIRECTORY_RECORD + nameLength;
+    // Stop before an entry that won't fit along with the directory written after it. For the
+    // manifest, the last entry, this sum is the finished archive's exact size.
+    if (written + LOCAL_HEADER + nameLength + bytes.length + DATA_DESCRIPTOR + directoryBytes > maxBytes) {
+      throw new Error(BACKUP_TOO_LARGE);
+    }
     const entry = new ZipPassThrough(name);
     zip.add(entry);
     entry.push(bytes, true);

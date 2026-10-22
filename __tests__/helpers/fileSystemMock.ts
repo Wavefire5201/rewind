@@ -121,7 +121,13 @@ export class MockDirectory {
 
   create(): void {}
 
-  delete(): void {}
+  /** Removes the files under it. */
+  delete(): void {
+    deletedUris.push(this.uri);
+    for (const uri of [...fileStore.keys()]) {
+      if (uri.startsWith(`${this.uri}/`)) fileStore.delete(uri);
+    }
+  }
 
   async copy(): Promise<void> {}
 
