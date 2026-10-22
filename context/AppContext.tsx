@@ -202,6 +202,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const storedSettings = settingsResult.status === 'fulfilled' ? settingsResult.value : getDefaultSettings();
         const storedAlbums = albumsResult.status === 'fulfilled' ? albumsResult.value : null;
 
+        // The profile and settings load whatever the photo count: between onboarding and the
+        // first photo, or after deleting every photo, nothing is in the photos key but these are.
+        if (storedProfile) setProfile(storedProfile);
+        setSettings(storedSettings);
+
         if (storedPhotos.length > 0) {
           // Migrate legacy photos missing albumId
           const needsMigration = storedPhotos.some(p => !p.albumId);
@@ -215,14 +220,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             // over stored photos; the next photo save writes the migration.
             await savePhotos(migratedPhotos).catch((e) => console.error('Photo migration not saved:', e));
           }
-          // Derive joinDate from earliest photo if no stored profile
-          const fallbackProfile: UserProfile = storedProfile ?? {
-            ...newProfile(),
-            joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
-          };
-          if (!storedProfile) await saveProfile(fallbackProfile);
-          setProfile(fallbackProfile);
-          setSettings(storedSettings);
+          // No profile stored: start one, joined on the earliest photo. Not when the profile
+          // failed to read, which would save over the one that's stored.
+          if (profileResult.status === 'fulfilled' && !storedProfile) {
+            const derivedProfile: UserProfile = {
+              ...newProfile(),
+              joinDate: [...storedPhotos].sort(byDate)[0]?.date ?? getToday(),
+            };
+            await saveProfile(derivedProfile);
+            setProfile(derivedProfile);
+          }
         } else if (USE_MOCK_DATA && !photoSavesBlocked) {
           // Seed with mock data on first launch
           setPhotos(MOCK_PHOTOS);

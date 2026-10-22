@@ -65,6 +65,52 @@ beforeEach(async () => {
 });
 
 describe('AppContext', () => {
+  // Between onboarding and the first photo (or after deleting every photo) nothing is in the
+  // photos key, but the profile and settings the user chose are.
+  it('loads the stored profile and settings when no photos are stored', async () => {
+    await AsyncStorage.multiSet([
+      ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-01' })],
+      ['@rewind/settings', JSON.stringify({ mirrorSelfies: false, use24hClock: true })],
+      ['@rewind/albums', JSON.stringify([album()])],
+    ]);
+    const { unmount } = await renderProvider();
+    expect(ctx!.photos).toHaveLength(0);
+    expect(ctx!.profile).toEqual({ name: 'Ada', avatarUri: null, joinDate: '2026-03-01' });
+    expect(ctx!.settings.mirrorSelfies).toBe(false);
+    expect(ctx!.settings.use24hClock).toBe(true);
+
+    // A change saves on top of what's stored, not on top of the defaults.
+    await act(async () => {
+      ctx!.updateSettings({ alignFaces: false });
+    });
+    await waitFor(async () => {
+      const saved = JSON.parse((await AsyncStorage.getItem('@rewind/settings')) ?? '{}');
+      expect(saved).toMatchObject({ mirrorSelfies: false, use24hClock: true, alignFaces: false });
+    });
+    await unmount();
+  });
+
+  it("doesn't start a new profile over one that failed to read", async () => {
+    await AsyncStorage.multiSet([
+      ['@rewind/photos', JSON.stringify([photo({ id: 'p1', date: '2026-03-01' })])],
+      ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-02-01' })],
+    ]);
+    const getItem = jest.mocked(AsyncStorage.getItem);
+    const realGetItem = getItem.getMockImplementation()!;
+    getItem.mockImplementation((key, ...rest) =>
+      key === '@rewind/profile' ? Promise.reject(new Error('read failed')) : realGetItem(key, ...rest),
+    );
+    try {
+      const { unmount } = await renderProvider();
+      expect(ctx!.photos).toHaveLength(1);
+      expect(jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/profile')).toEqual([]);
+      await unmount();
+    } finally {
+      getItem.mockImplementation(realGetItem);
+    }
+    expect(JSON.parse((await AsyncStorage.getItem('@rewind/profile'))!).name).toBe('Ada');
+  });
+
   it('loads persisted photos/profile/settings/albums on mount', async () => {
     await AsyncStorage.multiSet([
       ['@rewind/photos', JSON.stringify([photo({ id: 'p1' })])],
