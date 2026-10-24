@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
-  Easing, ReduceMotion, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+  Easing, ReduceMotion, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NoticeLayer from '@/components/ui/overlay/NoticeLayer';
 import { markSheetOpen, useOpenSheetCount } from '@/components/ui/overlay/layers';
@@ -21,9 +22,9 @@ export interface BottomSheetProps {
   /** Drag only from the handle at the top, for sheets whose content scrolls vertically. */
   dragFromHandleOnly?: boolean;
   /**
-   * Render in the screen instead of a Modal. A Modal is its own Android window and the keyboard
-   * never reports to it, so a sheet with a text field must be inline for KeyboardAvoidingView to
-   * work. Place it as the last child of the screen's root view; notices show from the app root.
+   * Render in the screen instead of a Modal, rising above the keyboard with a spacer. The sheets
+   * with a text field use it. Place it as the last child of the screen's root view; notices show
+   * from the app root.
    */
   inline?: boolean;
   children: React.ReactNode;
@@ -186,8 +187,9 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
  * bottom inset, which the sheet's padding already covers.
  */
 function KeyboardSpacer({ bottomInset }: { bottomInset: number }) {
-  const keyboard = useAnimatedKeyboard();
-  const style = useAnimatedStyle(() => ({ height: Math.max(0, keyboard.height.value - bottomInset) }));
+  // keyboard-controller's height runs from 0 to minus the keyboard's height.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const style = useAnimatedStyle(() => ({ height: Math.max(0, -keyboard.height.value - bottomInset) }));
   return <Animated.View testID="keyboard-spacer" style={style} />;
 }
 

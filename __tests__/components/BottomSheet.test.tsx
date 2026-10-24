@@ -204,8 +204,7 @@ it('with dragFromHandleOnly, only the handle drags, so scrolling content keeps i
 });
 
 describe('inline (in the screen, not a Modal)', () => {
-  // A Modal is its own Android window: the keyboard never reports to it, so sheets with a text
-  // field render in the screen, where KeyboardAvoidingView works.
+  // The sheets with a text field render in the screen and rise with the keyboard.
   it('renders in place, not in a Modal', async () => {
     await renderOpen({ inline: true });
     expect(screen.queryByTestId('bottom-sheet-modal')).toBeNull();
@@ -213,12 +212,16 @@ describe('inline (in the screen, not a Modal)', () => {
   });
 
   it('makes room for the keyboard, following it as it opens', async () => {
-    const { useAnimatedKeyboard } = jest.requireMock('react-native-reanimated') as { useAnimatedKeyboard: jest.Mock };
-    useAnimatedKeyboard.mockReturnValue({ height: { value: 320 }, state: { value: 2 } });
-    await renderOpen({ inline: true });
-    // Less the bottom inset (20 here), which the sheet's own padding already covers.
-    expect(StyleSheet.flatten(screen.getByTestId('keyboard-spacer').props.style).height).toBe(300);
-    useAnimatedKeyboard.mockReturnValue({ height: { value: 0 }, state: { value: 4 } });
+    // keyboard-controller's height runs from 0 to minus the keyboard's height.
+    const keyboard = jest.requireMock('react-native-keyboard-controller') as { useReanimatedKeyboardAnimation: jest.Mock };
+    keyboard.useReanimatedKeyboardAnimation.mockReturnValue({ height: { value: -320 }, progress: { value: 1 } });
+    try {
+      await renderOpen({ inline: true });
+      // Less the bottom inset (20 here), which the sheet's own padding already covers.
+      expect(StyleSheet.flatten(screen.getByTestId('keyboard-spacer').props.style).height).toBe(300);
+    } finally {
+      keyboard.useReanimatedKeyboardAnimation.mockReturnValue({ height: { value: 0 }, progress: { value: 0 } });
+    }
   });
 
   it('a sheet in a Modal has no keyboard spacer', async () => {
