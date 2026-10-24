@@ -2,13 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
-  Modal,
   Pressable,
   FlatList,
   StyleSheet,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'phosphor-react-native';
+import BottomSheet from '@/components/ui/BottomSheet';
 import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
@@ -48,7 +47,6 @@ export default function DateRangeSheet({
   onClose,
 }: DateRangeSheetProps) {
   const { fonts } = useFont();
-  const insets = useSafeAreaInsets();
   const [selStart, setSelStart] = useState(startDate);
   const [selEnd, setSelEnd] = useState(endDate);
   const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
@@ -117,129 +115,111 @@ export default function DateRangeSheet({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>date range</Text>
-          <Pressable
-            onPress={dismiss}
-            hitSlop={12}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <X size={20} color={Colors.textSecondary} weight="light" />
-          </Pressable>
-        </View>
-
-        {/* Date field row */}
-        <View style={styles.fieldRow}>
-          <Pressable
-            style={({ pressed }) => [styles.dateField, activeField === 'start' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
-            onPress={handleStartFieldTap}
-            accessibilityRole="button"
-            accessibilityLabel="Start date"
-            accessibilityValue={{ text: formatLongDate(selStart) }}
-            accessibilityState={{ expanded: activeField === 'start' }}
-          >
-            <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
-              {formatMMDDYY(selStart)}
-            </Text>
-          </Pressable>
-
-          <Text style={[styles.toText, { fontFamily: fonts.regular }]}>to</Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
-            onPress={handleEndFieldTap}
-            accessibilityRole="button"
-            accessibilityLabel="End date"
-            accessibilityValue={{ text: formatLongDate(selEnd) }}
-            accessibilityState={{ expanded: activeField === 'end' }}
-          >
-            <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
-              {formatMMDDYY(selEnd)}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Date list: a FlatList, since three years of photos is ~1000 rows */}
-        {activeField !== null && (
-          <FlatList
-            key={activeField}
-            data={sortedDates}
-            keyExtractor={(date) => date}
-            extraData={[selStart, selEnd, activeField]}
-            getItemLayout={(_, index) => ({ length: DATE_ROW_HEIGHT, offset: DATE_ROW_HEIGHT * index, index })}
-            initialScrollIndex={Math.max(0, sortedDates.indexOf(activeField === 'start' ? selStart : selEnd))}
-            initialNumToRender={8}
-            windowSize={5}
-            style={styles.dateList}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item: date }) => {
-              const isSelected =
-                (activeField === 'start' && date === selStart) ||
-                (activeField === 'end' && date === selEnd);
-              return (
-                <Pressable
-                  style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: Pressed.text }]}
-                  onPress={() => handleDateSelect(date)}
-                  accessibilityRole="button"
-                  accessibilityLabel={formatLongDate(date)}
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected, { fontFamily: fonts.regular }]}>
-                    {formatMMDDYY(date)}
-                  </Text>
-                </Pressable>
-              );
-            }}
-          />
-        )}
-
-        {/* Footer buttons */}
-        <View style={styles.footer}>
-          <PillButton
-            label="reset to all"
-            variant="outlined"
-            size="medium"
-            onPress={handleReset}
-            haptic={false}
-            style={styles.footerButton}
-            accessibilityLabel="Show all dates"
-          />
-          <PillButton
-            label="apply"
-            size="medium"
-            onPress={handleApply}
-            haptic={false}
-            style={styles.footerButton}
-            accessibilityLabel="Apply date range"
-          />
-        </View>
+    <BottomSheet visible={visible} onClose={onClose} dragFromHandleOnly>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.title, { fontFamily: fonts.medium }]}>date range</Text>
+        <Pressable
+          onPress={dismiss}
+          hitSlop={12}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <X size={20} color={Colors.textSecondary} weight="light" />
+        </Pressable>
       </View>
-    </Modal>
+
+      {/* Date field row */}
+      <View style={styles.fieldRow}>
+        <Pressable
+          style={({ pressed }) => [styles.dateField, activeField === 'start' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
+          onPress={handleStartFieldTap}
+          accessibilityRole="button"
+          accessibilityLabel="Start date"
+          accessibilityValue={{ text: formatLongDate(selStart) }}
+          accessibilityState={{ expanded: activeField === 'start' }}
+        >
+          <Text style={[styles.dateFieldText, activeField === 'start' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
+            {formatMMDDYY(selStart)}
+          </Text>
+        </Pressable>
+
+        <Text style={[styles.toText, { fontFamily: fonts.regular }]}>to</Text>
+
+        <Pressable
+          style={({ pressed }) => [styles.dateField, activeField === 'end' && styles.dateFieldActive, pressed && { opacity: 0.7 }]}
+          onPress={handleEndFieldTap}
+          accessibilityRole="button"
+          accessibilityLabel="End date"
+          accessibilityValue={{ text: formatLongDate(selEnd) }}
+          accessibilityState={{ expanded: activeField === 'end' }}
+        >
+          <Text style={[styles.dateFieldText, activeField === 'end' && styles.dateFieldTextActive, { fontFamily: fonts.regular }]}>
+            {formatMMDDYY(selEnd)}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Date list: a FlatList, since three years of photos is ~1000 rows */}
+      {activeField !== null && (
+        <FlatList
+          key={activeField}
+          data={sortedDates}
+          keyExtractor={(date) => date}
+          extraData={[selStart, selEnd, activeField]}
+          getItemLayout={(_, index) => ({ length: DATE_ROW_HEIGHT, offset: DATE_ROW_HEIGHT * index, index })}
+          initialScrollIndex={Math.max(0, sortedDates.indexOf(activeField === 'start' ? selStart : selEnd))}
+          initialNumToRender={8}
+          windowSize={5}
+          style={styles.dateList}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item: date }) => {
+            const isSelected =
+              (activeField === 'start' && date === selStart) ||
+              (activeField === 'end' && date === selEnd);
+            return (
+              <Pressable
+                style={({ pressed }) => [styles.dateListItem, isSelected && styles.dateListItemSelected, pressed && { opacity: Pressed.text }]}
+                onPress={() => handleDateSelect(date)}
+                accessibilityRole="button"
+                accessibilityLabel={formatLongDate(date)}
+                accessibilityState={{ selected: isSelected }}
+              >
+                <Text style={[styles.dateListText, isSelected && styles.dateListTextSelected, { fontFamily: fonts.regular }]}>
+                  {formatMMDDYY(date)}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+      )}
+
+      {/* Footer buttons */}
+      <View style={styles.footer}>
+        <PillButton
+          label="reset to all"
+          variant="outlined"
+          size="medium"
+          onPress={handleReset}
+          haptic={false}
+          style={styles.footerButton}
+          accessibilityLabel="Show all dates"
+        />
+        <PillButton
+          label="apply"
+          size="medium"
+          onPress={handleApply}
+          haptic={false}
+          style={styles.footerButton}
+          accessibilityLabel="Apply date range"
+        />
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: Colors.scrim,
-  },
-  sheet: {
-    backgroundColor: Colors.bgCard,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    maxHeight: '70%',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

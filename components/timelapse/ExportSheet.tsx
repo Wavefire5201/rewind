@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Modal, Pressable, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Images, FilmStrip, FolderOpen, DownloadSimple, X } from 'phosphor-react-native';
+import BottomSheet from '@/components/ui/BottomSheet';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
@@ -54,7 +54,6 @@ const OPTIONS: Option[] = [
 
 export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetProps) {
   const { fonts } = useFont();
-  const insets = useSafeAreaInsets();
 
   function handlePress(option: Option) {
     if (option.comingSoon) {
@@ -73,59 +72,42 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>export</Text>
-          <Pressable
-            onPress={dismiss}
-            hitSlop={12}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <X size={20} color={Colors.textSecondary} weight="light" />
-          </Pressable>
-        </View>
-
-        {OPTIONS.map((option) => (
-          <Pressable
-            key={option.format}
-            style={({ pressed }) => [styles.row, option.comingSoon && styles.rowDisabled, pressed && { opacity: 0.7 }]}
-            onPress={() => handlePress(option)}
-            accessibilityRole="button"
-            accessibilityLabel={option.comingSoon ? `${option.label}, coming soon` : option.label}
-          >
-            <View style={styles.iconContainer}>{option.icon}</View>
-            <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, option.comingSoon && styles.rowLabelDisabled, { fontFamily: fonts.regular }]}>
-                {option.label}
-              </Text>
-              <Text style={[styles.rowDescription, { fontFamily: fonts.regular }]}>{option.description}</Text>
-            </View>
-          </Pressable>
-        ))}
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { fontFamily: fonts.medium }]}>export</Text>
+        <Pressable
+          onPress={dismiss}
+          hitSlop={12}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <X size={20} color={Colors.textSecondary} weight="light" />
+        </Pressable>
       </View>
-    </Modal>
+
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option.format}
+          style={({ pressed }) => [styles.row, option.comingSoon && styles.rowDisabled, pressed && { opacity: 0.7 }]}
+          onPress={() => handlePress(option)}
+          accessibilityRole="button"
+          accessibilityLabel={option.comingSoon ? `${option.label}, coming soon` : option.label}
+        >
+          <View style={styles.iconContainer}>{option.icon}</View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, option.comingSoon && styles.rowLabelDisabled, { fontFamily: fonts.regular }]}>
+              {option.label}
+            </Text>
+            <Text style={[styles.rowDescription, { fontFamily: fonts.regular }]}>{option.description}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: Colors.scrim,
-  },
-  sheet: {
-    backgroundColor: Colors.bgCard,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

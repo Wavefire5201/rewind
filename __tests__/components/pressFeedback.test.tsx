@@ -39,9 +39,18 @@ it.each([
   const onClose = jest.fn();
   await inFonts(make(onClose));
   await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Close' })));
-  await act(async () => fireEvent.press(screen.getByTestId('sheet-backdrop')));
+  // The scrim is for sighted taps; screen readers ignore everything beside the modal sheet.
+  await act(async () => fireEvent.press(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true })));
   expect(onClose).toHaveBeenCalledTimes(2);
   expect(Haptics.impactAsync).toHaveBeenCalledTimes(2);
+});
+
+it('TextInputModal taps once when closed by its backdrop', async () => {
+  const onCancel = jest.fn();
+  await inFonts(<TextInputModal visible title="rename album" onConfirm={jest.fn()} onCancel={onCancel} />);
+  await act(async () => fireEvent.press(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true })));
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
 });
 
 it('TextInputModal taps on cancel', async () => {

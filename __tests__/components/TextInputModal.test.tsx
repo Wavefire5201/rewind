@@ -23,3 +23,11 @@ it('limits the input to the given length', async () => {
   await renderModal({ placeholder: 'album name', maxLength: 50 });
   expect(screen.getByLabelText('album name').props.maxLength).toBe(50);
 });
+
+it('confirms the trimmed text from its primary button', async () => {
+  const onConfirm = jest.fn();
+  await renderModal({ placeholder: 'album name', confirmLabel: 'rename', onConfirm });
+  await act(async () => fireEvent.changeText(screen.getByLabelText('album name'), '  trip  '));
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: 'rename' })));
+  expect(onConfirm).toHaveBeenCalledWith('trip');
+});

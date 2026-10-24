@@ -18,6 +18,8 @@ export interface BottomSheetProps {
   dismissible?: boolean;
   /** After the exit animation, when the sheet has left the screen. */
   onClosed?: () => void;
+  /** Drag only from the handle at the top, for sheets whose content scrolls vertically. */
+  dragFromHandleOnly?: boolean;
   children: React.ReactNode;
   testID?: string;
 }
@@ -34,7 +36,7 @@ const CLOSE_DRAG_VELOCITY = 800;
  * close it. With Reduce Motion on it fades instead of sliding. Notices raised while it's open
  * show above it.
  */
-export default function BottomSheet({ visible, onClose, dismissible = true, onClosed, children, testID }: BottomSheetProps) {
+export default function BottomSheet({ visible, onClose, dismissible = true, onClosed, dragFromHandleOnly = false, children, testID }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -93,6 +95,23 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     : { transform: [{ translateY: (1 - progress.value) * sheetHeight.value + dragY.value }] }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: scrim.value }));
 
+  const handle = (
+    <View testID="sheet-handle" style={styles.handle}>
+      <View style={styles.grabBar} />
+    </View>
+  );
+  const sheet = (
+    <Animated.View
+      testID="bottom-sheet"
+      accessibilityViewIsModal
+      onLayout={(e) => { sheetHeight.value = e.nativeEvent.layout.height; }}
+      style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, sheetStyle]}
+    >
+      {dragFromHandleOnly ? <GestureDetector gesture={pan}>{handle}</GestureDetector> : handle}
+      <View testID={testID}>{children}</View>
+    </Animated.View>
+  );
+
   function handleScrimPress() {
     if (!dismissible) return;
     haptics.tap();
@@ -113,17 +132,7 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
         <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={handleScrimPress} testID="sheet-backdrop" accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={pan}>
-          <Animated.View
-            testID="bottom-sheet"
-            accessibilityViewIsModal
-            onLayout={(e) => { sheetHeight.value = e.nativeEvent.layout.height; }}
-            style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, sheetStyle]}
-          >
-            <View style={styles.grabBar} />
-            <View testID={testID}>{children}</View>
-          </Animated.View>
-        </GestureDetector>
+        {dragFromHandleOnly ? sheet : <GestureDetector gesture={pan}>{sheet}</GestureDetector>}
         <NoticeLayer />
       </GestureHandlerRootView>
     </Modal>
@@ -140,14 +149,18 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: Colors.bgCard,
-    paddingTop: 12,
     paddingHorizontal: 20,
   },
+  // Full width across the top, so it's easy to grab.
+  handle: {
+    alignItems: 'center',
+    marginHorizontal: -20,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
   grabBar: {
-    alignSelf: 'center',
     width: 34,
     height: 3,
-    marginBottom: 14,
     backgroundColor: Colors.borderPrimary,
   },
 });

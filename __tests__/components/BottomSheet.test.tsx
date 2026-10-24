@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import { FontProvider } from '@/context/FontContext';
 import BottomSheet from '@/components/ui/BottomSheet';
@@ -136,4 +136,13 @@ it('with Reduce Motion it fades instead of sliding', async () => {
   await renderOpen();
   expect(sheetStyle().transform).toEqual([{ translateY: 0 }]);
   expect(sheetStyle().opacity).toBe(1);
+});
+
+it('with dragFromHandleOnly, only the handle drags, so scrolling content keeps its scroll', async () => {
+  const onClose = jest.fn();
+  await renderOpen({ onClose, dragFromHandleOnly: true });
+  expect(within(screen.getByTestId('sheet-handle')).queryByText('sheet body')).toBeNull();
+  await layOut(300);
+  await drag(200);
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

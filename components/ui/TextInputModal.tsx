@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { Colors, Fonts } from '@/constants/theme';
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import BottomSheet from '@/components/ui/BottomSheet';
+import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 
@@ -25,6 +17,7 @@ interface TextInputModalProps {
   onCancel: () => void;
 }
 
+/** A one-field question (rename, new album) as a bottom sheet that rises with the keyboard. */
 export default function TextInputModal({
   visible,
   title,
@@ -65,84 +58,66 @@ export default function TextInputModal({
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-    >
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <Pressable style={StyleSheet.absoluteFill} onPress={cancel} accessible={false} />
-        <View style={styles.card}>
-          <Text style={[styles.title, { fontFamily: fonts.regular }]}>{title}</Text>
-          {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
-          <TextInput
-            style={[styles.input, { fontFamily: fonts.regular }]}
-            value={value}
-            onChangeText={(v) => { setValue(v); if (showEmptyError) setShowEmptyError(false); }}
-            placeholder={placeholder}
-            placeholderTextColor={Colors.textTertiary}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleConfirm}
-            maxLength={maxLength}
-            accessibilityLabel={placeholder || title}
-          />
-          {showEmptyError ? (
-            <Text style={[styles.errorHint, { fontFamily: fonts.regular }]}>{"name can't be empty"}</Text>
-          ) : null}
-          <View style={styles.row}>
-            <Pressable
-              style={styles.btn}
-              onPress={cancel}
-              accessibilityLabel="Cancel"
-              accessibilityRole="button"
-            >
-              <Text style={[styles.cancelLabel, { fontFamily: fonts.regular }]}>cancel</Text>
-            </Pressable>
-            <Pressable
-              style={styles.btn}
-              onPress={handleConfirm}
-              accessibilityLabel={confirmLabel}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.confirmLabel, { fontFamily: fonts.regular }]}>{confirmLabel}</Text>
-            </Pressable>
-          </View>
+    // Scrim, drag and back cancel; the sheet's scrim tap already plays the tap.
+    <BottomSheet visible={visible} onClose={onCancel}>
+      {/* Pads itself by the keyboard's height, so the field and buttons stay above it. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.body}>
+        <Text style={[styles.title, { fontFamily: fonts.medium }]}>{title}</Text>
+        {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
+        <TextInput
+          style={[styles.input, { fontFamily: fonts.regular }]}
+          value={value}
+          onChangeText={(v) => { setValue(v); if (showEmptyError) setShowEmptyError(false); }}
+          placeholder={placeholder}
+          placeholderTextColor={Colors.textTertiary}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleConfirm}
+          maxLength={maxLength}
+          accessibilityLabel={placeholder || title}
+        />
+        {showEmptyError ? (
+          <Text style={[styles.errorHint, { fontFamily: fonts.regular }]}>{"name can't be empty"}</Text>
+        ) : null}
+        <View style={styles.actions}>
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.primary, pressed && { opacity: Pressed.filled }]}
+            onPress={handleConfirm}
+            accessibilityLabel={confirmLabel}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.primaryText, { fontFamily: fonts.medium }]}>{confirmLabel}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.cancel, pressed && { opacity: Pressed.text }]}
+            onPress={cancel}
+            accessibilityLabel="Cancel"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>cancel</Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: Colors.scrim,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    width: 300,
-    backgroundColor: Colors.bgCard,
-    padding: 24,
-    gap: 16,
+  body: {
+    paddingTop: 4,
   },
   title: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 16,
-    lineHeight: 22,
+    fontFamily: Fonts.mono.medium,
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.textPrimary,
   },
   message: {
     fontFamily: Fonts.mono.regular,
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 18,
     color: Colors.textSecondary,
-    marginTop: -8,
+    marginTop: 8,
   },
   input: {
     fontFamily: Fonts.mono.regular,
@@ -152,33 +127,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderPrimary,
     paddingVertical: 8,
+    marginTop: 16,
   },
   errorHint: {
     fontFamily: Fonts.mono.regular,
     fontSize: 12,
     color: Colors.danger,
-    marginTop: -8,
+    marginTop: 8,
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 16,
-    marginTop: 4,
+  actions: {
+    gap: 8,
+    marginTop: 20,
   },
-  btn: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+  button: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
-  cancelLabel: {
+  primary: {
+    backgroundColor: Colors.accent,
+  },
+  primaryText: {
+    fontFamily: Fonts.mono.medium,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: Colors.bgPage,
+  },
+  cancel: {
+    borderWidth: 1,
+    borderColor: Colors.borderPrimary,
+  },
+  cancelText: {
     fontFamily: Fonts.mono.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Colors.textSecondary,
-  },
-  confirmLabel: {
-    fontFamily: Fonts.mono.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Colors.accent,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: Colors.textPrimary,
   },
 });

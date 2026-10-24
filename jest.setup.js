@@ -17,6 +17,10 @@ jest.mock('react-native-reanimated', () => require('./__tests__/helpers/reanimat
 // stand-in renders children and lets tests drive gesture callbacks (see the helper).
 jest.mock('react-native-gesture-handler', () => require('./__tests__/helpers/gestureHandlerMock').gestureHandlerMock);
 
+// react-native-safe-area-context — its own Jest mock (zero insets, no provider needed): every
+// bottom sheet pads by the bottom inset.
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+
 // expo-haptics — silent stubs; assertions go through these fns
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => {}),

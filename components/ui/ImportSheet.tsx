@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Modal, Pressable, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ImageSquare, FileArrowUp, X } from 'phosphor-react-native';
+import BottomSheet from '@/components/ui/BottomSheet';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
@@ -38,7 +38,6 @@ const OPTIONS: Option[] = [
 
 export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetProps) {
   const { fonts } = useFont();
-  const insets = useSafeAreaInsets();
 
   function handlePress(option: Option) {
     haptics.tap();
@@ -52,59 +51,42 @@ export default function ImportSheet({ visible, onSelect, onClose }: ImportSheetP
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={dismiss} testID="sheet-backdrop" accessible={false} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { fontFamily: fonts.medium }]}>import</Text>
-          <Pressable
-            onPress={dismiss}
-            hitSlop={12}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <X size={20} color={Colors.textSecondary} weight="light" />
-          </Pressable>
-        </View>
-
-        {OPTIONS.map((option) => (
-          <Pressable
-            key={option.source}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-            onPress={() => handlePress(option)}
-            accessibilityLabel={option.label}
-            accessibilityRole="button"
-          >
-            <View style={styles.iconContainer}>{option.icon}</View>
-            <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { fontFamily: fonts.regular }]}>
-                {option.label}
-              </Text>
-              <Text style={[styles.rowDescription, { fontFamily: fonts.regular }]}>{option.description}</Text>
-            </View>
-          </Pressable>
-        ))}
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { fontFamily: fonts.medium }]}>import</Text>
+        <Pressable
+          onPress={dismiss}
+          hitSlop={12}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <X size={20} color={Colors.textSecondary} weight="light" />
+        </Pressable>
       </View>
-    </Modal>
+
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option.source}
+          style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+          onPress={() => handlePress(option)}
+          accessibilityLabel={option.label}
+          accessibilityRole="button"
+        >
+          <View style={styles.iconContainer}>{option.icon}</View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { fontFamily: fonts.regular }]}>
+              {option.label}
+            </Text>
+            <Text style={[styles.rowDescription, { fontFamily: fonts.regular }]}>{option.description}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: Colors.scrim,
-  },
-  sheet: {
-    backgroundColor: Colors.bgCard,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
