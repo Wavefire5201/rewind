@@ -20,7 +20,8 @@ interface NodeDb {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string) => NodeDb };
 
-/** Every runAsync/execAsync statement (trimmed), and how many transactions were started. */
+/** Every runAsync/execAsync statement and prepared-statement execution (trimmed), and how many
+ *  transactions were started. */
 export const sqliteLog: { statements: string[]; transactions: number } = { statements: [], transactions: 0 };
 
 const databases = new Map<string, NodeDb>();
@@ -50,7 +51,13 @@ export interface MockDb {
   getAllAsync<T = Row>(sql: string, ...params: unknown[]): Promise<T[]>;
   getFirstAsync<T = Row>(sql: string, ...params: unknown[]): Promise<T | null>;
   withTransactionAsync(fn: () => Promise<void>): Promise<void>;
+  prepareAsync(sql: string): Promise<MockStatement>;
   closeAsync(): Promise<void>;
+}
+
+export interface MockStatement {
+  executeAsync(...params: unknown[]): Promise<{ changes: number; lastInsertRowId: number }>;
+  finalizeAsync(): Promise<void>;
 }
 
 function wrap(name: string, db: NodeDb): MockDb {
@@ -86,6 +93,17 @@ function wrap(name: string, db: NodeDb): MockDb {
         db.exec('ROLLBACK');
         throw e;
       }
+    },
+    async prepareAsync(sql) {
+      const statement = db.prepare(sql);
+      return {
+        async executeAsync(...params: unknown[]) {
+          sqliteLog.statements.push(sql.trim());
+          const result = statement.run(...paramsOf(params));
+          return { changes: Number(result.changes), lastInsertRowId: Number(result.lastInsertRowid) };
+        },
+        async finalizeAsync() {},
+      };
     },
     async closeAsync() {
       db.close();

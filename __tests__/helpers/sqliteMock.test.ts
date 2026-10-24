@@ -59,3 +59,14 @@ it('logs statements and transactions', async () => {
   expect(sqliteLog.transactions).toBe(1);
   expect(sqliteLog.statements).toEqual(['INSERT INTO t (id, n) VALUES (?, ?)']);
 });
+
+it('prepared statements run with params and log each execution', async () => {
+  const db = await freshDb();
+  sqliteLog.statements.length = 0;
+  const statement = await db.prepareAsync('INSERT INTO t (id, n) VALUES (?, ?)');
+  await statement.executeAsync('a', 1);
+  await statement.executeAsync(['b', 2]);
+  await statement.finalizeAsync();
+  expect(await db.getAllAsync('SELECT id, n FROM t ORDER BY id')).toEqual([{ id: 'a', n: 1 }, { id: 'b', n: 2 }]);
+  expect(sqliteLog.statements).toEqual(['INSERT INTO t (id, n) VALUES (?, ?)', 'INSERT INTO t (id, n) VALUES (?, ?)']);
+});
