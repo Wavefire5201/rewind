@@ -17,7 +17,6 @@ import FaceTrendCard from '@/components/face/FaceTrendCard';
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
-jest.mock('@react-native-community/datetimepicker', () => () => null);
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
@@ -37,7 +36,7 @@ it.each([
   ['ExportSheet', <ExportSheet key="e" visible onSelect={jest.fn()} onClose={jest.fn()} />],
   ['ImportSheet', <ImportSheet key="i" visible onSelect={jest.fn()} onClose={jest.fn()} />],
   ['DateRangeSheet', <DateRangeSheet key="d" visible dates={['2026-03-01']} startDate="2026-03-01" endDate="2026-03-01" onApply={jest.fn()} onClose={jest.fn()} />],
-  ['ImportPhotoModal', <ImportPhotoModal key="m" visible photos={[{ uri: 'file:///a.jpg', suggestedDate: '2026-03-01' }, { uri: 'file:///b.jpg', suggestedDate: '2026-03-02' }]} onSave={jest.fn()} onCancel={jest.fn()} />],
+  ['ImportPhotoModal', <ImportPhotoModal key="m" visible photos={[{ uri: 'file:///a.jpg', suggestedDate: '2026-03-01' }, { uri: 'file:///b.jpg', suggestedDate: '2026-03-02' }]} photoDates={new Set()} onSave={jest.fn()} onCancel={jest.fn()} />],
   ['TimerSelector', <TimerSelector key="t" visible selectedDuration={0} onSelect={jest.fn()} />],
   ['TextInputModal', <TextInputModal key="x" visible title="rename album" onConfirm={jest.fn()} onCancel={jest.fn()} />],
   ['CapturePreview', <CapturePreview key="c" visible imageUri="file:///a.jpg" onSave={jest.fn()} onRetake={jest.fn()} />],

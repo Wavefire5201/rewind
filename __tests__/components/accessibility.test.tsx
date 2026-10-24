@@ -13,7 +13,6 @@ import TimerSelector from '@/components/camera/TimerSelector';
 // still be easy to hit (44 dp, counting hitSlop).
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('expo-image', () => ({ Image: () => null }));
-jest.mock('@react-native-community/datetimepicker', () => () => null);
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 const inFonts = (ui: React.ReactElement) => render(<FontProvider>{ui}</FontProvider>);
@@ -58,7 +57,7 @@ it('DateRangeSheet: every control is labelled, including the dates in the list',
 
 it('ImportPhotoModal: a labelled close button and date button', async () => {
   await inFonts(
-    <ImportPhotoModal visible photos={[{ uri: 'file:///a.jpg', suggestedDate: '2026-03-01' }]} onSave={jest.fn()} onCancel={jest.fn()} />,
+    <ImportPhotoModal visible photos={[{ uri: 'file:///a.jpg', suggestedDate: '2026-03-01' }]} photoDates={new Set()} onSave={jest.fn()} onCancel={jest.fn()} />,
   );
   expect(screen.getByRole('button', { name: 'Cancel import' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Change date' })).toBeTruthy();

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from 'react-native';
 import PinModal, { PinIntent } from '@/components/ui/PinModal';
 import { hasPin } from '@/utils/pin';
@@ -52,6 +52,11 @@ function AlbumSettingsScreen() {
   const { albums, photos, settings, addPhotos, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
+  // Days this album already has: dotted in the import date picker.
+  const photoDates = useMemo(
+    () => new Set(photos.filter(p => p.albumId === albumId).map(p => p.date)),
+    [photos, albumId],
+  );
 
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -519,6 +524,7 @@ function AlbumSettingsScreen() {
       <ImportPhotoModal
         visible={showImportModal}
         photos={importPhotos}
+        photoDates={photoDates}
         onSave={handleImportSave}
         onCancel={() => { setShowImportModal(false); setImportPhotos([]); }}
       />

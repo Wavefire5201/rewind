@@ -14,7 +14,6 @@ import {
 import { Image } from 'expo-image';
 import { X, CaretLeft } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
@@ -22,10 +21,14 @@ import SectionLabel from '@/components/ui/SectionLabel';
 import PillButton from '@/components/ui/PillButton';
 import { cachePolicyFor } from '@/utils/imageSource';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
+import DatePickerSheet from '@/components/ui/DatePickerSheet';
+import { getToday } from '@/utils/dates';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
   photos: { uri: string; suggestedDate: string }[];
+  /** Days this album already has a photo for: dotted in the date picker. */
+  photoDates: ReadonlySet<string>;
   onSave: (entries: { uri: string; date: string; caption: string }[]) => void;
   onCancel: () => void;
 }
@@ -53,6 +56,7 @@ function formatDisplayDate(str: string): string {
 export default function ImportPhotoModal({
   visible,
   photos,
+  photoDates,
   onSave,
   onCancel,
 }: ImportPhotoModalProps) {
@@ -111,11 +115,9 @@ export default function ImportPhotoModal({
   const total = photos.length;
   const isLast = currentIndex === total - 1;
 
-  function handleDateChange(_event: unknown, selectedDate?: Date) {
-    if (Platform.OS === 'android') setShowDatePicker(false);
-    if (selectedDate) {
-      setDate(dateToStr(selectedDate));
-    }
+  function handleDatePicked(picked: string) {
+    setDate(picked);
+    setShowDatePicker(false);
   }
 
   function handleSaveNext() {
@@ -241,7 +243,7 @@ export default function ImportPhotoModal({
               <SectionLabel>date</SectionLabel>
               <Pressable
                 style={styles.dateButton}
-                onPress={() => { haptics.tap(); setShowDatePicker(prev => !prev); }}
+                onPress={() => { haptics.tap(); setShowDatePicker(true); }}
                 accessibilityRole="button"
                 accessibilityLabel="Change date"
                 accessibilityValue={{ text: formatDisplayDate(date) }}
@@ -250,16 +252,14 @@ export default function ImportPhotoModal({
                   {formatDisplayDate(date)}
                 </Text>
               </Pressable>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={dateStrToDate(date)}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleDateChange}
-                  themeVariant="dark"
-                  maximumDate={new Date()}
-                />
-              )}
+              <DatePickerSheet
+                visible={showDatePicker}
+                value={date}
+                maxDate={getToday()}
+                photoDates={photoDates}
+                onConfirm={handleDatePicked}
+                onClose={() => setShowDatePicker(false)}
+              />
             </View>
 
             {/* Caption */}
