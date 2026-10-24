@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useAppContext } from '@/context/AppContext';
 import { FontProvider } from '@/context/FontContext';
@@ -64,25 +65,29 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <AppProvider>
-            <FontProvider>
-              <StatusBar style="light" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: Colors.bgPage },
-                  animation: 'fade_from_bottom',
-                  gestureEnabled: true,
-                  navigationBarColor: Colors.bgPage,
-                }}
-              />
-              {splashDone ? null : <SplashCover onDone={() => setSplashDone(true)} />}
-              {/* Notices and confirms; after the splash, so a launch notice isn't hidden under it. */}
-              {splashDone && <OverlayHost />}
-            </FontProvider>
-          </AppProvider>
-        </SafeAreaProvider>
+        {/* Tracks the keyboard, Modals included (a Modal is its own Android window, which RN's
+            Keyboard and Reanimated can't see). Already edge-to-edge, so it adds no padding. */}
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent preserveEdgeToEdge>
+          <SafeAreaProvider>
+            <AppProvider>
+              <FontProvider>
+                <StatusBar style="light" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: Colors.bgPage },
+                    animation: 'fade_from_bottom',
+                    gestureEnabled: true,
+                    navigationBarColor: Colors.bgPage,
+                  }}
+                />
+                {splashDone ? null : <SplashCover onDone={() => setSplashDone(true)} />}
+                {/* Notices and confirms; after the splash, so a launch notice isn't hidden under it. */}
+                {splashDone && <OverlayHost />}
+              </FontProvider>
+            </AppProvider>
+          </SafeAreaProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

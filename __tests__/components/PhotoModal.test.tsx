@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import type { ConfirmOptions } from '@/utils/confirm';
 import * as Haptics from 'expo-haptics';
@@ -31,6 +32,24 @@ it('shows the face readout for the photo on screen', async () => {
     </FontProvider>,
   );
   expect(screen.getByText('face 2% fuller than your 30-day average')).toBeTruthy();
+});
+
+it('lifts its content with the keyboard, so the caption being edited stays in sight', async () => {
+  // The viewer is a Modal: its own Android window, which only keyboard-controller can track.
+  const keyboard = jest.requireMock('react-native-keyboard-controller') as { useReanimatedKeyboardAnimation: jest.Mock };
+  keyboard.useReanimatedKeyboardAnimation.mockReturnValue({ height: { value: -320 }, progress: { value: 1 } });
+  try {
+    const ui = (
+      <FontProvider>
+        <PhotoModal visible photos={[photo]} initialIndex={0} joinDate="2026-01-01" onClose={jest.fn()} onDelete={jest.fn()} onUpdateCaption={jest.fn()} />
+      </FontProvider>
+    );
+    const view = await render(ui);
+    await act(async () => view.rerender(ui)); // animated styles land on the next render
+    expect(StyleSheet.flatten(screen.getByTestId('photo-viewer-content').props.style).transform).toEqual([{ translateY: -320 }]);
+  } finally {
+    keyboard.useReanimatedKeyboardAnimation.mockReturnValue({ height: { value: 0 }, progress: { value: 0 } });
+  }
 });
 
 describe('deleting a photo', () => {

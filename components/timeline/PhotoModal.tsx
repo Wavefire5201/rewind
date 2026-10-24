@@ -23,6 +23,7 @@ import {
   Gesture,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { formatDateLabel, formatTime, getDayNumber } from '@/utils/dates';
@@ -152,7 +153,9 @@ export default function PhotoModal({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState('');
-
+  // 0 to minus the keyboard's height; tracked inside this Modal's own window.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const keyboardLift = useAnimatedStyle(() => ({ transform: [{ translateY: keyboard.height.value }] }));
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -261,8 +264,9 @@ export default function PhotoModal({
         {/* Tap-to-dismiss: fills the whole screen behind the content */}
         <Pressable style={StyleSheet.absoluteFill} onPress={() => { haptics.tap(); onClose(); }} accessibilityLabel="Close photo viewer" accessibilityRole="button" />
 
-        {/* Content */}
-        <View style={styles.content} pointerEvents="box-none">
+        {/* Content. Rides up with the keyboard, so the caption being edited stays in sight: the
+            bottom row lands just above the keyboard, the caption above it. */}
+        <Animated.View testID="photo-viewer-content" style={[styles.content, keyboardLift]} pointerEvents="box-none">
           {/* Close button */}
           <View style={[styles.closeRow, { paddingTop: insets.top + 8 }]}>
             <Pressable
@@ -370,7 +374,7 @@ export default function PhotoModal({
               </Pressable>
             </View>
           )}
-        </View>
+        </Animated.View>
         <OverlayHost />
       </GestureHandlerRootView>
     </Modal>

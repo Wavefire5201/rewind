@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ConfirmOptions } from '@/utils/confirm';
-import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import CapturePreview from '@/components/camera/CapturePreview';
 import { FontProvider } from '@/context/FontContext';
@@ -49,6 +49,15 @@ it('copies the photo into the documents directory and saves it once confirmed', 
   await act(async () => fireEvent.press(screen.getByText('save')));
   expect(savedCopies()).toHaveLength(1);
   expect(onSave).toHaveBeenCalledWith('', savedCopies()[0]);
+});
+
+it('keeps the caption and its buttons above the keyboard (keyboard-aware scrolling, which works in a Modal)', async () => {
+  await renderPreview(async () => true);
+  const scroll = screen.getByTestId('capture-preview-scroll');
+  expect(within(scroll).getByPlaceholderText('add a caption...')).toBeTruthy();
+  expect(within(scroll).getByText('save')).toBeTruthy();
+  // Scrolled far enough that the save and retake row clears the keyboard too.
+  expect(scroll.props.bottomOffset).toBeGreaterThan(0);
 });
 
 it("keeps the full-size preview out of Glide's disk cache", async () => {

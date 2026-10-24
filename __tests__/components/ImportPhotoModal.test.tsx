@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import { FontProvider } from '@/context/FontContext';
@@ -16,6 +16,18 @@ it("keeps each reviewed photo out of Glide's disk cache", async () => {
     </FontProvider>,
   );
   expect(mockImage.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ cachePolicy: 'memory' }));
+});
+
+it('keeps the caption in sight and the save button riding on the keyboard (both work in a Modal)', async () => {
+  await render(
+    <FontProvider>
+      <ImportPhotoModal visible photos={[{ uri: 'file:///picked.jpg', suggestedDate: '2026-03-01' }]} photoDates={new Set()} onSave={jest.fn()} onCancel={jest.fn()} />
+    </FontProvider>,
+  );
+  // keyboard-controller's Jest mock renders KeyboardAwareScrollView as a ScrollView and
+  // KeyboardStickyView as a View; the testIDs mark which is which.
+  expect(within(screen.getByTestId('import-fields')).getByPlaceholderText('add a caption...')).toBeTruthy();
+  expect(within(screen.getByTestId('import-footer')).getByRole('button', { name: 'save' })).toBeTruthy();
 });
 
 it('changing the date uses the themed picker', async () => {

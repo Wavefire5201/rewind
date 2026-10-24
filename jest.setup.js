@@ -21,6 +21,10 @@ jest.mock('react-native-gesture-handler', () => require('./__tests__/helpers/ges
 // bottom sheet pads by the bottom inset.
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
+// react-native-keyboard-controller — its own Jest mock (keyboard closed). A test opens it with
+// useReanimatedKeyboardAnimation.mockReturnValue({ height: { value: -320 }, ... }) (height is negative).
+jest.mock('react-native-keyboard-controller', () => require('react-native-keyboard-controller/jest'));
+
 // expo-sqlite — real SQL on Node's built-in SQLite (in-memory, one db per name); see the helper.
 jest.mock('expo-sqlite', () => require('./__tests__/helpers/sqliteMock').sqliteMock);
 

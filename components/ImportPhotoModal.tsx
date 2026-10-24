@@ -7,10 +7,8 @@ import {
   Pressable,
   StyleSheet,
   useWindowDimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Image } from 'expo-image';
 import { X, CaretLeft } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -69,6 +67,7 @@ export default function ImportPhotoModal({
   const [photoStates, setPhotoStates] = useState<Record<number, { date: string; caption: string }>>({});
   const [skipped, setSkipped] = useState<Set<number>>(new Set());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(0);
 
   // Derived fields for the current photo (hydrated from saved state or photo suggestion)
   const currentSaved = photoStates[currentIndex];
@@ -187,10 +186,9 @@ export default function ImportPhotoModal({
       transparent={false}
       onRequestClose={handleCancel}
     >
-      <KeyboardAvoidingView
-        style={[styles.root, { backgroundColor: Colors.bgPage }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      {/* keyboard-controller tracks this Modal's own window (RN's KeyboardAvoidingView can't): the
+          fields scroll the caption into sight above the footer, which rides on the keyboard. */}
+      <View style={[styles.root, { backgroundColor: Colors.bgPage }]}>
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           {currentIndex > 0 ? (
@@ -217,8 +215,11 @@ export default function ImportPhotoModal({
           </Pressable>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
+          testID="import-fields"
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+          // Clear of the footer riding on the keyboard (less the inset it drops when open).
+          bottomOffset={Math.max(0, footerHeight - insets.bottom) + 16}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -275,26 +276,31 @@ export default function ImportPhotoModal({
               />
             </View>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
-        {/* Footer */}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <PillButton
-            label={isLast ? 'save' : 'save & next  →'}
-            onPress={handleSaveNext}
-            size="large"
-            haptic={false}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
-            onPress={handleSkip}
-            accessibilityLabel="Skip this photo"
-            accessibilityRole="button"
+        {/* Footer: rides on the keyboard, dropping the bottom inset the keyboard covers. */}
+        <KeyboardStickyView testID="import-footer" offset={{ closed: 0, opened: insets.bottom }}>
+          <View
+            style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}
+            onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
           >
-            <Text style={[styles.skipBtnText, { fontFamily: fonts.regular }]}>skip</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+            <PillButton
+              label={isLast ? 'save' : 'save & next  →'}
+              onPress={handleSaveNext}
+              size="large"
+              haptic={false}
+            />
+            <Pressable
+              style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+              onPress={handleSkip}
+              accessibilityLabel="Skip this photo"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.skipBtnText, { fontFamily: fonts.regular }]}>skip</Text>
+            </Pressable>
+          </View>
+        </KeyboardStickyView>
+      </View>
       <OverlayHost />
     </Modal>
   );
@@ -374,6 +380,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   footer: {
+    // Opaque: it slides up over the fields with the keyboard.
+    backgroundColor: Colors.bgPage,
     paddingHorizontal: 24,
     paddingTop: 16,
     borderTopWidth: 1,

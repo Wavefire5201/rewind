@@ -5,9 +5,8 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Platform,
-  KeyboardAvoidingView,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CaretLeft } from 'phosphor-react-native';
@@ -55,9 +54,13 @@ function StepNameAlbum({ onNext, initialValue }: { onNext: (name: string) => voi
   }
 
   return (
+    // keyboard-controller's, on both platforms: edge-to-edge Android no longer resizes the window
+    // for the keyboard, which RN's KeyboardAvoidingView relied on there.
     <KeyboardAvoidingView
+      testID="onboarding-name-step"
       style={styles.stepContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
+      automaticOffset
     >
       <View style={styles.centerContent}>
         <Text style={[styles.stepTitle, { fontFamily: fonts.light }]}>name your album</Text>
