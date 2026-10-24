@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageManipulator, FlipType } from 'expo-image-manipulator';
 import { useLocalSearchParams, useRouter, useNavigation, useIsFocused } from 'expo-router';
@@ -12,6 +12,7 @@ import { useAppContext } from '@/context/AppContext';
 import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
 import { confirm } from '@/utils/confirm';
+import { notify } from '@/utils/notify';
 import Viewfinder, { type FaceState, type ViewfinderRef } from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
 import TimerSelector from '@/components/camera/TimerSelector';
@@ -142,8 +143,7 @@ function CameraScreen() {
         setShowPreview(true);
       }
     } catch {
-      haptics.error();
-      Alert.alert('Capture failed', 'Could not take photo. Please try again.');
+      notify({ title: 'capture failed', message: 'could not take photo. please try again.', tone: 'error' });
     } finally {
       isCapturingRef.current = false;
       setIsCapturing(false);
@@ -245,7 +245,7 @@ function CameraScreen() {
   const handleSaveFraming = useCallback(() => {
     const next = faceState.hasFace ? framingFromFace(faceState) : null;
     if (!next || !albumId) {
-      haptics.error();
+      notify({ title: 'no face in view', message: 'line your face up in the guide, then hold the shutter again.', tone: 'error' });
       return;
     }
     updateAlbum(albumId, { framing: next });

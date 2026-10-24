@@ -25,6 +25,7 @@ import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
 import FaceTrendCard from '@/components/face/FaceTrendCard';
 import type { PhotoEntry } from '@/types';
 import { haptics } from '@/utils/haptics';
+import { notify } from '@/utils/notify';
 import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
 import { nounFor } from '@/utils/text';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
@@ -178,9 +179,9 @@ function AlbumDetailScreen() {
         if (!picked || !date) return;
         const { added } = addPhotos([await createPhotoEntry(picked.uri, date, '', id)]);
         if (added > 0) haptics.success();
-        else haptics.error();
+        else notify({ title: 'that day already has a photo', tone: 'error' });
       } catch {
-        haptics.error();
+        notify({ title: "couldn't add the photo", tone: 'error' });
       }
     } else if (source === 'backup') {
       // Redirect to album settings for full backup import

@@ -1,22 +1,22 @@
-import { Alert } from 'react-native';
 import type { ConfirmOptions } from '@/utils/confirm';
 import * as Haptics from 'expo-haptics';
 import { confirmDeleteAlbum } from '@/utils/albumDialogs';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 
 const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
 jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 
-let alertSpy: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
-  alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  resetNoticesForTests();
 });
-afterEach(() => alertSpy.mockRestore());
+afterEach(() => resetNoticesForTests());
 
 it("won't delete the last album, with an error buzz", async () => {
   const onDelete = jest.fn();
   await confirmDeleteAlbum({ name: 'daily' }, 1, onDelete);
-  expect(alertSpy).toHaveBeenCalledWith("Can't delete", 'You need at least one album.');
+  expect(getNotices()).toEqual([expect.objectContaining({ title: "can't delete", message: 'you need at least one album.', tone: 'error' })]);
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
   expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
   expect(mockConfirm).not.toHaveBeenCalled();
   expect(onDelete).not.toHaveBeenCalled();

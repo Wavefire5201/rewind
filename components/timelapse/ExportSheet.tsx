@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, Modal, Pressable, Alert, StyleSheet } from 'react-native';
+import { View, Text, Modal, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Images, FilmStrip, FolderOpen, DownloadSimple, X } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
+import { notify } from '@/utils/notify';
 
 export type ExportFormat = 'album' | 'backup' | 'gif' | 'mp4';
 
@@ -58,7 +59,7 @@ export default function ExportSheet({ visible, onSelect, onClose }: ExportSheetP
   function handlePress(option: Option) {
     if (option.comingSoon) {
       haptics.tap();
-      Alert.alert('Coming soon', "This export isn't available yet.");
+      notify({ title: 'coming soon', message: "this export isn't available yet.", tone: 'info' });
       return;
     }
     haptics.tap();

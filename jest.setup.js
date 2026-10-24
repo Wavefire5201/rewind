@@ -12,9 +12,10 @@ jest.mock('expo-localization', () => ({
 // runtime), so every suite gets the test stand-in; a suite's own jest.mock still wins.
 jest.mock('react-native-reanimated', () => require('./__tests__/helpers/reanimatedMock').reanimatedMock);
 
-// react-native-gesture-handler — its own Jest setup stubs the native module (overlay layers
-// mount a gesture root inside every modal); suites that drive gestures mock it themselves.
-require('react-native-gesture-handler/jestSetup');
+// react-native-gesture-handler — overlay layers mount sheets and notices inside every modal; the
+// real GestureDetector needs Reanimated internals the stand-in above doesn't have. The recording
+// stand-in renders children and lets tests drive gesture callbacks (see the helper).
+jest.mock('react-native-gesture-handler', () => require('./__tests__/helpers/gestureHandlerMock').gestureHandlerMock);
 
 // expo-haptics — silent stubs; assertions go through these fns
 jest.mock('expo-haptics', () => ({

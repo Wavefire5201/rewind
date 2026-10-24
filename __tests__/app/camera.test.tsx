@@ -1,8 +1,8 @@
 import React from 'react';
 import type { ConfirmOptions } from '@/utils/confirm';
-import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import CameraRoute from '@/app/(tabs)/camera';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import { FontProvider } from '@/context/FontContext';
 
 const mockViewfinder = jest.fn();
@@ -73,7 +73,9 @@ beforeEach(() => {
   mockPhotosLoadFailed = false;
   mockTodayPhoto = null;
   mockConfirm.mockResolvedValue(false);
+  resetNoticesForTests();
 });
+afterEach(() => resetNoticesForTests());
 
 it('asks before replacing today\'s photo, and a dismissed question keeps the old one', async () => {
   mockTodayPhoto = { id: 'today' };
@@ -94,13 +96,17 @@ it('replaces today\'s photo after a yes', async () => {
 
 it("won't save a photo when the stored photos couldn't be read, and says why", async () => {
   mockPhotosLoadFailed = true;
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await render(<FontProvider><CameraRoute /></FontProvider>);
   await act(async () => last(mockControls).onCapture());
   // The preview asks before copying the photo; refusing leaves nothing behind.
   expect(await last(mockPreview).confirmSave()).toBe(false);
-  expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.any(String));
-  alertSpy.mockRestore();
+  expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
+});
+
+it('saving framing with no face says why', async () => {
+  await render(<FontProvider><CameraRoute /></FontProvider>);
+  await act(async () => last(mockControls).onCaptureReference());
+  expect(getNotices()).toEqual([expect.objectContaining({ title: 'no face in view', tone: 'error' })]);
 });
 
 it('saves normally when the photos loaded', async () => {

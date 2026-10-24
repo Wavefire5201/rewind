@@ -1,6 +1,5 @@
 import React from 'react';
 import type { ConfirmOptions } from '@/utils/confirm';
-import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import HomeScreen from '@/app/(tabs)/index';

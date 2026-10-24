@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Alert, AppState } from 'react-native';
+import { AppState } from 'react-native';
 import { File } from 'expo-file-system';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
 import { savePhotos, loadPhotos, saveProfile, loadProfile, saveSettings, loadSettings, getDefaultSettings, saveAlbums, loadAlbums, clearAllData, clearUnlockedAlbumIds } from '@/utils/storage';
 import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
-import { haptics } from '@/utils/haptics';
+import { notify } from '@/utils/notify';
+import { notifyCantSavePhotos } from '@/utils/photoNotices';
 import { useToday } from '@/hooks/useToday';
 import { getToday, byDate } from '@/utils/dates';
 
@@ -23,7 +24,8 @@ function enqueueSave(saveFn: () => Promise<void>): Promise<boolean> {
     () => true,
     (e) => {
       console.error('Storage write failed:', e);
-      haptics.error();
+      // One notice however many queued writes fail.
+      notify({ title: "couldn't save", message: "rewind couldn't save your latest change. try again.", tone: 'error', key: 'save-failed' });
       return false;
     },
   );
@@ -46,7 +48,7 @@ let photoSavesBlocked = false;
 function savePhotosLatest(photos: PhotoEntry[]): Promise<boolean> {
   if (photoSavesBlocked) {
     console.error('Photos not saved: the stored photos could not be read, and saving would replace them.');
-    haptics.error();
+    notifyCantSavePhotos();
     return Promise.resolve(false);
   }
   return new Promise<boolean>((resolve) => {
@@ -191,11 +193,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (photosResult.status === 'rejected') {
           console.error('Failed to load photos; not saving photos this launch:', photosResult.reason);
           setPhotosLoadFailed(true);
-          haptics.error();
-          Alert.alert(
-            "Couldn't load your photos",
-            "Nothing has been deleted, but Rewind couldn't read your saved photos. To keep them safe, new photos can't be saved for now. Try restarting the app.",
-          );
+          notify({
+            title: "couldn't load your photos",
+            message: "nothing has been deleted, but rewind couldn't read your saved photos. to keep them safe, new photos can't be saved for now. try restarting the app.",
+            tone: 'error',
+            sticky: true,
+            key: 'photos-load-failed',
+          });
         }
         const storedPhotos = photosResult.status === 'fulfilled' ? photosResult.value : [];
         const storedProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;

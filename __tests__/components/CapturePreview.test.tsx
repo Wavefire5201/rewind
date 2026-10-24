@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import CapturePreview from '@/components/camera/CapturePreview';
 import { FontProvider } from '@/context/FontContext';
 import { fileStore, resetFileSystemMock } from '../helpers/fileSystemMock';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 const mockImage = jest.fn();
@@ -79,4 +80,15 @@ describe('retaking with a caption typed', () => {
     const onRetake = await retakeWithCaption(true);
     expect(onRetake).toHaveBeenCalledTimes(1);
   });
+});
+
+it('a save that fails says so and keeps the preview open', async () => {
+  resetNoticesForTests();
+  fileStore.delete(SHOT); // the shot is gone: the copy fails
+  const onSave = jest.fn();
+  await renderPreview(async () => true, onSave);
+  await act(async () => fireEvent.press(screen.getByText('save')));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(getNotices()).toEqual([expect.objectContaining({ title: 'save failed', tone: 'error' })]);
+  resetNoticesForTests();
 });

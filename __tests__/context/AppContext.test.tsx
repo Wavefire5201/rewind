@@ -1,14 +1,19 @@
 import React from 'react';
-import { Alert, AppState, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, waitFor, act } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { AppProvider, useAppContext } from '@/context/AppContext';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import type { PhotoEntry, Album } from '@/types';
 import { fileStore, deletedUris, resetFileSystemMock } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
+
+beforeEach(() => resetNoticesForTests());
+// Notice timers mustn't outlive the file.
+afterEach(() => resetNoticesForTests());
 
 type Ctx = ReturnType<typeof useAppContext>;
 
@@ -218,7 +223,6 @@ describe('AppContext', () => {
     const getItem = jest.mocked(AsyncStorage.getItem);
     let realGetItem: NonNullable<ReturnType<typeof getItem.getMockImplementation>>;
     let errorSpy: jest.SpyInstance;
-    let alertSpy: jest.SpyInstance;
 
     beforeEach(async () => {
       await AsyncStorage.multiSet([['@rewind/photos', stored], ['@rewind/albums', JSON.stringify([album()])]]);
@@ -228,12 +232,10 @@ describe('AppContext', () => {
         key === '@rewind/photos' ? Promise.reject(new Error('Row too big to fit into CursorWindow')) : realGetItem(key, ...rest),
       );
       errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     });
     afterEach(() => {
       getItem.mockImplementation(realGetItem);
       errorSpy.mockRestore();
-      alertSpy.mockRestore();
     });
 
     const photoWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/photos');
@@ -256,7 +258,13 @@ describe('AppContext', () => {
       expect(ctx!.photos).toEqual([]);
       expect(ctx!.photosLoadFailed).toBe(true);
       expect(ctx!.albums).toHaveLength(1); // the rest of the data still loads
-      expect(alertSpy).toHaveBeenCalledWith("Couldn't load your photos", expect.stringContaining('Nothing has been deleted'));
+      expect(getNotices()).toEqual([expect.objectContaining({
+        title: "couldn't load your photos",
+        message: expect.stringContaining('nothing has been deleted'),
+        tone: 'error',
+        sticky: true,
+        key: 'photos-load-failed',
+      })]);
       expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
 
       let updated: Promise<boolean> | undefined;
@@ -276,6 +284,10 @@ describe('AppContext', () => {
       // Refused photos aren't shown either: they'd be gone on the next launch.
       expect(ctx!.photos.filter((p) => p.id === 'new' || p.id === 'imported')).toEqual([]);
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Photos not saved'));
+      // Each refusal says so, as one notice rather than a stack of them.
+      expect(getNotices().filter((n) => n.key === 'cant-save-photos')).toEqual([
+        expect.objectContaining({ title: "can't save photos", tone: 'error', sticky: true }),
+      ]);
       await unmount();
     });
 
@@ -319,12 +331,11 @@ describe('AppContext', () => {
     afterEach(() => errorSpy.mockRestore());
 
     it('keeps a copy, then starts over with no photos and saves normally', async () => {
-      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
       await AsyncStorage.setItem('@rewind/photos', '[{"id":"p1",');
       const { unmount } = await renderProvider();
       expect(ctx!.photos).toEqual([]);
       expect(ctx!.photosLoadFailed).toBe(false);
-      expect(alertSpy).not.toHaveBeenCalled();
+      expect(getNotices()).toEqual([]);
       expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
 
       await act(async () => {
@@ -332,7 +343,6 @@ describe('AppContext', () => {
       });
       await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p2']));
       expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
-      alertSpy.mockRestore();
       await unmount();
     });
   });
@@ -666,11 +676,32 @@ describe('AppContext', () => {
     });
     await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Storage write failed:', expect.any(Error)));
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+    expect(getNotices()).toEqual([expect.objectContaining({ title: "couldn't save", tone: 'error', key: 'save-failed' })]);
 
     await act(async () => {
       ctx!.updatePhoto('p1', { caption: 'saved' });
     });
     await waitFor(async () => expect((await storedPhotos())[0].caption).toBe('saved'));
+    errorSpy.mockRestore();
+    await unmount();
+  });
+
+  it('a failed write shows one "couldn\'t save" notice, however many writes fail', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addPhoto(photo({ id: 'p1', caption: 'old' }));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full')).mockRejectedValueOnce(new Error('disk full'));
+    await act(async () => {
+      ctx!.updatePhoto('p1', { caption: 'a' });
+    });
+    await act(async () => {
+      ctx!.updatePhoto('p1', { caption: 'b' });
+    });
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(2));
+    expect(getNotices().filter((n) => n.title === "couldn't save")).toHaveLength(1);
     errorSpy.mockRestore();
     await unmount();
   });

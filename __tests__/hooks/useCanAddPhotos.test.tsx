@@ -1,31 +1,37 @@
-import { Alert } from 'react-native';
 import { renderHook } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import { useAppContext } from '@/context/AppContext';
 import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 
 jest.mock('@/context/AppContext', () => ({ useAppContext: jest.fn() }));
 const mockUseAppContext = useAppContext as unknown as jest.Mock;
 
-let alertSpy: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
-  alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  resetNoticesForTests();
 });
-afterEach(() => alertSpy.mockRestore());
+afterEach(() => resetNoticesForTests());
 
 it('allows adding photos when they loaded', async () => {
   mockUseAppContext.mockReturnValue({ photosLoadFailed: false });
   const { result } = await renderHook(() => useCanAddPhotos());
   expect(result.current()).toBe(true);
-  expect(alertSpy).not.toHaveBeenCalled();
+  expect(getNotices()).toEqual([]);
   expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });
 
-it("refuses, and says why, when the stored photos couldn't be read", async () => {
+it('refuses with a sticky error notice', async () => {
   mockUseAppContext.mockReturnValue({ photosLoadFailed: true });
   const { result } = await renderHook(() => useCanAddPhotos());
   expect(result.current()).toBe(false);
-  expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.stringContaining('without overwriting them'));
+  expect(getNotices()).toEqual([expect.objectContaining({
+    title: "can't save photos",
+    message: expect.stringContaining('without overwriting them'),
+    tone: 'error',
+    sticky: true,
+    key: 'cant-save-photos',
+  })]);
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
   expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
 });

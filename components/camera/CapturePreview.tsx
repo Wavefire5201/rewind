@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Modal, StyleSheet, useWindowDimensions, Alert } from 'react-native';
+import { View, TextInput, Modal, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { File, Paths } from 'expo-file-system';
@@ -10,6 +10,7 @@ import { haptics } from '@/utils/haptics';
 import { cachePolicyFor } from '@/utils/imageSource';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
 import { confirm } from '@/utils/confirm';
+import { notify } from '@/utils/notify';
 
 interface CapturePreviewProps {
   visible: boolean;
@@ -47,8 +48,7 @@ export default function CapturePreview({
       onSave(caption, dest.uri);
       setCaption('');
     } catch {
-      haptics.error();
-      Alert.alert('Save failed', "Couldn't save photo, please try again.");
+      notify({ title: 'save failed', message: "couldn't save photo, please try again.", tone: 'error' });
     } finally {
       setSaving(false);
     }

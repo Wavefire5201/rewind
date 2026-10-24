@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
-import { Alert } from 'react-native';
 import { useAppContext } from '@/context/AppContext';
-import { haptics } from '@/utils/haptics';
+import { notifyCantSavePhotos } from '@/utils/photoNotices';
 
 /**
  * A check to run before saving a new photo or starting an import. While the stored photos
@@ -12,11 +11,7 @@ export function useCanAddPhotos(): () => boolean {
   const { photosLoadFailed } = useAppContext();
   return useCallback(() => {
     if (!photosLoadFailed) return true;
-    haptics.error();
-    Alert.alert(
-      "Can't save photos",
-      "Rewind couldn't read your saved photos, so it can't save new ones without overwriting them. Try restarting the app.",
-    );
+    notifyCantSavePhotos();
     return false;
   }, [photosLoadFailed]);
 }

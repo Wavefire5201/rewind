@@ -1,6 +1,6 @@
-import { Alert } from 'react-native';
 import { haptics } from '@/utils/haptics';
 import { confirm } from '@/utils/confirm';
+import { notify } from '@/utils/notify';
 
 /**
  * Asks before deleting an album and its photos: the same words and haptics from every
@@ -8,8 +8,7 @@ import { confirm } from '@/utils/confirm';
  */
 export async function confirmDeleteAlbum(album: { name: string }, albumCount: number, onDelete: () => void): Promise<void> {
   if (albumCount <= 1) {
-    haptics.error();
-    Alert.alert("Can't delete", 'You need at least one album.');
+    notify({ title: "can't delete", message: 'you need at least one album.', tone: 'error' });
     return;
   }
   haptics.tap();

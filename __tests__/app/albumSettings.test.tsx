@@ -1,8 +1,9 @@
 import React from 'react';
 import type { ConfirmOptions } from '@/utils/confirm';
-import { Alert } from 'react-native';
+import { Linking } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import AlbumSettingsRoute from '@/app/album/settings';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import { FontProvider } from '@/context/FontContext';
 import type { Album, PhotoEntry } from '@/types';
 
@@ -70,7 +71,11 @@ jest.mock('@/utils/import', () => ({
   createPhotoEntry: async (uri: string, date: string, caption: string, albumId: string) =>
     ({ id: `imported-${date}`, albumId, date, imageUri: uri, caption, capturedAt: `${date}T12:00:00.000Z`, cameraDirection: 'front' }),
 }));
-jest.mock('@/utils/notifications', () => ({}));
+let mockPermissionGranted = true;
+jest.mock('@/utils/notifications', () => ({
+  requestNotificationPermission: async () => mockPermissionGranted,
+  syncAllReminders: async () => {},
+}));
 jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('@/components/ui/TimePicker', () => () => null);
 jest.mock('@/components/ui/TextInputModal', () => () => null);
@@ -88,7 +93,16 @@ beforeEach(() => {
   mockPhotosLoadFailed = false;
   mockPhotos = [];
   mockConfirm.mockResolvedValue(false);
+  mockPermissionGranted = true;
+  resetNoticesForTests();
 });
+afterEach(() => resetNoticesForTests());
+
+/** The newest notice's title and message. */
+const lastNotice = () => {
+  const n = getNotices().at(-1);
+  return n && [n.title, n.message];
+};
 
 it('locks the album and returns home when a PIN already exists', async () => {
   await renderSettings();
@@ -154,22 +168,15 @@ describe('import photos', () => {
 
   it("won't start when the stored photos couldn't be read, and says why", async () => {
     mockPhotosLoadFailed = true;
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await renderSettings();
     await act(async () => fireEvent.press(screen.getByLabelText('Import photos')));
-    expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.any(String));
+    expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
     expect(sheetVisible()).toBe(false);
-    alertSpy.mockRestore();
   });
 });
 
 // The join date moves back in AppContext's addPhotos, so both import paths get it.
 describe('importing older photos', () => {
-  let alertSpy: jest.SpyInstance;
-  beforeEach(() => {
-    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-  });
-  afterEach(() => alertSpy.mockRestore());
 
   it('hands a camera-roll import to addPhotos and leaves the join date to it', async () => {
     await renderSettings();
@@ -185,7 +192,8 @@ describe('importing older photos', () => {
       ['a', '2025-03-10', 'first'],
     ]);
     expect(mockUpdateProfile).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith('Import complete', '2 photos added.');
+    expect(lastNotice()).toEqual(['import complete', '2 photos added.']);
+    expect(getNotices()[0].tone).toBe('success');
   });
 
   it('hands a backup restore to addPhotos the same way', async () => {
@@ -197,7 +205,7 @@ describe('importing older photos', () => {
     });
     expect(mockAddPhotos).toHaveBeenCalledWith(restored);
     expect(mockUpdateProfile).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith('Import complete', '1 photo restored from backup.');
+    expect(lastNotice()).toEqual(['import complete', '1 photo restored from backup.']);
   });
 });
 
@@ -206,32 +214,64 @@ describe('restoring a backup', () => {
 
   async function restore(result: { photos: unknown[]; skipped: number; unreadable: number }) {
     mockImportFromBackup.mockResolvedValueOnce(result);
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await renderSettings();
     await act(async () => sheetProps().onSelect('backup'));
-    const call = alertSpy.mock.calls.at(-1);
-    alertSpy.mockRestore();
-    return call?.slice(0, 2);
+    return lastNotice();
   }
 
   it("says how many entries couldn't be read", async () => {
     await expect(restore({ photos: restored(2), skipped: 1, unreadable: 3 })).resolves.toEqual([
-      'Import complete',
+      'import complete',
       "2 photos restored. 1 skipped (already exist). 3 couldn't be read.",
     ]);
   });
 
   it("reports a backup none of whose entries could be read, instead of calling it empty", async () => {
     await expect(restore({ photos: [], skipped: 0, unreadable: 1 })).resolves.toEqual([
-      'Import complete',
+      'import complete',
       "0 photos restored. 1 couldn't be read.",
     ]);
   });
 
   it('keeps the short message when every entry was restored', async () => {
     await expect(restore({ photos: restored(1), skipped: 0, unreadable: 0 })).resolves.toEqual([
-      'Import complete',
+      'import complete',
       '1 photo restored from backup.',
     ]);
+  });
+});
+
+describe('results as notices', () => {
+  const local = (id: string) =>
+    ({ id, albumId: 'a', date: `2026-03-0${id}`, imageUri: `file:///document/${id}.jpg`, caption: '', capturedAt: '2026-03-01T12:00:00.000Z', cameraDirection: 'front' }) as PhotoEntry;
+
+  it('export success says how many photos were saved', async () => {
+    mockPhotos = [local('1'), local('2')];
+    mockExportToPhotoAlbum.mockResolvedValueOnce({ exported: 2, skipped: 0 });
+    await renderSettings();
+    await act(async () => { await (mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> }).onSelect('album'); });
+    expect(getNotices()).toEqual([expect.objectContaining({ title: 'export complete', tone: 'success', message: expect.stringContaining('2 photos') })]);
+  });
+
+  it('a failed export says why', async () => {
+    mockPhotos = [local('1')];
+    mockExportToPhotoAlbum.mockRejectedValueOnce(new Error('no space left'));
+    await renderSettings();
+    await act(async () => { await (mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> }).onSelect('album'); });
+    expect(getNotices()).toEqual([expect.objectContaining({ title: 'export failed', tone: 'error', message: expect.stringContaining('no space left') })]);
+  });
+
+  it('a refused notification permission offers to open settings', async () => {
+    mockPermissionGranted = false;
+    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    await renderSettings();
+    await act(async () => fireEvent.press(screen.getByLabelText('Enable daily reminder')));
+    const [notice] = getNotices();
+    expect(notice).toEqual(expect.objectContaining({ title: 'notifications are off', tone: 'error', sticky: true }));
+    expect(notice.action?.label).toBe('open settings');
+    notice.action?.onPress();
+    expect(openSettings).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAlbum).not.toHaveBeenCalled();
+    openSettings.mockRestore();
   });
 });

@@ -1,6 +1,6 @@
-import { Alert } from 'react-native';
 import { render, act, screen } from '@testing-library/react-native';
 import AlbumDetailScreen from '@/app/album/[id]';
+import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
 
@@ -104,13 +104,42 @@ it('imports one photo onto the tapped empty day, whatever its EXIF date, without
 it("won't start an import onto an empty day when the stored photos couldn't be read", async () => {
   mockAvailable = false;
   mockPhotosLoadFailed = true;
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await renderScreen();
   const grid = mockGrid.mock.calls.at(-1)?.[0] as { onEmptyDayPress: (d: string) => void };
   await act(async () => grid.onEmptyDayPress('2026-09-15'));
-  expect(alertSpy).toHaveBeenCalledWith("Can't save photos", expect.any(String));
+  expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
   expect((mockSheet.mock.calls.at(-1)?.[0] as { visible: boolean }).visible).toBe(false);
-  alertSpy.mockRestore();
+});
+
+describe('filling an empty day', () => {
+  async function fillDay() {
+    mockAvailable = false;
+    mockPick.mockResolvedValueOnce([{ uri: 'file:///picked.jpg', date: '2026-10-01' }]);
+    await renderScreen();
+    const grid = mockGrid.mock.calls.at(-1)?.[0] as { onEmptyDayPress: (d: string) => void };
+    await act(async () => grid.onEmptyDayPress('2026-09-15'));
+    const sheet = mockSheet.mock.calls.at(-1)?.[0] as { onSelect: (s: string) => Promise<void> };
+    await act(async () => sheet.onSelect('camera-roll'));
+  }
+  beforeEach(() => resetNoticesForTests());
+  afterEach(() => resetNoticesForTests());
+
+  it('filling a day that already has a photo says so', async () => {
+    mockAddPhotos.mockReturnValueOnce({ added: 0, skipped: 1 });
+    await fillDay();
+    expect(getNotices()).toEqual([expect.objectContaining({ title: 'that day already has a photo', tone: 'error' })]);
+  });
+
+  it("a photo that can't be added says so", async () => {
+    mockCreateEntry.mockRejectedValueOnce(new Error('copy failed'));
+    await fillDay();
+    expect(getNotices()).toEqual([expect.objectContaining({ title: "couldn't add the photo", tone: 'error' })]);
+  });
+
+  it('a filled day gets one success haptic and no notice', async () => {
+    await fillDay();
+    expect(getNotices()).toEqual([]);
+  });
 });
 
 it("makes the album's thumbnails while it's open and the q95 pass is done", async () => {

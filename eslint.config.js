@@ -18,6 +18,14 @@ module.exports = defineConfig([
       'react-hooks/immutability': 'off',
       'react-hooks/globals': 'off',
       'react-hooks/set-state-in-effect': 'warn',
+      // System alerts don't match the app; questions and messages go through its own sheets.
+      'no-restricted-imports': ['error', {
+        paths: [{
+          name: 'react-native',
+          importNames: ['Alert'],
+          message: 'Use confirm() from @/utils/confirm or notify() from @/utils/notify.',
+        }],
+      }],
     },
   },
   {

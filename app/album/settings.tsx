@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from 'react-native';
 import PinModal, { PinIntent } from '@/components/ui/PinModal';
 import { hasPin } from '@/utils/pin';
 import Animated, {
@@ -27,6 +27,7 @@ import TextInputModal from '@/components/ui/TextInputModal';
 import TimePicker from '@/components/ui/TimePicker';
 import ExportSheet, { ExportFormat } from '@/components/timelapse/ExportSheet';
 import { confirm } from '@/utils/confirm';
+import { notify } from '@/utils/notify';
 import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
@@ -115,7 +116,12 @@ function AlbumSettingsScreen() {
     if (newEnabled) {
       const granted = await requestNotificationPermission();
       if (!granted) {
-        Alert.alert('Permission required', 'Enable notifications in Settings to use reminders.');
+        notify({
+          title: 'notifications are off',
+          message: 'enable notifications in settings to use reminders.',
+          tone: 'error',
+          action: { label: 'open settings', onPress: () => { Linking.openSettings().catch(() => {}); } },
+        });
         return;
       }
     }
@@ -177,16 +183,14 @@ function AlbumSettingsScreen() {
           cancelRef.current
         );
         setExporting(false);
-        haptics.success();
-        const skippedMsg = result.skipped > 0 ? ` Skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.` : '';
-        Alert.alert('Export complete', `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`);
+        const skippedMsg = result.skipped > 0 ? ` skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.` : '';
+        notify({ title: 'export complete', message: `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`, tone: 'success' });
       } catch (err: unknown) {
         setExporting(false);
         const message = err instanceof Error ? err.message : 'Unknown error';
         if (message !== 'Cancelled') {
-          haptics.error();
-          const detail = lastSaved > 0 ? `Saved ${lastSaved} of ${localCount} before failing.\n\n${message}` : message;
-          Alert.alert('Export failed', detail);
+          const detail = lastSaved > 0 ? `saved ${lastSaved} of ${localCount} before failing. ${message}` : message;
+          notify({ title: 'export failed', message: detail, tone: 'error' });
         }
       }
     } else if (format === 'backup') {
@@ -213,17 +217,18 @@ function AlbumSettingsScreen() {
           cancelRef.current
         );
         setExporting(false);
-        haptics.success();
+        // One success haptic: from the notice when some photos were left out, else here.
+        if (result.skipped === 0) haptics.success();
         await shareFile(result.filePath);
         await cleanupExportDir();
         if (result.skipped > 0) {
-          Alert.alert('Export complete', `Exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`);
+          notify({ title: 'export complete', message: `exported ${result.exported} photo${result.exported !== 1 ? 's' : ''}, skipped ${result.skipped} remote photo${result.skipped !== 1 ? 's' : ''}.`, tone: 'success' });
         }
       } catch (err: unknown) {
         setExporting(false);
         await cleanupExportDir();
         const message = err instanceof Error ? err.message : 'Unknown error';
-        if (message !== 'Cancelled') { haptics.error(); Alert.alert('Export failed', message); }
+        if (message !== 'Cancelled') notify({ title: 'export failed', message, tone: 'error' });
       }
     }
   }
@@ -244,8 +249,7 @@ function AlbumSettingsScreen() {
         setImportPhotos(picked.map(p => ({ uri: p.uri, suggestedDate: p.date ?? getToday() })));
         setShowImportModal(true);
       } catch (e: unknown) {
-        haptics.error();
-        Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
+        notify({ title: 'import failed', message: e instanceof Error ? e.message : 'unknown error', tone: 'error' });
       }
     } else if (source === 'backup') {
       importCancelRef.current = { cancelled: false };
@@ -261,26 +265,22 @@ function AlbumSettingsScreen() {
         }, importCancelRef.current, existingDates);
         setImporting(false);
         if (result.photos.length === 0 && result.skipped === 0 && result.unreadable === 0) {
-          Alert.alert('Import complete', 'No photos found in the backup file.');
+          notify({ title: 'import complete', message: 'no photos found in the backup file.', tone: 'info' });
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
         const batch = addPhotos(result.photos);
         const added = batch.added;
         const skipped = batch.skipped + result.skipped;
-        haptics.success();
         const parts = [`${added} photo${added !== 1 ? 's' : ''} restored`];
         if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
         if (result.unreadable > 0) parts.push(`${result.unreadable} couldn't be read`);
         const msg = parts.length > 1 ? `${parts.join('. ')}.` : `${parts[0]} from backup.`;
-        Alert.alert('Import complete', msg);
+        notify({ title: 'import complete', message: msg, tone: 'success' });
       } catch (e: unknown) {
         setImporting(false);
         const message = e instanceof Error ? e.message : 'Unknown error';
-        if (message !== 'Cancelled') {
-          haptics.error();
-          Alert.alert('Import failed', message);
-        }
+        if (message !== 'Cancelled') notify({ title: 'import failed', message, tone: 'error' });
       }
     }
   }
@@ -303,14 +303,13 @@ function AlbumSettingsScreen() {
 
     setShowImportModal(false);
     setImportPhotos([]);
-    haptics.success();
 
     // I4: honest counts
     const parts: string[] = [];
     if (added > 0) parts.push(`${added} photo${added !== 1 ? 's' : ''} added`);
     if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
     if (copyFailed > 0) parts.push(`${copyFailed} failed to copy`);
-    Alert.alert('Import complete', parts.length > 0 ? parts.join(', ') + '.' : 'No photos imported.');
+    notify({ title: 'import complete', message: parts.length > 0 ? parts.join(', ') + '.' : 'no photos imported.', tone: 'success' });
   }
 
   // --- PIN / Lock ---
