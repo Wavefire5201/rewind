@@ -60,7 +60,6 @@ const face = { hasFace: true, faceX: 0.5, faceY: 0.4, faceWidth: 0.3, faceHeight
 async function renderWithFaceInGuide() {
   await render(<FontProvider><CameraRoute /></FontProvider>);
   await act(async () => last(mockViewfinder).onAvailabilityChange(true));
-  await act(async () => fireEvent.press(screen.getByLabelText('Show face guide')));
   await act(async () => last(mockViewfinder).onFaceState(face));
 }
 
@@ -85,6 +84,19 @@ it('saves normally when the photos loaded', async () => {
   await render(<FontProvider><CameraRoute /></FontProvider>);
   await act(async () => last(mockControls).onCapture());
   expect(await last(mockPreview).confirmSave()).toBe(true);
+});
+
+it('opens with the face guide and auto-capture on', async () => {
+  await renderWithFaceInGuide();
+  expect(screen.getByLabelText('Hide face guide')).toBeTruthy();
+  expect(last(mockAutoCapture).enabled).toBe(true);
+});
+
+it('stops auto-capture when the face guide is turned off', async () => {
+  await renderWithFaceInGuide();
+  await act(async () => fireEvent.press(screen.getByLabelText('Hide face guide')));
+  expect(screen.getByLabelText('Show face guide')).toBeTruthy();
+  expect(last(mockAutoCapture).enabled).toBe(false);
 });
 
 it('pauses auto-capture and the camera while the capture preview is open', async () => {

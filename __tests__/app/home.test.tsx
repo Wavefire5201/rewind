@@ -19,14 +19,16 @@ jest.mock('@/hooks/usePhotos', () => ({
 }));
 jest.mock('@/hooks/useStreak', () => ({ useStreak: () => ({ currentStreak: 0, weekStatus: [] }) }));
 jest.mock('@/hooks/useGreeting', () => ({ useGreeting: () => ({ greeting: 'hi', dayNumber: 1 }) }));
-jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
+let mockLocked = false;
+jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => mockLocked, unlockAlbum: jest.fn() }) }));
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     albums: mockAlbums, photos: [], isLoading: false,
     addAlbum: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
   }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
@@ -56,6 +58,20 @@ beforeEach(() => {
   mockAlbums = [album('a', 'daily'), album('b', 'second')];
   mockTotalPhotos = 0;
   mockRecent = null;
+  mockLocked = false;
+});
+
+it('opens the camera on the top album from its quick-capture button', async () => {
+  await renderHome();
+  await act(async () => fireEvent.press(screen.getByLabelText('Take photo in daily')));
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith({ pathname: '/(tabs)/camera', params: { albumId: 'a' } });
+});
+
+it('has no quick-capture button on a locked album', async () => {
+  mockLocked = true;
+  await renderHome();
+  expect(screen.queryByLabelText('Take photo in daily')).toBeNull();
 });
 
 it('counts a single photo as "1 photo"', async () => {

@@ -8,7 +8,7 @@ import PhotoImage from '@/components/ui/PhotoImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Plus, CaretRight, Camera, GearSix, LockSimple, PencilSimple, Trash } from 'phosphor-react-native';
-import { Colors, Fonts, Sizes } from '@/constants/theme';
+import { Colors, Fonts, Pressed, Sizes } from '@/constants/theme';
 import { useAppContext } from '@/context/AppContext';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
@@ -57,6 +57,11 @@ function HeroCard({
     router.push({ pathname: '/album/[id]', params: { id: albumId } });
   }
 
+  function handleQuickCapture() {
+    haptics.tap();
+    router.push({ pathname: '/(tabs)/camera', params: { albumId } });
+  }
+
   return (
     <Pressable
       style={({ pressed }) => [styles.heroCard, pressed && { opacity: 0.8 }]}
@@ -89,33 +94,47 @@ function HeroCard({
       />
 
       <View style={styles.heroOverlay}>
-        <View style={styles.heroOverlayTop}>
-          <View style={styles.heroOverlayLeft}>
-            <Text style={[styles.heroAlbumName, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
-            {!locked && (
-              <Text style={[typography.small, { color: Colors.streak }]}>
-                {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
-              </Text>
-            )}
+        <View style={styles.heroOverlayMain}>
+          <View style={styles.heroOverlayTop}>
+            <View style={styles.heroOverlayLeft}>
+              <Text style={[styles.heroAlbumName, { fontFamily: fonts.regular }]} numberOfLines={1}>{albumName}</Text>
+              {!locked && (
+                <Text style={[typography.small, { color: Colors.streak }]}>
+                  {currentStreak > 0 ? `${currentStreak} day streak` : 'no streak yet'}
+                </Text>
+              )}
+            </View>
+            {locked && <CaretRight size={16} color={Colors.textTertiary} weight="regular" />}
           </View>
-          <CaretRight size={16} color={Colors.textTertiary} weight="regular" />
+          {!locked && (
+            <View style={styles.weekRow}>
+              {weekStatus.map((wd) => (
+                <View key={wd.date} style={styles.weekDayCol}>
+                  <View
+                    accessibilityLabel={`${wd.date}: ${wd.status}`}
+                    style={[
+                      styles.weekDot,
+                      (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
+                      wd.status === 'today-pending' && styles.weekDotToday,
+                      (wd.status === 'disabled' || wd.status === 'upcoming') && styles.weekDotDim,
+                    ]}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
         </View>
+        {/* Straight to the camera; the rest of the card opens the album. */}
         {!locked && (
-          <View style={styles.weekRow}>
-            {weekStatus.map((wd) => (
-              <View key={wd.date} style={styles.weekDayCol}>
-                <View
-                  accessibilityLabel={`${wd.date}: ${wd.status}`}
-                  style={[
-                    styles.weekDot,
-                    (wd.status === 'captured' || wd.status === 'today-done') && styles.weekDotFilled,
-                    wd.status === 'today-pending' && styles.weekDotToday,
-                    (wd.status === 'disabled' || wd.status === 'upcoming') && styles.weekDotDim,
-                  ]}
-                />
-              </View>
-            ))}
-          </View>
+          <Pressable
+            style={({ pressed }) => [styles.quickCapture, pressed && { opacity: Pressed.filled }]}
+            onPress={handleQuickCapture}
+            hitSlop={8}
+            accessibilityLabel={`Take photo in ${albumName}`}
+            accessibilityRole="button"
+          >
+            <Camera size={20} color={Colors.bgPage} weight="regular" />
+          </Pressable>
         )}
       </View>
     </Pressable>
@@ -499,8 +518,21 @@ const styles = StyleSheet.create({
     height: 160,
   },
   heroOverlay: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 16,
     padding: 16,
+  },
+  heroOverlayMain: {
+    flex: 1,
     gap: 8,
+  },
+  quickCapture: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.accent,
   },
   heroOverlayTop: {
     flexDirection: 'row',
