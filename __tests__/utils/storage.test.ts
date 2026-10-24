@@ -140,6 +140,46 @@ it('a save after a failed load never deletes rows it did not load', async () => 
   expect((await rows('photos')).map((r) => r.id)).toEqual(['p1', 'p2', 'p3', 'p4']);
 });
 
+it('until a load succeeds, profile and settings saves fill missing rows but never replace stored ones', async () => {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO kv (key, value) VALUES (?, ?)', 'profile', JSON.stringify(profile));
+  jest.spyOn(db, 'getAllAsync').mockRejectedValueOnce(new Error('read failed'));
+  await expect(loadAll()).rejects.toThrow('read failed');
+
+  // Onboarding (shown because no albums loaded) stamps a new profile; a settings change follows.
+  await expect(saveProfile({ name: 'You', avatarUri: null, joinDate: '2026-10-24' })).resolves.toBe(true);
+  await expect(saveSettings({ ...getDefaultSettings(), use24hClock: true })).resolves.toBe(true);
+  resetStorageForTests();
+  const loaded = await loadAll();
+  expect(loaded.profile).toEqual(profile);
+  expect(loaded.settings.use24hClock).toBe(true); // no settings row was stored, so this one fills it
+});
+
+it('a failed change is retried whole by the next save of any slice', async () => {
+  const a1 = album('a1');
+  const a2 = album('a2');
+  const p1 = photo('p1', '2026-03-01');
+  const p2 = photo('p2', '2026-03-02', { albumId: 'a2' });
+  await Promise.all([saveAlbums([a1, a2]), savePhotos([p1, p2])]);
+
+  // Deleting a2 with its photos fails...
+  failNextTransaction(new Error('disk full'));
+  await expect(Promise.all([saveAlbums([a1]), savePhotos([p1])])).resolves.toEqual([false, false]);
+  // ...and the next save, an unrelated rename, lands the whole delete with it: no orphaned photos.
+  await expect(saveAlbums([{ ...a1, name: 'renamed' }])).resolves.toBe(true);
+  expect((await rows('albums')).map((r) => [r.id, r.name])).toEqual([['a1', 'renamed']]);
+  expect((await rows('photos')).map((r) => r.id)).toEqual(['p1']);
+});
+
+it('a clear drops a failed change instead of retrying it', async () => {
+  await savePhotos([photo('p1', '2026-03-01')]);
+  failNextTransaction(new Error('disk full'));
+  await expect(savePhotos([photo('p1', '2026-03-01'), photo('p2', '2026-03-02')])).resolves.toBe(false);
+  await expect(clearAllData()).resolves.toBe(true);
+  await expect(saveAlbums([album('a1')])).resolves.toBe(true);
+  expect(await rows('photos')).toEqual([]);
+});
+
 it('saves during a commit coalesce into one later flush, in order', async () => {
   sqliteLog.transactions = 0;
   const a = savePhotos([photo('p1', '2026-03-01', { caption: 'A' })]);

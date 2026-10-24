@@ -91,3 +91,17 @@ it('photo and album rows insert into their tables', async () => {
   const stored = await db.getFirstAsync<Record<string, unknown>>('SELECT * FROM photos WHERE id = ?', 'p1');
   expect(rowToPhoto(stored as never)).toEqual(fullPhoto);
 });
+
+it("a JSON column that won't parse is left out, so one bad row can't stop the app loading", () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const back = rowToPhoto({ ...photoToRow(fullPhoto), face_scan: '{not json', face_landmarks: '[' });
+  // A missing scan is redone by the backfill; the rest of the photo is intact.
+  expect('faceScan' in back).toBe(false);
+  expect('faceLandmarks' in back).toBe(false);
+  expect(back.caption).toBe('first day');
+  const album: Album = {
+    id: 'a1', name: 'daily', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false,
+  };
+  expect(rowToAlbum({ ...albumToRow(album, 0), framing: 'nope' })).toEqual(album);
+  warn.mockRestore();
+});

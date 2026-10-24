@@ -12,8 +12,11 @@ import { notify } from '@/utils/notify';
  * photo is a new object), and upserts or deletes just those rows. Saves made in the same tick share
  * one flush and one transaction, so e.g. an album and its photos are deleted together or not at
  * all. Flushes run one at a time; saves made during one wait for the next, newest state winning.
- * A failed flush rolls back, keeps the last committed state (the next save retries the change),
- * logs, and shows a notice.
+ * A failed flush rolls back, keeps the last committed state, logs, and shows a notice; the next
+ * save of anything retries the whole failed change with it, so it never lands half done.
+ *
+ * Until a load succeeds, the profile and settings rows are only filled in, never replaced: the app
+ * didn't read them, so e.g. onboarding after a failed load can't stamp over the stored profile.
  */
 
 export function getDefaultSettings(): AppSettings {
@@ -50,6 +53,10 @@ let committedSettings: AppSettings | null = null;
 let pending: Pending = {};
 let waiters: ((saved: boolean) => void)[] = [];
 let scheduled = false;
+// The slices of the last failed flush, retried under newer ones by the next flush.
+let failed: Pending = {};
+// Whether the database's contents are known: loaded, or cleared.
+let loaded = false;
 
 const PHOTO_COLUMNS: (keyof PhotoRow)[] = [
   'id', 'album_id', 'date', 'image_uri', 'thumb_uri', 'caption', 'captured_at', 'camera_direction', 'encoding', 'face_scan', 'face_landmarks',
@@ -63,6 +70,7 @@ const upsertSql = (table: string, columns: string[]) =>
 const UPSERT_PHOTO = upsertSql('photos', PHOTO_COLUMNS);
 const UPSERT_ALBUM = upsertSql('albums', ALBUM_COLUMNS);
 const UPSERT_KV = 'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
+const FILL_KV = 'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING';
 
 function parseJson<T>(text: string | undefined, what: string): T | null {
   if (text === undefined) return null;
@@ -93,6 +101,7 @@ export async function loadAll(): Promise<StoredData> {
   committedAlbums = new Map(albums.map((a, position) => [a.id, { album: a, position }]));
   committedProfile = profile;
   committedSettings = settings;
+  loaded = true;
   return { photos, albums, profile, settings };
 }
 
@@ -141,11 +150,15 @@ function schedule(): void {
 
 async function runFlushes(): Promise<void> {
   while (Object.keys(pending).length > 0) {
-    const batch = pending;
+    // A clear wipes the failed change too, rather than retrying it.
+    const batch = pending.clear ? pending : { ...failed, ...pending };
     const batchWaiters = waiters;
     pending = {};
     waiters = [];
+    failed = {};
     const saved = await flush(batch);
+    // Kept for the next save to retry, not retried here: a failing disk would loop.
+    if (!saved && !batch.clear) failed = batch;
     batchWaiters.forEach((resolve) => resolve(saved));
   }
   scheduled = false;
@@ -162,12 +175,13 @@ async function flush(batch: Pending): Promise<boolean> {
       if (batch.clear) await db.execAsync('DELETE FROM photos; DELETE FROM albums; DELETE FROM kv;');
       if (batch.photos) photos = await writePhotos(db, photos, batch.photos);
       if (batch.albums) albums = await writeAlbums(db, albums, batch.albums);
+      const kvSql = loaded || batch.clear ? UPSERT_KV : FILL_KV;
       if (batch.profile && batch.profile !== profile) {
-        await db.runAsync(UPSERT_KV, 'profile', JSON.stringify(batch.profile));
+        await db.runAsync(kvSql, 'profile', JSON.stringify(batch.profile));
         profile = batch.profile;
       }
       if (batch.settings && batch.settings !== settings) {
-        await db.runAsync(UPSERT_KV, 'settings', JSON.stringify(batch.settings));
+        await db.runAsync(kvSql, 'settings', JSON.stringify(batch.settings));
         settings = batch.settings;
       }
     });
@@ -181,6 +195,7 @@ async function flush(batch: Pending): Promise<boolean> {
   committedAlbums = albums;
   committedProfile = profile;
   committedSettings = settings;
+  if (batch.clear) loaded = true;
   return true;
 }
 
@@ -241,4 +256,6 @@ export function resetStorageForTests(): void {
   pending = {};
   waiters = [];
   scheduled = false;
+  failed = {};
+  loaded = false;
 }

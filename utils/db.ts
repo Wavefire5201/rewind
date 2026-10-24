@@ -97,6 +97,18 @@ export interface AlbumRow {
 
 const json = (value: unknown): string | null => (value === undefined ? null : JSON.stringify(value));
 
+// A JSON column that won't parse is left out (a missing scan is redone, a missing framing falls back
+// to the default), so one bad row can't stop the app loading.
+function parseColumn<T>(text: string | null, what: string): T | undefined {
+  if (text === null) return undefined;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.warn(`unreadable ${what}, left out`);
+    return undefined;
+  }
+}
+
 export function photoToRow(p: PhotoEntry): PhotoRow {
   return {
     id: p.id,
@@ -126,8 +138,10 @@ export function rowToPhoto(r: PhotoRow): PhotoEntry {
   };
   if (r.thumb_uri !== null) photo.thumbUri = r.thumb_uri;
   if (r.encoding !== null) photo.encoding = r.encoding as PhotoEntry['encoding'];
-  if (r.face_scan !== null) photo.faceScan = JSON.parse(r.face_scan);
-  if (r.face_landmarks !== null) photo.faceLandmarks = JSON.parse(r.face_landmarks);
+  const faceScan = parseColumn<PhotoEntry['faceScan']>(r.face_scan, `face scan of ${r.id}`);
+  if (faceScan !== undefined) photo.faceScan = faceScan;
+  const faceLandmarks = parseColumn<PhotoEntry['faceLandmarks']>(r.face_landmarks, `face landmarks of ${r.id}`);
+  if (faceLandmarks !== undefined) photo.faceLandmarks = faceLandmarks;
   return photo;
 }
 
@@ -154,6 +168,7 @@ export function rowToAlbum(r: AlbumRow): Album {
     reminderTime: r.reminder_time,
     isLocked: r.is_locked === 1,
   };
-  if (r.framing !== null) album.framing = JSON.parse(r.framing);
+  const framing = parseColumn<Album['framing']>(r.framing, `framing of ${r.id}`);
+  if (framing !== undefined) album.framing = framing;
   return album;
 }

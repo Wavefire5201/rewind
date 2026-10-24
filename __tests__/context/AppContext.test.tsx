@@ -142,6 +142,21 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it("after a failed load, a profile update (onboarding's new join date) leaves the stored profile alone", async () => {
+    const ada: UserProfile = { name: 'Ada', avatarUri: null, joinDate: '2021-05-03' };
+    await seed({ photos: [photo({ id: 'p1', date: '2021-05-03' })], profile: ada });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(await getDb(), 'getAllAsync').mockRejectedValueOnce(new Error('read failed'));
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.updateProfile({ joinDate: '2026-10-24' });
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(await stored<UserProfile>('profile')).toEqual(ada);
+    errorSpy.mockRestore();
+    await unmount();
+  });
+
   it('loads persisted photos/profile/settings/albums on mount', async () => {
     await seed({
       photos: [photo({ id: 'p1' })],
@@ -470,6 +485,9 @@ describe('AppContext', () => {
         await new Promise((r) => setTimeout(r, 20));
       });
       expect(deletedUris).not.toContain('file:///document/b.jpg');
+      // Neither half of the delete was stored.
+      expect((await storedAlbums()).map((a) => a.id)).toEqual(['a1', 'a2']);
+      expect((await storedPhotos()).map((p) => p.id)).toEqual(['p1']);
       await unmount();
     });
 
