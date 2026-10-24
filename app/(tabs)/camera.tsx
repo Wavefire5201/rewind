@@ -78,7 +78,8 @@ function CameraScreen() {
   previewOpenRef.current = showPreview;
   const [capturedUri, setCapturedUri] = useState('');
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [showFaceGuide, setShowFaceGuide] = useState(false);
+  // On by default: the guide also drives auto-capture, the app's main way to take a shot.
+  const [showFaceGuide, setShowFaceGuide] = useState(true);
   const [capturedLandmarks, setCapturedLandmarks] = useState<FaceLandmarks | null>(null);
   const [faceState, setFaceState] = useState<FaceState>({ hasFace: false, faceX: 0, faceY: 0, faceWidth: 0, faceHeight: 0, yawAngle: 0, rollAngle: 0 });
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
