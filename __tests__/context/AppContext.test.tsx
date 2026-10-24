@@ -732,6 +732,27 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it('two album changes before a render both take effect', async () => {
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+      ctx!.addAlbum(album({ id: 'a2' }));
+      ctx!.addAlbum(album({ id: 'a3' }));
+    });
+    await act(async () => {
+      ctx!.deleteAlbum('a2');
+      ctx!.deleteAlbum('a3');
+    });
+    expect(ctx!.albums.map((a) => a.id)).toEqual(['a1']);
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a4' }));
+      ctx!.deleteAlbum('a1');
+    });
+    expect(ctx!.albums.map((a) => a.id)).toEqual(['a4']);
+    await waitFor(async () => expect((await storedAlbums()).map((a) => a.id)).toEqual(['a4']));
+    await unmount();
+  });
+
   it('deleting an album removes it and its photos together', async () => {
     const { unmount } = await renderProvider();
     await act(async () => {
@@ -852,6 +873,27 @@ describe('AppContext', () => {
     expect(deletedUris).toContain('file:///document/p_thumb.jpg');
     // The deleted albums' daily reminders must stop too.
     expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
+    await unmount();
+  });
+
+  it('a photo change made while the reset clears never writes the old rows back', async () => {
+    fileStore.set('file:///document/p.jpg', 'QUJD');
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+    // E.g. a face-scan backfill saving a batch just as the reset starts.
+    await act(async () => {
+      const reset = ctx!.resetAllData();
+      ctx!.updatePhoto('p1', { caption: 'scanned' });
+      await reset;
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(ctx!.photos).toEqual([]);
+    expect(await storedPhotos()).toEqual([]);
     await unmount();
   });
 

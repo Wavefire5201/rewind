@@ -81,6 +81,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // depend on React's eager-evaluation timing — this ref is always fresh.
   const photosRef = useRef<PhotoEntry[]>([]);
   photosRef.current = photos;
+  // Mirrors for resetAllData to put back if its clear fails.
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  // Albums change only on user actions, each computed from this list and setting it at once
+  // (not at the next render), so changes made before a render build on each other, and a
+  // delete can save the albums together with its photos (see deleteAlbum).
+  const albumsRef = useRef<Album[]>(DEFAULT_ALBUMS);
+  const setAlbumsNow = useCallback((next: Album[]) => {
+    albumsRef.current = next;
+    setAlbums(next);
+  }, []);
 
   // Unlocks are memory-only: a restart, or a while in the background, locks albums again.
   const unlockAlbum = useCallback((id: string) => {
@@ -156,7 +170,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (stored.albums.length > 0) {
-        setAlbums(stored.albums);
+        setAlbumsNow(stored.albums);
       } else if (USE_MOCK_DATA) {
         // Seed default album for mock data mode
         const earliestDate = [...MOCK_PHOTOS].sort(byDate)[0]?.date;
@@ -168,13 +182,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           reminderTime: '08:00',
           isLocked: false,
         };
-        setAlbums([mockAlbum]);
+        setAlbumsNow([mockAlbum]);
         void saveAlbums([mockAlbum]);
       }
       setIsLoading(false);
     }
     init();
-  }, []);
+  }, [setAlbumsNow]);
 
   // Applies one change to the photos and saves it. Resolves with whether the save reached
   // storage; files an update removes are deleted only after that (see deleteUnreferencedFiles).
@@ -298,27 +312,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addAlbum = useCallback((album: Album) => {
-    setAlbums(prev => {
-      const next = [...prev, album];
-      void saveAlbums(next);
-      return next;
-    });
-  }, []);
+    const next = [...albumsRef.current, album];
+    setAlbumsNow(next);
+    void saveAlbums(next);
+  }, [setAlbumsNow]);
 
   const updateAlbum = useCallback((id: string, updates: Partial<Album>) => {
-    setAlbums(prev => {
-      const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
-      void saveAlbums(next);
-      return next;
-    });
+    const next = albumsRef.current.map(a => a.id === id ? { ...a, ...updates } : a);
+    setAlbumsNow(next);
+    void saveAlbums(next);
     // Locking an album again must take effect, not ride on an earlier unlock.
     if (updates.isLocked === true) forgetUnlock(id);
-  }, [forgetUnlock]);
+  }, [setAlbumsNow, forgetUnlock]);
 
   const deleteAlbum = useCallback((id: string) => {
-    if (albums.length <= 1) return;
-    const nextAlbums = albums.filter(a => a.id !== id);
-    setAlbums(nextAlbums);
+    if (albumsRef.current.length <= 1) return;
+    const nextAlbums = albumsRef.current.filter(a => a.id !== id);
+    setAlbumsNow(nextAlbums);
     cancelAlbumReminder(id);
     forgetUnlock(id);
     // The album and its photos save in the same tick, so they share one transaction: both go or
@@ -340,23 +350,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).then(saved => {
       if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
-  }, [albums, forgetUnlock]);
+  }, [setAlbumsNow, forgetUnlock]);
 
   const resetAllData = useCallback(async () => {
-    const localUris = photosRef.current.flatMap(filesOf).filter((uri): uri is string => !!uri?.startsWith('file://'));
-    // A failed clear leaves every row stored (storage has said so), so their files stay too.
-    if (!(await clearAllData())) return;
-    for (const uri of localUris) {
+    const before = { photos: photosRef.current, albums: albumsRef.current, profile: profileRef.current, settings: settingsRef.current };
+    // Emptied in the same tick as the clear, so a change made meanwhile (a backfill's batch, say)
+    // builds on the empty app and can't write the old rows back.
+    const cleared = clearAllData();
+    setPhotos([]);
+    setAlbumsNow([]);
+    setProfile(newProfile());
+    setSettings(getDefaultSettings());
+    if (!(await cleared)) {
+      // Every row is still stored (storage has said so): show them again, and keep their files.
+      setPhotos(before.photos);
+      setAlbumsNow(before.albums);
+      setProfile(before.profile);
+      setSettings(before.settings);
+      return;
+    }
+    setUnlockedAlbumIds(new Set());
+    for (const uri of new Set(before.photos.flatMap(filesOf))) {
+      if (!uri?.startsWith('file://')) continue;
       try { new File(uri).delete(); } catch {}
     }
     // The albums are gone, so are their reminders.
     await cancelAllReminders();
-    setPhotos([]);
-    setProfile(newProfile());
-    setSettings(getDefaultSettings());
-    setAlbums([]);
-    setUnlockedAlbumIds(new Set());
-  }, []);
+  }, [setAlbumsNow]);
 
   const seedMockPhotos = useCallback((albumId?: string) => {
     // Generate 7 mock photos: today back through last 6 days
@@ -410,21 +430,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return prev;
     });
 
-    setAlbums(prev => {
-      const earliestISO = new Date(earliest + 'T00:00:00').toISOString();
-      const updated = prev.map(a => {
-        if (a.id === resolvedAlbumId && a.createdAt > earliestISO) {
-          return { ...a, createdAt: earliestISO };
-        }
-        return a;
-      });
-      if (JSON.stringify(updated) !== JSON.stringify(prev)) {
-        void saveAlbums(updated);
-        return updated;
+    const earliestISO = new Date(earliest + 'T00:00:00').toISOString();
+    const prevAlbums = albumsRef.current;
+    const updated = prevAlbums.map(a => {
+      if (a.id === resolvedAlbumId && a.createdAt > earliestISO) {
+        return { ...a, createdAt: earliestISO };
       }
-      return prev;
+      return a;
     });
-  }, []);
+    if (updated.some((a, i) => a !== prevAlbums[i])) {
+      setAlbumsNow(updated);
+      void saveAlbums(updated);
+    }
+  }, [setAlbumsNow]);
 
   // Memoized so a provider render with nothing changed doesn't re-render every consumer.
   const value = useMemo<AppContextValue>(() => ({
