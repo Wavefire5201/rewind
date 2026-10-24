@@ -4,6 +4,7 @@ import { FontProvider } from '@/context/FontContext';
 import NoticeLayer from '@/components/ui/overlay/NoticeLayer';
 import { notify, getNotices, resetNoticesForTests } from '@/utils/notify';
 import { lastGesture, resetCapturedGestures } from '../../helpers/gestureHandlerMock';
+import { timingCalls } from '../../helpers/reanimatedMock';
 
 jest.mock('react-native-reanimated', () => require('../../helpers/reanimatedMock').reanimatedMock);
 jest.mock('react-native-gesture-handler', () => require('../../helpers/gestureHandlerMock').gestureHandlerMock);
@@ -32,6 +33,35 @@ it('only the most recently mounted layer renders notices', async () => {
   // The modal holding layer b closes: the notice moves to the layer underneath.
   await act(async () => rerender(<FontProvider><NoticeLayer testID="a" /></FontProvider>));
   expect(within(screen.getByTestId('a')).getByText('saved')).toBeTruthy();
+});
+
+it('a notice already on screen does not slide in again when a newer layer takes over', async () => {
+  const { rerender } = await inFonts(<NoticeLayer testID="a" />);
+  await act(async () => { notify({ title: 'export complete', tone: 'success' }); });
+  expect(screen.getByTestId('notice-card').props.entering).toBeDefined();
+  await act(async () => rerender(<FontProvider><NoticeLayer testID="a" /><NoticeLayer testID="b" /></FontProvider>));
+  expect(within(screen.getByTestId('b')).getByTestId('notice-card').props.entering).toBeUndefined();
+});
+
+it('a disabled layer takes no notices (e.g. a sheet that is closing)', async () => {
+  await inFonts(<><NoticeLayer testID="a" /><NoticeLayer testID="b" enabled={false} /></>);
+  await act(async () => { notify({ title: 'saved' }); });
+  expect(within(screen.getByTestId('a')).getByText('saved')).toBeTruthy();
+});
+
+it("a moved notice's countdown carries on from where it was", async () => {
+  jest.useFakeTimers();
+  try {
+    const { rerender } = await inFonts(<NoticeLayer testID="a" />);
+    await act(async () => { notify({ title: 'saved', tone: 'success' }); });
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    timingCalls.length = 0;
+    await act(async () => rerender(<FontProvider><NoticeLayer testID="a" /><NoticeLayer testID="b" /></FontProvider>));
+    const countdown = timingCalls.find((c) => c.to === 0);
+    expect(countdown?.config?.duration).toBe(2000);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('a swipe dismisses a notice', async () => {
@@ -86,6 +116,16 @@ it('slides in from the top and out the top', async () => {
   const card = screen.getByTestId('notice-card');
   expect(card.props.entering.animation).toBe('FadeInUp');
   expect(card.props.exiting.animation).toBe('FadeOutUp');
+});
+
+it('the countdown bar runs even with Reduce Motion on', async () => {
+  // Reanimated's default would jump it to empty at once.
+  useReducedMotion.mockReturnValue(true);
+  timingCalls.length = 0;
+  await inFonts(<NoticeLayer />);
+  await act(async () => { notify({ title: 'saved', tone: 'success' }); });
+  const countdown = timingCalls.find((c) => c.to === 0 && (c.config?.duration ?? 0) > 2900);
+  expect(countdown?.config?.reduceMotion).toBe('never');
 });
 
 it('with Reduce Motion the notice only fades', async () => {

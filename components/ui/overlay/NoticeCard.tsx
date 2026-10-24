@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing, FadeIn, FadeInUp, FadeOut, FadeOutUp, LinearTransition, ReduceMotion,
-  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { CheckCircle, Info, WarningCircle } from 'phosphor-react-native';
@@ -27,12 +27,19 @@ const ENTER_REDUCED = FadeIn.duration(200).reduceMotion(ReduceMotion.Never);
 const EXIT_REDUCED = FadeOut.duration(150).reduceMotion(ReduceMotion.Never);
 const RESTACK = LinearTransition.duration(220).easing(EASE_OUT);
 
+/** Notices that have been on screen: one moving to another layer (a sheet opened or closed over
+ *  it) is mounted again there, and mustn't slide in a second time. */
+const shownNotices = new Set<string>();
+
 export default function NoticeCard({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
   const { fonts } = useFont();
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
+  const [firstShow] = useState(() => !shownNotices.has(notice.id));
+  const duration = NOTICE_DURATION_MS[notice.tone];
+  // Set from the expiry time in the effect below (render stays pure).
   const timeLeft = useSharedValue(1);
   const Icon = ICON[notice.tone];
   // A stable function for the gesture worklet: the gesture is built once, not on every render.
@@ -41,9 +48,21 @@ export default function NoticeCard({ notice, onDismiss }: { notice: Notice; onDi
   const dismiss = useCallback(() => onDismissRef.current(), []);
 
   useEffect(() => {
-    if (notice.sticky) return;
-    timeLeft.value = withTiming(0, { duration: NOTICE_DURATION_MS[notice.tone], easing: Easing.linear });
-  }, [notice.sticky, notice.tone, timeLeft]);
+    shownNotices.add(notice.id);
+  }, [notice.id]);
+
+  // Counts down to the store's expiry time, so a notice that moves layers carries on where it was
+  // and a replaced one starts again. Runs under Reduce Motion too: it's a timer, and skipped it
+  // would show empty from the start.
+  useEffect(() => {
+    if (notice.expiresAt === undefined) return;
+    const left = Math.max(0, notice.expiresAt - Date.now());
+    const never = ReduceMotion.Never;
+    timeLeft.value = withSequence(
+      withTiming(left / duration, { duration: 0, reduceMotion: never }),
+      withTiming(0, { duration: left, easing: Easing.linear, reduceMotion: never }),
+    );
+  }, [notice.expiresAt, duration, timeLeft]);
 
   const pan = useMemo(() => Gesture.Pan()
     // Moves only after a real drag, so a tap still reaches the action button.
@@ -84,7 +103,7 @@ export default function NoticeCard({ notice, onDismiss }: { notice: Notice; onDi
   return (
     <Animated.View
       testID="notice-card"
-      entering={reduceMotion ? ENTER_REDUCED : ENTER}
+      entering={firstShow ? (reduceMotion ? ENTER_REDUCED : ENTER) : undefined}
       exiting={reduceMotion ? EXIT_REDUCED : EXIT}
       layout={RESTACK}
     >

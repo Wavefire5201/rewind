@@ -80,7 +80,8 @@ jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('@/components/ui/TimePicker', () => () => null);
 jest.mock('@/components/ui/TextInputModal', () => () => null);
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockExportSheet(props); return null; } }));
-jest.mock('@/components/timelapse/ExportProgress', () => () => null);
+const mockProgress = jest.fn();
+jest.mock('@/components/timelapse/ExportProgress', () => (props: unknown) => { mockProgress(props); return null; });
 jest.mock('@/components/ImportPhotoModal', () => (props: typeof mockImportModal) => { mockImportModal = props; return null; });
 jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockImportSheet(props); return null; } }));
 
@@ -274,4 +275,14 @@ describe('results as notices', () => {
     expect(mockUpdateAlbum).not.toHaveBeenCalled();
     openSettings.mockRestore();
   });
+});
+
+it('cancelling an export or import plays no haptic of its own (the cancel button taps)', async () => {
+  const Haptics = jest.requireMock('expo-haptics') as { impactAsync: jest.Mock };
+  await renderSettings();
+  const cancels = mockProgress.mock.calls.slice(-2).map(([p]) => (p as { onCancel: () => void }).onCancel);
+  expect(cancels).toHaveLength(2);
+  Haptics.impactAsync.mockClear();
+  cancels.forEach((cancel) => cancel());
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
 });

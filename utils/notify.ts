@@ -16,7 +16,8 @@ export interface NoticeInput {
   /** Stays until swiped away: for messages that must not be missed. */
   sticky?: boolean;
   action?: NoticeAction;
-  /** A notice with the same key replaces the visible one instead of stacking. */
+  /** A notice with the same key replaces the visible one instead of stacking. Defaults to its
+   *  tone, title and message, so identical notices never stack. */
   key?: string;
 }
 export interface Notice {
@@ -26,7 +27,9 @@ export interface Notice {
   tone: NoticeTone;
   sticky: boolean;
   action?: NoticeAction;
-  key?: string;
+  key: string;
+  /** When it leaves on its own (ms since epoch); undefined while sticky. */
+  expiresAt?: number;
 }
 
 /** Errors stay longer: they're the ones people need to read. */
@@ -53,25 +56,34 @@ function clearTimer(id: string): void {
 /** Shows a notice, plays its tone's haptic (callers shouldn't play their own), and returns its id. */
 export function notify(input: NoticeInput): string {
   const tone = input.tone ?? 'info';
+  const key = input.key ?? `${tone}|${input.title}|${input.message ?? ''}`;
+  const replaced = notices.find((n) => n.key === key);
+  // A screen-reader user needs time to reach the notice (and its button) by swiping.
+  const sticky = Boolean(input.sticky || input.action || screenReaderEnabled);
   const notice: Notice = {
-    id: `notice-${++nextId}`,
+    // A replacement keeps the id, so its card stays on screen and just updates.
+    id: replaced?.id ?? `notice-${++nextId}`,
     title: input.title,
     message: input.message,
     tone,
-    // A screen-reader user needs time to reach the notice (and its button) by swiping.
-    sticky: Boolean(input.sticky || input.action || screenReaderEnabled),
+    sticky,
     action: input.action,
-    key: input.key,
+    key,
+    expiresAt: sticky ? undefined : Date.now() + NOTICE_DURATION_MS[tone],
   };
 
-  const replaced = input.key ? notices.find((n) => n.key === input.key) : undefined;
   let next: Notice[];
   if (replaced) {
     clearTimer(replaced.id);
     next = notices.map((n) => (n === replaced ? notice : n));
   } else {
     next = [...notices, notice];
-    while (next.length > MAX_NOTICES) clearTimer(next.shift()!.id);
+    while (next.length > MAX_NOTICES) {
+      // The oldest that would leave anyway goes first; sticky ones are the ones that matter.
+      const index = Math.max(0, next.findIndex((n) => !n.sticky));
+      clearTimer(next[index].id);
+      next.splice(index, 1);
+    }
   }
   if (!notice.sticky) timers.set(notice.id, setTimeout(() => dismissNotice(notice.id), NOTICE_DURATION_MS[tone]));
   publish(next);

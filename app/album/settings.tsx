@@ -510,7 +510,7 @@ function AlbumSettingsScreen() {
         label={exportLabel}
         current={exportCurrent}
         total={exportTotal}
-        onCancel={() => { cancelRef.current.cancelled = true; haptics.tap(); }}
+        onCancel={() => { cancelRef.current.cancelled = true; }}
       />
 
       <ExportProgress
@@ -518,7 +518,7 @@ function AlbumSettingsScreen() {
         label="restoring from backup..."
         current={importCurrent}
         total={importTotal}
-        onCancel={() => { importCancelRef.current.cancelled = true; haptics.tap(); }}
+        onCancel={() => { importCancelRef.current.cancelled = true; }}
       />
 
       <ImportPhotoModal

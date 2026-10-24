@@ -10,6 +10,8 @@ import { View, FlatList } from 'react-native';
 export type FrameInfo = { timestamp: number };
 export type TestClock = { tick: (info: FrameInfo) => void; active: boolean; setActive: (active: boolean) => void };
 export const frameClocks: TestClock[] = [];
+/** Every withTiming/withSpring call's target and config, so tests can check e.g. reduceMotion. */
+export const timingCalls: { to: unknown; config?: { reduceMotion?: string; duration?: number } }[] = [];
 
 let pendingUiWrites: (() => void)[] = [];
 let onUiThread = false;
@@ -53,13 +55,19 @@ export const reanimatedMock = {
   ...layoutAnimations,
   ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
   /** Animations finish at once: the value jumps to its target and the callback reports finished. */
-  withTiming<T>(to: T, _config?: unknown, callback?: (finished: boolean) => void): T {
+  withTiming<T>(to: T, config?: { reduceMotion?: string }, callback?: (finished: boolean) => void): T {
+    timingCalls.push({ to, config });
     callback?.(true);
     return to;
   },
-  withSpring<T>(to: T, _config?: unknown, callback?: (finished: boolean) => void): T {
+  withSpring<T>(to: T, config?: { reduceMotion?: string }, callback?: (finished: boolean) => void): T {
+    timingCalls.push({ to, config });
     callback?.(true);
     return to;
+  },
+  /** Runs the steps in order; the value ends at the last one. */
+  withSequence<T>(...animations: T[]): T {
+    return animations[animations.length - 1];
   },
   withDelay<T>(_delay: number, animation: T): T {
     return animation;

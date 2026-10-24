@@ -10,8 +10,12 @@ import { dismissNotice, getNotices, setScreenReaderEnabled, subscribeNotices } f
  * Shows the notices, stacked under the status bar, when this is the topmost notice layer. Mount
  * one at the app root and one inside every Modal; only the top one draws.
  */
-export default function NoticeLayer({ testID }: { testID?: string }) {
-  const isTop = useTopLayer('notice');
+export default function NoticeLayer({ testID, enabled = true }: {
+  testID?: string;
+  /** False while its sheet is closing, so notices go to the layer underneath straight away. */
+  enabled?: boolean;
+}) {
+  const isTop = useTopLayer('notice', enabled);
   const notices = useSyncExternalStore(subscribeNotices, getNotices);
   const insets = useSafeAreaInsets();
 

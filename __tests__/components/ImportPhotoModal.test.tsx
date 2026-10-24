@@ -35,7 +35,7 @@ it('changing the date uses the themed picker', async () => {
 it.each([
   ['saving', 'save'],
   ['skipping', 'Skip this photo'],
-] as const)('%s the last photo plays one success haptic, not a tap as well', async (_what, button) => {
+] as const)('%s the last photo taps once: the import\'s result notice plays the success', async (_what, button) => {
   jest.clearAllMocks();
   await render(
     <FontProvider>
@@ -43,7 +43,6 @@ it.each([
     </FontProvider>,
   );
   await act(async () => fireEvent.press(screen.getByRole('button', { name: button })));
-  expect(Haptics.impactAsync).not.toHaveBeenCalled();
-  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
-  expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
+  expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });

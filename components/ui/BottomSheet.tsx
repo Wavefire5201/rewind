@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
-  Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+  Easing, ReduceMotion, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,9 +30,11 @@ export interface BottomSheetProps {
   testID?: string;
 }
 
-const OPEN = { duration: 340, easing: Easing.bezier(0.16, 1, 0.3, 1) };
-const CLOSE = { duration: 220, easing: Easing.bezier(0.4, 0, 1, 1) };
-const SCRIM_MS = 200;
+// Never skipped: under Reduce Motion the sheet fades with these instead of sliding (Reanimated's
+// default would jump straight to the end).
+const OPEN = { duration: 340, easing: Easing.bezier(0.16, 1, 0.3, 1), reduceMotion: ReduceMotion.Never };
+const CLOSE = { duration: 220, easing: Easing.bezier(0.4, 0, 1, 1), reduceMotion: ReduceMotion.Never };
+const SCRIM = { duration: 200, reduceMotion: ReduceMotion.Never };
 /** A drag down past this share of the sheet's height, or this fast, closes it. */
 const CLOSE_DRAG_SHARE = 0.3;
 const CLOSE_DRAG_VELOCITY = 800;
@@ -71,10 +73,10 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     if (visible) {
       dragY.value = 0;
       progress.value = withTiming(1, OPEN);
-      scrim.value = withTiming(1, { duration: SCRIM_MS });
+      scrim.value = withTiming(1, SCRIM);
     } else {
       progress.value = withTiming(0, CLOSE, (finished) => { if (finished) runOnJS(finishClose)(); });
-      scrim.value = withTiming(0, { duration: SCRIM_MS });
+      scrim.value = withTiming(0, SCRIM);
     }
   }, [visible, progress, scrim, dragY, finishClose]);
 
@@ -92,6 +94,8 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
   }, [inline, mounted, requestClose]);
 
   const pan = useMemo(() => Gesture.Pan()
+    // A sheet that can't be dismissed doesn't drag either.
+    .enabled(dismissible)
     .activeOffsetY(10)
     // Sideways swipes belong to the content (e.g. the calendar's months).
     .failOffsetX([-20, 20])
@@ -99,12 +103,13 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
       dragY.value = Math.max(0, e.translationY);
     })
     .onEnd((e) => {
-      if (e.translationY > sheetHeight.value * CLOSE_DRAG_SHARE || e.velocityY > CLOSE_DRAG_VELOCITY) {
+      const pastThreshold = e.translationY > sheetHeight.value * CLOSE_DRAG_SHARE || e.velocityY > CLOSE_DRAG_VELOCITY;
+      if (dismissible && pastThreshold) {
         runOnJS(requestClose)();
       } else {
         dragY.value = withTiming(0, OPEN);
       }
-    }), [dragY, sheetHeight, requestClose]);
+    }), [dragY, sheetHeight, requestClose, dismissible]);
 
   const sheetStyle = useAnimatedStyle(() => (reduceMotion
     ? { opacity: progress.value, transform: [{ translateY: dragY.value }] }
@@ -160,7 +165,7 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     >
       <GestureHandlerRootView style={styles.root}>
         {layers}
-        <NoticeLayer />
+        <NoticeLayer enabled={visible} />
       </GestureHandlerRootView>
     </Modal>
   );

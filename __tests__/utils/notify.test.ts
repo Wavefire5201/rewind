@@ -106,3 +106,31 @@ it('keeps the same list object until something changes', () => {
   notify({ title: 'saved' });
   expect(getNotices()).toBe(getNotices());
 });
+
+it('identical notices show once, even without a key', () => {
+  notify({ title: 'coming soon', message: "this export isn't available yet.", tone: 'info' });
+  notify({ title: 'coming soon', message: "this export isn't available yet.", tone: 'info' });
+  expect(titles()).toEqual(['coming soon']);
+});
+
+it('a replaced notice keeps its id, so it stays on screen instead of re-entering', () => {
+  const first = notify({ title: 'a', key: 'save-failed', tone: 'error' });
+  const second = notify({ title: 'b', key: 'save-failed', tone: 'error' });
+  expect(second).toBe(first);
+  expect(getNotices()).toEqual([expect.objectContaining({ id: first, title: 'b' })]);
+});
+
+it('sticky notices are the last to go when the stack is full', () => {
+  notify({ title: "couldn't load your photos", tone: 'error', sticky: true });
+  for (const title of ['a', 'b', 'c']) notify({ title });
+  expect(titles()).toEqual(["couldn't load your photos", 'b', 'c']);
+});
+
+it('notices carry when they expire; sticky ones never do', () => {
+  jest.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+  notify({ title: 'saved', tone: 'success' });
+  notify({ title: 'stuck', sticky: true });
+  const [saved, stuck] = getNotices();
+  expect(saved.expiresAt).toBe(Date.now() + 3000);
+  expect(stuck.expiresAt).toBeUndefined();
+});

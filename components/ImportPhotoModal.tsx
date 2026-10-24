@@ -121,8 +121,8 @@ export default function ImportPhotoModal({
   }
 
   function handleSaveNext() {
-    // The last one ends the import: it gets the success haptic below instead of a tap.
-    if (!isLast) haptics.tap();
+    // One tap per press. The last one starts the import, whose result notice plays the success.
+    haptics.tap();
     // Persist current state before advancing
     const currentDate = photoStates[currentIndex]?.date ?? (photos[currentIndex]?.suggestedDate || dateToStr(new Date()));
     const currentCaption = photoStates[currentIndex]?.caption ?? '';
@@ -130,7 +130,6 @@ export default function ImportPhotoModal({
     setPhotoStates(updatedStates);
 
     if (isLast) {
-      haptics.success();
       // Collect all non-skipped entries in original order
       const result = photos
         .map((p, i) => {
@@ -154,13 +153,12 @@ export default function ImportPhotoModal({
   }
 
   function handleSkip() {
-    if (!isLast) haptics.tap();
+    haptics.tap();
     const newSkipped = new Set(skipped);
     newSkipped.add(currentIndex);
     setSkipped(newSkipped);
 
     if (isLast) {
-      haptics.success();
       // Collect all non-skipped entries including previously saved
       const result = photos
         .map((p, i) => {

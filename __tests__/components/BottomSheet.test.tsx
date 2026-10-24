@@ -6,7 +6,7 @@ import { FontProvider } from '@/context/FontContext';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { useOpenSheetCount } from '@/components/ui/overlay/layers';
 import { lastGesture, resetCapturedGestures } from '../helpers/gestureHandlerMock';
-import { flushUiWrites } from '../helpers/reanimatedMock';
+import { flushUiWrites, timingCalls } from '../helpers/reanimatedMock';
 
 jest.mock('react-native-reanimated', () => require('../helpers/reanimatedMock').reanimatedMock);
 jest.mock('react-native-gesture-handler', () => require('../helpers/gestureHandlerMock').gestureHandlerMock);
@@ -109,6 +109,21 @@ it('a non-dismissible sheet ignores scrim, drag and back', async () => {
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
 });
 
+it('a non-dismissible sheet springs back after a drag instead of staying part-way down', async () => {
+  const onClose = jest.fn();
+  const props = { onClose, dismissible: false };
+  const view = await renderOpen(props);
+  await layOut(300);
+  const pan = lastGesture('Pan').handlers;
+  await act(async () => {
+    pan.onUpdate({ translationY: 250, translationX: 0 } as never);
+    pan.onEnd({ translationY: 250, velocityY: 0, translationX: 0, velocityX: 0 } as never);
+  });
+  await act(async () => view.rerender(sheet(props)));
+  expect(sheetStyle().transform).toEqual([{ translateY: 0 }]);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
 it('calls onClosed after closing', async () => {
   const onClosed = jest.fn();
   const { rerender } = await renderOpen({ onClosed });
@@ -129,6 +144,16 @@ it('slides when open, with no fade on the sheet itself', async () => {
   await renderOpen();
   expect(sheetStyle().transform).toEqual([{ translateY: 0 }]);
   expect(sheetStyle().opacity).toBeUndefined();
+});
+
+it('animates even with Reduce Motion on (as a fade), instead of letting Reanimated skip it', async () => {
+  // Reanimated's default skips a timing under Reduce Motion: the sheet would snap, not fade.
+  useReducedMotion.mockReturnValue(true);
+  timingCalls.length = 0;
+  const view = await renderOpen();
+  await act(async () => view.rerender(sheet({ visible: false })));
+  expect(timingCalls.length).toBeGreaterThanOrEqual(4); // open + scrim, close + scrim
+  for (const call of timingCalls) expect(call.config?.reduceMotion).toBe('never');
 });
 
 it('with Reduce Motion it fades instead of sliding', async () => {
