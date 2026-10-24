@@ -194,12 +194,16 @@ export default function DatePickerSheet({ visible, value, maxDate, photoDates, o
                       key={date}
                       onPress={() => pickDay(date)}
                       disabled={disabled}
-                      style={[styles.cell, isToday && !isSelected && styles.today, isSelected && styles.selected, disabled && styles.dayDisabled]}
+                      style={[styles.cell, disabled && styles.dayDisabled]}
                       accessibilityRole="button"
                       accessibilityLabel={longDate(date)}
                       accessibilityHint={hasPhoto ? 'has a photo' : undefined}
                       accessibilityState={{ selected: isSelected, disabled }}
                     >
+                      {/* One fixed square for both marks, so they match whatever the cell's width. */}
+                      {isSelected || isToday ? (
+                        <View testID="day-mark" style={[styles.mark, isSelected ? styles.markSelected : styles.markToday]} />
+                      ) : null}
                       <Text style={[styles.day, isToday && styles.todayText, isSelected && styles.selectedText, { fontFamily: isSelected ? fonts.medium : fonts.regular }]}>
                         {Number(date.slice(8, 10))}
                       </Text>
@@ -215,40 +219,30 @@ export default function DatePickerSheet({ visible, value, maxDate, photoDates, o
 
       {mode === 'years' && (
         <Animated.View entering={GRID_FADE} style={styles.choices}>
-          {years.map((year) => (
-            <Pressable
+          {inRowsOfThree(years.map((year) => (
+            <Choice
               key={year}
+              label={String(year)}
+              current={year === shown.year}
               onPress={() => pickYear(year)}
-              style={({ pressed }) => [styles.choice, year === shown.year && styles.choiceCurrent, pressed && { opacity: Pressed.text }]}
-              accessibilityRole="button"
-              accessibilityLabel={String(year)}
-              accessibilityState={{ selected: year === shown.year }}
-            >
-              <Text style={[styles.choiceText, year === shown.year && styles.choiceTextCurrent, { fontFamily: fonts.regular }]}>{year}</Text>
-            </Pressable>
-          ))}
+              fontFamily={fonts.regular}
+            />
+          )))}
         </Animated.View>
       )}
 
       {mode === 'months' && (
         <Animated.View entering={GRID_FADE} style={styles.choices}>
-          {MONTH_SHORT.map((label, i) => {
-            const disabled = monthIndex({ year: pickedYear, month: i + 1 }) > maxIndex;
-            const current = pickedYear === shown.year && i + 1 === shown.month;
-            return (
-              <Pressable
-                key={label}
-                onPress={() => pickMonth(i + 1)}
-                disabled={disabled}
-                style={({ pressed }) => [styles.choice, current && styles.choiceCurrent, disabled && styles.choiceDisabled, pressed && { opacity: Pressed.text }]}
-                accessibilityRole="button"
-                accessibilityLabel={label}
-                accessibilityState={{ selected: current, disabled }}
-              >
-                <Text style={[styles.choiceText, current && styles.choiceTextCurrent, { fontFamily: fonts.regular }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
+          {inRowsOfThree(MONTH_SHORT.map((label, i) => (
+            <Choice
+              key={label}
+              label={label}
+              current={pickedYear === shown.year && i + 1 === shown.month}
+              disabled={monthIndex({ year: pickedYear, month: i + 1 }) > maxIndex}
+              onPress={() => pickMonth(i + 1)}
+              fontFamily={fonts.regular}
+            />
+          )))}
         </Animated.View>
       )}
 
@@ -264,7 +258,43 @@ export default function DatePickerSheet({ visible, value, maxDate, photoDates, o
   );
 }
 
-const CELL = 36;
+/** Rows of three equal boxes; the last row is padded so its boxes keep the same width. */
+function inRowsOfThree(items: React.ReactElement[]) {
+  const rows: React.ReactElement[][] = [];
+  for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+  return rows.map((row, r) => (
+    <View key={r} testID="choice-row" style={styles.choiceRow}>
+      {row}
+      {Array.from({ length: 3 - row.length }, (_, k) => <View key={`spacer-${k}`} style={styles.choiceBox} />)}
+    </View>
+  ));
+}
+
+function Choice({ label, current, disabled = false, onPress, fontFamily }: {
+  label: string;
+  current: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  fontFamily: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [styles.choiceBox, current && styles.choiceCurrent, disabled && styles.choiceDisabled, pressed && { opacity: Pressed.text }]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: current, disabled }}
+    >
+      {/* The border is an overlay: on the flex:1 box itself it would make the box wider than its siblings. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.choiceBorder, current && styles.choiceBorderCurrent]} />
+      <Text style={[styles.choiceText, current && styles.choiceTextCurrent, { fontFamily }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const CELL = 40;
+const MARK = 36;
 
 const styles = StyleSheet.create({
   header: {
@@ -328,18 +358,21 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
-  // Borders as an inset outline, not on the flex cell itself (a bordered flex:1 cell grows).
-  today: {
-    outlineWidth: 1,
-    outlineColor: Colors.streak,
-    outlineOffset: -3,
-    outlineStyle: 'solid',
+  // A fixed square behind the number: same size for the selected day and today.
+  mark: {
+    position: 'absolute',
+    width: MARK,
+    height: MARK,
+  },
+  markSelected: {
+    backgroundColor: Colors.accent,
+  },
+  markToday: {
+    borderWidth: 1,
+    borderColor: Colors.streak,
   },
   todayText: {
     color: Colors.streak,
-  },
-  selected: {
-    backgroundColor: Colors.accent,
   },
   selectedText: {
     color: Colors.bgPage,
@@ -349,7 +382,7 @@ const styles = StyleSheet.create({
   },
   dot: {
     position: 'absolute',
-    bottom: 4,
+    bottom: (CELL - MARK) / 2 + 4,
     width: 3,
     height: 3,
     borderRadius: 1.5,
@@ -359,20 +392,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPage,
   },
   choices: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 6,
   },
-  choice: {
-    width: '31.8%',
-    paddingVertical: 12,
+  choiceRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  choiceBox: {
+    flex: 1,
+    height: 44,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceBorder: {
     borderWidth: 1,
     borderColor: Colors.borderPrimary,
   },
+  choiceBorderCurrent: {
+    borderColor: Colors.accent,
+  },
   choiceCurrent: {
     backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
   },
   choiceDisabled: {
     opacity: 0.35,

@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import { FontProvider } from '@/context/FontContext';
 import DatePickerSheet from '@/components/ui/DatePickerSheet';
@@ -103,4 +104,29 @@ it('closes from its close button with a tap', async () => {
   await press(screen.getByRole('button', { name: 'Close' }));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+});
+
+it('the selected day and today get the same square mark', async () => {
+  jest.useFakeTimers({ now: new Date('2026-10-24T17:00:00Z') });
+  try {
+    await renderPicker();
+    const mark = (label: string) => StyleSheet.flatten(within(day(label)).getByTestId('day-mark').props.style);
+    const selected = mark('october 21, 2026');
+    const today = mark('october 24, 2026');
+    expect(selected.width).toBe(selected.height);
+    expect([today.width, today.height]).toEqual([selected.width, selected.height]);
+    expect(selected.backgroundColor).toBeDefined();
+    expect(today.borderWidth).toBe(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('lays the year and month choices out three to a row, so every box is the same width', async () => {
+  await renderPicker({ photoDates: new Set(['2019-03-05']) });
+  await press(screen.getByText('october 2026'));
+  const rows = screen.getAllByTestId('choice-row');
+  // 2016…2026 is 11 years: four rows, the last padded with one spacer.
+  expect(rows).toHaveLength(4);
+  for (const row of rows) expect(row.children).toHaveLength(3);
 });
