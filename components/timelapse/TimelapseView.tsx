@@ -92,6 +92,8 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
 
   if (filteredPhotos.length < 2) return null;
 
+  const dateRangeTextStyle = [styles.dateRangeText, hasDateFilter && styles.dateRangeTextActive, { fontFamily: fonts.regular }];
+
   return (
     <>
       {/* Outside the padded body: the header carries its own padding, like other screens'. */}
@@ -105,14 +107,17 @@ export default function TimelapseView({ header, timelapse, speedSelectorStyle }:
           accessibilityLabel="Select date range"
           accessibilityRole="button"
         >
-          <CalendarBlank
-            size={14}
-            color={hasDateFilter ? Colors.accent : Colors.textTertiary}
-            weight="light"
-          />
-          <Text style={[styles.dateRangeText, hasDateFilter && styles.dateRangeTextActive, { fontFamily: fonts.regular }]}>
-            {formatMMDD(rangeStart)}  —  {formatMMDD(rangeEnd)}
-          </Text>
+          {/* Equal halves either side of the dash, so the dash (not the icon + text) sits at the center. */}
+          <View style={styles.dateRangeStart}>
+            <CalendarBlank
+              size={14}
+              color={hasDateFilter ? Colors.accent : Colors.textTertiary}
+              weight="light"
+            />
+            <Text style={dateRangeTextStyle}>{formatMMDD(rangeStart)}</Text>
+          </View>
+          <Text style={dateRangeTextStyle}>—</Text>
+          <Text style={[dateRangeTextStyle, styles.dateRangeEnd]}>{formatMMDD(rangeEnd)}</Text>
         </Pressable>
 
         {/* Player */}
@@ -216,10 +221,19 @@ const styles = StyleSheet.create({
   dateRangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 16,
     paddingVertical: 8,
     marginBottom: 8,
+  },
+  dateRangeStart: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  dateRangeEnd: {
+    flex: 1,
   },
   dateRangeText: {
     fontFamily: Fonts.mono.regular,
