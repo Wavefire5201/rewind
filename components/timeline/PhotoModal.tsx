@@ -30,6 +30,7 @@ import { formatDateLabel, formatTime, getDayNumber } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 import { haptics } from '@/utils/haptics';
 import type { PhotoEntry } from '@/types';
+import OverlayHost from '@/components/ui/overlay/OverlayHost';
 
 interface PhotoModalProps {
   visible: boolean;
@@ -374,6 +375,7 @@ export default function PhotoModal({
             </View>
           )}
         </View>
+        <OverlayHost />
       </GestureHandlerRootView>
     </Modal>
   );

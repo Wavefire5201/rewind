@@ -5,6 +5,7 @@ import { Colors } from '@/constants/theme';
 import PinEntry from '@/components/ui/PinEntry';
 import { hasPin, savePin, verifyPin, getAttemptInfo } from '@/utils/pin';
 import { haptics } from '@/utils/haptics';
+import OverlayHost from '@/components/ui/overlay/OverlayHost';
 
 /**
  * intent controls what the modal does:
@@ -170,6 +171,7 @@ export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPin
               cancelLabel="continue"
             />
           </SafeAreaView>
+          <OverlayHost />
         </SafeAreaProvider>
       </Modal>
     );
@@ -202,6 +204,7 @@ export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPin
             disableKeypad={lockoutSeconds > 0}
           />
         </SafeAreaView>
+        <OverlayHost />
       </SafeAreaProvider>
     </Modal>
   );

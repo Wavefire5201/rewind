@@ -8,6 +8,14 @@ jest.mock('expo-localization', () => ({
   getCalendars: () => [{ firstWeekday: 1 }],
 }));
 
+// react-native-reanimated — the real module can't load under Jest (worklets need a native
+// runtime), so every suite gets the test stand-in; a suite's own jest.mock still wins.
+jest.mock('react-native-reanimated', () => require('./__tests__/helpers/reanimatedMock').reanimatedMock);
+
+// react-native-gesture-handler — its own Jest setup stubs the native module (overlay layers
+// mount a gesture root inside every modal); suites that drive gestures mock it themselves.
+require('react-native-gesture-handler/jestSetup');
+
 // expo-haptics — silent stubs; assertions go through these fns
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => {}),

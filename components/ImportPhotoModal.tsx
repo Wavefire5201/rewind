@@ -21,6 +21,7 @@ import { haptics } from '@/utils/haptics';
 import SectionLabel from '@/components/ui/SectionLabel';
 import PillButton from '@/components/ui/PillButton';
 import { cachePolicyFor } from '@/utils/imageSource';
+import OverlayHost from '@/components/ui/overlay/OverlayHost';
 
 export interface ImportPhotoModalProps {
   visible: boolean;
@@ -295,6 +296,7 @@ export default function ImportPhotoModal({
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <OverlayHost />
     </Modal>
   );
 }

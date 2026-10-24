@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useAppContext } from '@/context/AppContext';
 import { FontProvider } from '@/context/FontContext';
 import AnimatedSplash from '@/components/ui/AnimatedSplash';
+import OverlayHost from '@/components/ui/overlay/OverlayHost';
 import { Colors, Fonts } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -37,11 +38,9 @@ const ebStyles = StyleSheet.create({
 
 // Over the app until the R has drawn itself and the app's data has loaded. The root layout
 // mounts once per launch, so this plays on a cold start, not on returning from the background.
-function SplashCover() {
+function SplashCover({ onDone }: { onDone: () => void }) {
   const { isLoading } = useAppContext();
-  const [done, setDone] = useState(false);
-  if (done) return null;
-  return <AnimatedSplash ready={!isLoading} onDone={() => setDone(true)} />;
+  return <AnimatedSplash ready={!isLoading} onDone={onDone} />;
 }
 
 export default function RootLayout() {
@@ -50,6 +49,7 @@ export default function RootLayout() {
     CommitMono_Regular: require('../assets/fonts/CommitMono-Regular.otf'),
     CommitMono_Medium: require('../assets/fonts/CommitMono-Medium.otf'),
   });
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -77,7 +77,9 @@ export default function RootLayout() {
                   navigationBarColor: Colors.bgPage,
                 }}
               />
-              <SplashCover />
+              {splashDone ? null : <SplashCover onDone={() => setSplashDone(true)} />}
+              {/* Notices and confirms; after the splash, so a launch notice isn't hidden under it. */}
+              {splashDone && <OverlayHost />}
             </FontProvider>
           </AppProvider>
         </SafeAreaProvider>

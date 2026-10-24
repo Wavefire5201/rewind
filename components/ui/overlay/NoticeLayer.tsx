@@ -1,5 +1,6 @@
 import React, { useEffect, useSyncExternalStore } from 'react';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NoticeCard from '@/components/ui/overlay/NoticeCard';
 import { useTopLayer } from '@/components/ui/overlay/layers';
@@ -25,12 +26,14 @@ export default function NoticeLayer({ testID }: { testID?: string }) {
     };
   }, []);
 
+  // Its own gesture root: inside a Modal's window there's none above it, so swipes need one here
+  // (nested in the app's root view, it's a plain view).
   return (
-    <View testID={testID} style={[styles.layer, { top: insets.top + 8 }]} pointerEvents="box-none">
+    <GestureHandlerRootView testID={testID} style={[styles.layer, { top: insets.top + 8 }]} pointerEvents="box-none">
       {isTop && notices.map((notice) => (
         <NoticeCard key={notice.id} notice={notice} onDismiss={() => dismissNotice(notice.id)} />
       ))}
-    </View>
+    </GestureHandlerRootView>
   );
 }
 

@@ -8,6 +8,7 @@ import { useFont } from '@/context/FontContext';
 import PillButton from '@/components/ui/PillButton';
 import { haptics } from '@/utils/haptics';
 import { cachePolicyFor } from '@/utils/imageSource';
+import OverlayHost from '@/components/ui/overlay/OverlayHost';
 
 interface CapturePreviewProps {
   visible: boolean;
@@ -103,6 +104,7 @@ export default function CapturePreview({
           <PillButton label="retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
         </View>
       </SafeAreaView>
+      <OverlayHost />
     </Modal>
   );
 }
