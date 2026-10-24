@@ -152,7 +152,7 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
 
         <SettingsRow
           icon={<LockSimple size={20} color={Colors.textSecondary} weight="light" />}
-          label="change passcode"
+          label={pinExists ? 'change passcode' : 'set passcode'}
           chevron
           onPress={handleChangePasscode}
         />
