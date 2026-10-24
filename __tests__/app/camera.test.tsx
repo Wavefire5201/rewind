@@ -11,7 +11,6 @@ const mockPreview = jest.fn();
 const mockAutoCapture = jest.fn();
 const mockTakePhoto = jest.fn(async () => ({ uri: 'file:///cache/shot.jpg' }));
 let mockFocused = true;
-let mockPhotosLoadFailed = false;
 
 jest.mock('@/components/camera/Viewfinder', () => {
   const R = require('react');
@@ -42,7 +41,6 @@ jest.mock('@/context/AppContext', () => ({
     settings: { mirrorSelfies: true, photoQuality: 'medium' },
     updateAlbum: jest.fn(),
     today: '2026-10-16',
-    photosLoadFailed: mockPhotosLoadFailed,
   }),
 }));
 jest.mock('expo-router', () => ({
@@ -70,7 +68,6 @@ async function renderWithFaceInGuide() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
-  mockPhotosLoadFailed = false;
   mockTodayPhoto = null;
   mockConfirm.mockResolvedValue(false);
   resetNoticesForTests();
@@ -94,22 +91,13 @@ it('replaces today\'s photo after a yes', async () => {
   await expect(last(mockPreview).confirmSave()).resolves.toBe(true);
 });
 
-it("won't save a photo when the stored photos couldn't be read, and says why", async () => {
-  mockPhotosLoadFailed = true;
-  await render(<FontProvider><CameraRoute /></FontProvider>);
-  await act(async () => last(mockControls).onCapture());
-  // The preview asks before copying the photo; refusing leaves nothing behind.
-  expect(await last(mockPreview).confirmSave()).toBe(false);
-  expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
-});
-
 it('saving framing with no face says why', async () => {
   await render(<FontProvider><CameraRoute /></FontProvider>);
   await act(async () => last(mockControls).onCaptureReference());
   expect(getNotices()).toEqual([expect.objectContaining({ title: 'no face in view', tone: 'error' })]);
 });
 
-it('saves normally when the photos loaded', async () => {
+it('saves without asking when today has no photo', async () => {
   await render(<FontProvider><CameraRoute /></FontProvider>);
   await act(async () => last(mockControls).onCapture());
   expect(await last(mockPreview).confirmSave()).toBe(true);

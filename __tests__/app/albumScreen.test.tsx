@@ -5,7 +5,6 @@ import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
 
 let mockAvailable = true;
-let mockPhotosLoadFailed = false;
 const mockCard = jest.fn();
 const mockModal = jest.fn();
 const mockGrid = jest.fn();
@@ -32,7 +31,6 @@ jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: [{ id: 'a', name: 'daily', createdAt: '2026-01-01' }],
     addPhoto: mockAddPhoto, addPhotos: mockAddPhotos, updatePhoto: jest.fn(), deletePhoto: jest.fn(), updateProfile: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
-    photosLoadFailed: mockPhotosLoadFailed,
   }),
 }));
 jest.mock('expo-router', () => ({
@@ -61,7 +59,6 @@ const renderScreen = () => render(<FontProvider><AlbumDetailScreen /></FontProvi
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockPhotosLoadFailed = false;
 });
 
 it('shows the face card and the photo readout when the face scanner is available', async () => {
@@ -101,14 +98,13 @@ it('imports one photo onto the tapped empty day, whatever its EXIF date, without
   expect(mockAddPhoto).not.toHaveBeenCalled();
 });
 
-it("won't start an import onto an empty day when the stored photos couldn't be read", async () => {
+it('imports onto an empty day are never refused', async () => {
   mockAvailable = false;
-  mockPhotosLoadFailed = true;
   await renderScreen();
   const grid = mockGrid.mock.calls.at(-1)?.[0] as { onEmptyDayPress: (d: string) => void };
   await act(async () => grid.onEmptyDayPress('2026-09-15'));
-  expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
-  expect((mockSheet.mock.calls.at(-1)?.[0] as { visible: boolean }).visible).toBe(false);
+  expect(getNotices()).toEqual([]);
+  expect((mockSheet.mock.calls.at(-1)?.[0] as { visible: boolean }).visible).toBe(true);
 });
 
 describe('filling an empty day', () => {

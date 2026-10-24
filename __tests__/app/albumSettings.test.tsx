@@ -18,7 +18,6 @@ const mockDismissAll = jest.fn();
 const mockReplace = jest.fn();
 let mockHasPin = true;
 let mockAlbums: Album[] = [];
-let mockPhotosLoadFailed = false;
 // Called with ImportSheet's props on every render.
 const mockImportSheet = jest.fn();
 const mockExportSheet = jest.fn();
@@ -38,7 +37,6 @@ jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: mockPhotos, settings: { use24hClock: false },
     addPhotos: mockAddPhotos, updateProfile: mockUpdateProfile, updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
-    photosLoadFailed: mockPhotosLoadFailed,
   }),
 }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
@@ -91,7 +89,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockHasPin = true;
   mockAlbums = [album('a'), album('b', { name: 'second' })];
-  mockPhotosLoadFailed = false;
   mockPhotos = [];
   mockConfirm.mockResolvedValue(false);
   mockPermissionGranted = true;
@@ -165,14 +162,6 @@ describe('import photos', () => {
     await renderSettings();
     await act(async () => fireEvent.press(screen.getByLabelText('Import photos')));
     expect(sheetVisible()).toBe(true);
-  });
-
-  it("won't start when the stored photos couldn't be read, and says why", async () => {
-    mockPhotosLoadFailed = true;
-    await renderSettings();
-    await act(async () => fireEvent.press(screen.getByLabelText('Import photos')));
-    expect(getNotices()).toEqual([expect.objectContaining({ title: "can't save photos", tone: 'error' })]);
-    expect(sheetVisible()).toBe(false);
   });
 });
 

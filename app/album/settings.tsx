@@ -14,7 +14,6 @@ import { CaretLeft, PencilSimple, LockSimple, BellSimple, Export, DownloadSimple
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
-import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
 import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
@@ -47,7 +46,6 @@ export default function AlbumSettingsRoute() {
 function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
-  const canAddPhotos = useCanAddPhotos();
   const { fonts } = useFont();
   const { albums, photos, settings, addPhotos, updateAlbum, deleteAlbum } = useAppContext();
   const album = albums.find(a => a.id === albumId);
@@ -240,7 +238,6 @@ function AlbumSettingsScreen() {
 
   // --- Import ---
   function handleImport() {
-    if (!canAddPhotos()) return;
     haptics.tap();
     setShowImportSheet(true);
   }

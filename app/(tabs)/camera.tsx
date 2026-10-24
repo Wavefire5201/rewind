@@ -7,7 +7,6 @@ import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { usePhotos } from '@/hooks/usePhotos';
 import { useGreeting } from '@/hooks/useGreeting';
-import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { useAppContext } from '@/context/AppContext';
 import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
@@ -55,7 +54,6 @@ function CameraScreen() {
   const focused = useIsFocused();
   const { albums, settings, updateAlbum, today } = useAppContext();
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
-  const canAddPhotos = useCanAddPhotos();
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
 
@@ -260,7 +258,6 @@ function CameraScreen() {
 
   // Asked before the preview copies the photo, so declining leaves nothing behind.
   const confirmSave = useCallback(async () => {
-    if (!canAddPhotos()) return false;
     if (!todayPhoto) return true;
     // Any way of dismissing the question keeps today's photo.
     return confirm({
@@ -269,7 +266,7 @@ function CameraScreen() {
       confirmLabel: 'replace',
       destructive: true,
     });
-  }, [todayPhoto, canAddPhotos]);
+  }, [todayPhoto]);
 
   const handleSave = (caption: string, savedUri: string) => {
     const newPhoto: PhotoEntry = {

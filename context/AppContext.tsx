@@ -44,11 +44,6 @@ interface AppContextValue {
   /** Today's local date, updated at midnight and on returning to the foreground. */
   today: string;
   isLoading: boolean;
-  /**
-   * The stored photos couldn't be read this launch. They're still stored, so nothing saves
-   * photos over them: adding photos is refused (see useCanAddPhotos) until the next launch.
-   */
-  photosLoadFailed: boolean;
   addPhoto: (entry: PhotoEntry) => void;
   addPhotos: (entries: PhotoEntry[]) => { added: number; skipped: number };
   updatePhoto: (id: string, updates: Partial<PhotoEntry>) => void;
@@ -77,7 +72,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(getDefaultSettings());
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
   const [isLoading, setIsLoading] = useState(true);
-  const [photosLoadFailed, setPhotosLoadFailed] = useState(false);
   const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
   const today = useToday();
 
@@ -126,7 +120,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Nothing loaded, but nothing is lost: a save writes only the rows it changes, so the
         // stored photos stay put until a launch that can read them.
         console.error('Failed to load app data:', e);
-        setPhotosLoadFailed(true);
         notify({
           title: "couldn't load your photos",
           message: "nothing has been deleted, but rewind couldn't read your saved photos. try restarting the app.",
@@ -353,7 +346,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const localUris = photosRef.current.flatMap(filesOf).filter((uri): uri is string => !!uri?.startsWith('file://'));
     // A failed clear leaves every row stored (storage has said so), so their files stay too.
     if (!(await clearAllData())) return;
-    setPhotosLoadFailed(false);
     for (const uri of localUris) {
       try { new File(uri).delete(); } catch {}
     }
@@ -442,7 +434,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     albums,
     today,
     isLoading,
-    photosLoadFailed,
     addPhoto,
     addPhotos,
     updatePhoto,
@@ -457,7 +448,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     seedMockPhotos,
     unlockedAlbumIds,
     unlockAlbum,
-  }), [photos, profile, settings, albums, today, isLoading, photosLoadFailed, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
+  }), [photos, profile, settings, albums, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
