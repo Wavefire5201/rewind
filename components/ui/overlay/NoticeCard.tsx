@@ -113,8 +113,15 @@ export default function NoticeCard({ notice, onDismiss }: { notice: Notice; onDi
           accessible
           accessibilityRole="alert"
           accessibilityLabel={notice.message ? `${notice.title}. ${notice.message}` : notice.title}
-          accessibilityActions={[{ name: 'escape', label: 'dismiss' }]}
-          onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'escape') dismiss(); }}
+          // The card groups its children, so VoiceOver can't focus the action button: a double
+          // tap on the card runs it instead.
+          accessibilityActions={notice.action
+            ? [{ name: 'escape', label: 'dismiss' }, { name: 'activate', label: notice.action.label }]
+            : [{ name: 'escape', label: 'dismiss' }]}
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === 'escape') dismiss();
+            else if (e.nativeEvent.actionName === 'activate' && notice.action) handleAction();
+          }}
         >
           <Icon size={16} color={notice.tone === 'info' ? Colors.textSecondary : EDGE[notice.tone]} weight="light" />
           <View style={styles.text}>

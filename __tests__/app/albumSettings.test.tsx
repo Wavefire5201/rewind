@@ -66,15 +66,21 @@ jest.mock('@/utils/export', () => ({
 }));
 jest.mock('@/utils/import', () => ({
   importFromBackup: (...args: unknown[]) => mockImportFromBackup(...args),
-  createPhotoEntry: async (uri: string, date: string, caption: string, albumId: string) =>
-    ({ id: `imported-${date}`, albumId, date, imageUri: uri, caption, capturedAt: `${date}T12:00:00.000Z`, cameraDirection: 'front' }),
+  // A uri containing "fail" fails to copy.
+  createPhotoEntry: async (uri: string, date: string, caption: string, albumId: string) => {
+    if (uri.includes('fail')) throw new Error('copy failed');
+    return { id: `imported-${date}`, albumId, date, imageUri: uri, caption, capturedAt: `${date}T12:00:00.000Z`, cameraDirection: 'front' };
+  },
 }));
 let mockPermissionGranted = true;
 jest.mock('@/utils/notifications', () => ({
   requestNotificationPermission: async () => mockPermissionGranted,
   syncAllReminders: async () => {},
 }));
-jest.mock('@/components/ui/PinModal', () => () => null);
+const mockPinModal = jest.fn();
+jest.mock('@/components/ui/PinModal', () => (props: unknown) => { mockPinModal(props); return null; });
+const pinProps = () => mockPinModal.mock.calls.at(-1)?.[0] as { visible: boolean; onSuccess: () => void };
+const Haptics = jest.requireMock('expo-haptics') as { impactAsync: jest.Mock; notificationAsync: jest.Mock };
 jest.mock('@/components/ui/TimePicker', () => () => null);
 jest.mock('@/components/ui/TextInputModal', () => () => null);
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockExportSheet(props); return null; } }));
@@ -108,6 +114,20 @@ it('locks the album and returns home when a PIN already exists', async () => {
   expect(mockUpdateAlbum).toHaveBeenCalledWith('a', { isLocked: true });
   // The screen is behind the lock gate, so staying would show the unlock prompt.
   expect(mockDismissAll).toHaveBeenCalled();
+  // One haptic for the one action: the success, no tap before it.
+  expect(Haptics.notificationAsync.mock.calls).toEqual([['success']]);
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+});
+
+it('locking through a new passcode leaves the success haptic to the passcode screen', async () => {
+  mockHasPin = false;
+  await renderSettings();
+  await act(async () => fireEvent.press(screen.getByLabelText('Lock album')));
+  expect(pinProps().visible).toBe(true);
+  Haptics.notificationAsync.mockClear();
+  await act(async () => pinProps().onSuccess());
+  expect(mockUpdateAlbum).toHaveBeenCalledWith('a', { isLocked: true });
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });
 
 it('keeps a long album name on one line in the rename row', async () => {
@@ -145,6 +165,16 @@ describe('exporting an album with photos not on this device', () => {
     await exportAs(format);
     expect(mockExportToPhotoAlbum).not.toHaveBeenCalled();
     expect(mockExportToBackup).not.toHaveBeenCalled();
+  });
+
+  it.each(['album', 'backup'] as const)("with none of the photos on this device, says so instead of asking (%s)", async (format) => {
+    mockPhotos = [photo('1', 'https://example.com/1.jpg'), photo('2', 'https://example.com/2.jpg')];
+    await renderSettings();
+    await act(async () => { await (mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> }).onSelect(format); });
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(mockExportToPhotoAlbum).not.toHaveBeenCalled();
+    expect(mockExportToBackup).not.toHaveBeenCalled();
+    expect(getNotices()).toEqual([expect.objectContaining({ title: 'nothing to export', message: 'none of these photos are on this device.', tone: 'info' })]);
   });
 
   it('continuing exports the photos that are on this device', async () => {
@@ -229,6 +259,35 @@ describe('restoring a backup', () => {
       '1 photo restored from backup.',
     ]);
   });
+
+  it('is a success only when photos came in and none were lost', async () => {
+    await restore({ photos: restored(1), skipped: 0, unreadable: 0 });
+    expect(getNotices().at(-1)?.tone).toBe('success');
+    resetNoticesForTests();
+    await restore({ photos: restored(2), skipped: 0, unreadable: 1 });
+    expect(getNotices().at(-1)?.tone).toBe('info');
+  });
+});
+
+describe('camera-roll import results', () => {
+  const save = async (uris: string[]) => {
+    await renderSettings();
+    await act(async () => { await mockImportModal!.onSave(uris.map((uri, i) => ({ uri, date: `2025-06-0${i + 1}`, caption: '' }))); });
+    return getNotices().at(-1);
+  };
+
+  it("isn't a success when nothing was imported", async () => {
+    mockAddPhotos.mockReturnValueOnce({ added: 0, skipped: 2 });
+    await expect(save(['content://a', 'content://b'])).resolves.toEqual(expect.objectContaining({
+      title: 'import complete', message: '2 skipped (already exist).', tone: 'info',
+    }));
+  });
+
+  it("isn't a success when some photos failed to copy", async () => {
+    await expect(save(['content://a', 'content://fail'])).resolves.toEqual(expect.objectContaining({
+      message: '1 photo added, 1 failed to copy.', tone: 'info',
+    }));
+  });
 });
 
 describe('results as notices', () => {
@@ -251,6 +310,16 @@ describe('results as notices', () => {
     expect(getNotices()).toEqual([expect.objectContaining({ title: 'export failed', tone: 'error', message: expect.stringContaining('no space left') })]);
   });
 
+  it('a failure with no message falls back to lowercase copy, like the rest of the app', async () => {
+    mockPhotos = [local('1')];
+    mockExportToPhotoAlbum.mockRejectedValueOnce('boom');
+    mockImportFromBackup.mockRejectedValueOnce(42);
+    await renderSettings();
+    await act(async () => { await (mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> }).onSelect('album'); });
+    await act(async () => sheetProps().onSelect('backup'));
+    expect(getNotices().map((n) => n.message)).toEqual(['unknown error', 'unknown error']);
+  });
+
   it('a refused notification permission offers to open settings', async () => {
     mockPermissionGranted = false;
     const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
@@ -262,6 +331,9 @@ describe('results as notices', () => {
     notice.action?.onPress();
     expect(openSettings).toHaveBeenCalledTimes(1);
     expect(mockUpdateAlbum).not.toHaveBeenCalled();
+    // The notice's error haptic is the press's only one: no tap before it.
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+    expect(Haptics.notificationAsync.mock.calls).toEqual([['error']]);
     openSettings.mockRestore();
   });
 });

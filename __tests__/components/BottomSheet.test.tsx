@@ -133,11 +133,42 @@ it('calls onClosed after closing', async () => {
   expect(screen.queryByText('sheet body')).toBeNull();
 });
 
+it('a sheet that mounts hidden never calls onClosed', async () => {
+  const onClosed = jest.fn();
+  await render(sheet({ onClosed, visible: false }));
+  await act(async () => {});
+  expect(onClosed).not.toHaveBeenCalled();
+});
+
 it('counts as an open sheet until closed', async () => {
   const { rerender } = await renderOpen();
   expect(screen.getByTestId('open-sheets').props.children).toBe(1);
   await act(async () => rerender(sheet({ visible: false })));
   expect(screen.getByTestId('open-sheets').props.children).toBe(0);
+});
+
+it("opens only once a closing sheet has left the screen (iOS can't present two sibling Modals)", async () => {
+  // Hold the close animations, so the first sheet stays on screen animating out.
+  const reanimated = jest.requireMock('react-native-reanimated') as { withTiming: (to: unknown, config?: unknown, cb?: (f: boolean) => void) => unknown };
+  const held: ((finished: boolean) => void)[] = [];
+  const withTiming = jest.spyOn(reanimated, 'withTiming').mockImplementation((to, _config, cb) => { if (cb) held.push(cb); return to; });
+  const two = (first: boolean, second: boolean) => (
+    <FontProvider>
+      <BottomSheet visible={first} onClose={jest.fn()}><Text>first body</Text></BottomSheet>
+      <BottomSheet visible={second} onClose={jest.fn()}><Text>second body</Text></BottomSheet>
+    </FontProvider>
+  );
+  try {
+    const { rerender } = await render(two(true, false));
+    await act(async () => rerender(two(false, true)));
+    expect(screen.queryByText('second body')).toBeNull();
+
+    await act(async () => held.forEach((finish) => finish(true)));
+    expect(screen.queryByText('first body')).toBeNull();
+    expect(screen.getByText('second body')).toBeTruthy();
+  } finally {
+    withTiming.mockRestore();
+  }
 });
 
 it('slides when open, with no fade on the sheet itself', async () => {

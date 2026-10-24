@@ -6,6 +6,7 @@ import PinEntry from '@/components/ui/PinEntry';
 import { hasPin, savePin, verifyPin, getAttemptInfo } from '@/utils/pin';
 import { haptics } from '@/utils/haptics';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
+import { useOpenSheetCount } from '@/components/ui/overlay/layers';
 
 /**
  * intent controls what the modal does:
@@ -28,6 +29,12 @@ interface PinModalProps {
 type InternalStep = 'verify' | 'enter-new' | 'confirm-new' | 'no-pin';
 
 export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPinFound }: PinModalProps) {
+  // Presents once no bottom sheet is on screen: iOS can't present two sibling Modals, and a sheet
+  // still animating closed (e.g. the "remove and unlock" confirm) would hide or drop this one.
+  const openSheets = useOpenSheetCount();
+  const [presented, setPresented] = useState(visible && openSheets === 0);
+  if (visible && !presented && openSheets === 0) setPresented(true);
+  if (!visible && presented) setPresented(false);
   const [step, setStep] = useState<InternalStep>('verify');
   const [firstPin, setFirstPin] = useState('');
   const [error, setError] = useState('');
@@ -151,7 +158,7 @@ export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPin
   // "no-pin" screen — shown when unlock is attempted but PIN data is gone
   if (step === 'no-pin') {
     return (
-      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+      <Modal visible={presented} animationType="slide" presentationStyle="fullScreen">
         <SafeAreaProvider style={{ flex: 1 }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPage }} edges={['top', 'bottom']}>
             <PinEntry
@@ -191,7 +198,7 @@ export default function PinModal({ visible, intent, onSuccess, onCancel, onNoPin
   const subtitle = step === 'enter-new' ? 'choose a 4-digit passcode' : undefined;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+    <Modal visible={presented} animationType="slide" presentationStyle="fullScreen">
       <SafeAreaProvider style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPage }} edges={['top', 'bottom']}>
           <PinEntry

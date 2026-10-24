@@ -53,7 +53,8 @@ function clearTimer(id: string): void {
   timers.delete(id);
 }
 
-/** Shows a notice, plays its tone's haptic (callers shouldn't play their own), and returns its id. */
+/** Shows a notice, plays its tone's haptic (callers shouldn't play their own; a repeat of one on
+ *  screen plays none), and returns its id. */
 export function notify(input: NoticeInput): string {
   const tone = input.tone ?? 'info';
   const key = input.key ?? `${tone}|${input.title}|${input.message ?? ''}`;
@@ -88,9 +89,15 @@ export function notify(input: NoticeInput): string {
   if (!notice.sticky) timers.set(notice.id, setTimeout(() => dismissNotice(notice.id), NOTICE_DURATION_MS[tone]));
   publish(next);
 
-  if (tone === 'success') haptics.success();
-  else if (tone === 'error') haptics.error();
-  AccessibilityInfo.announceForAccessibility(input.message ? `${input.title}. ${input.message}` : input.title);
+  // A repeat of a notice still on screen (a burst of the same failure) is silent; changed words
+  // are still read out.
+  if (!replaced) {
+    if (tone === 'success') haptics.success();
+    else if (tone === 'error') haptics.error();
+  }
+  if (!replaced || replaced.title !== notice.title || replaced.message !== notice.message) {
+    AccessibilityInfo.announceForAccessibility(input.message ? `${input.title}. ${input.message}` : input.title);
+  }
   return notice.id;
 }
 

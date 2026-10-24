@@ -26,13 +26,16 @@ import TextInputModal from '@/components/ui/TextInputModal';
 import TimePicker from '@/components/ui/TimePicker';
 import ExportSheet, { ExportFormat } from '@/components/timelapse/ExportSheet';
 import { confirm } from '@/utils/confirm';
-import { notify } from '@/utils/notify';
+import { notify, type NoticeTone } from '@/utils/notify';
 import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import SectionLabel from '@/components/ui/SectionLabel';
 import SettingsRow from '@/components/ui/SettingsRow';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
+
+/** An import's result is a success only when photos came in and none were lost on the way. */
+const importTone = (added: number, failed: number): NoticeTone => (added > 0 && failed === 0 ? 'success' : 'info');
 
 export default function AlbumSettingsRoute() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
@@ -112,13 +115,13 @@ function AlbumSettingsScreen() {
 
   // --- Reminders ---
   async function handleReminderToggle() {
-    haptics.tap();
     const current = albums.find(a => a.id === albumId);
     if (!current) return;
     const newEnabled = !current.reminderEnabled;
     if (newEnabled) {
       const granted = await requestNotificationPermission();
       if (!granted) {
+        // The notice's error haptic is this press's feedback: no tap before it.
         notify({
           title: 'notifications are off',
           message: 'enable notifications in settings to use reminders.',
@@ -128,6 +131,7 @@ function AlbumSettingsScreen() {
         return;
       }
     }
+    haptics.tap();
     updateAlbum(albumId, { reminderEnabled: newEnabled });
     const updatedAlbum: Album = { ...current, reminderEnabled: newEnabled };
     await syncAllReminders(albums.map(a => a.id === albumId ? updatedAlbum : a));
@@ -162,16 +166,22 @@ function AlbumSettingsScreen() {
     setShowExportSheet(false);
     cancelRef.current = { cancelled: false };
 
+    const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
+    const skipped = albumPhotos.length - localCount;
+    if (skipped > 0 && localCount === 0) {
+      // Nothing could be exported, so there's no question to ask.
+      notify({ title: 'nothing to export', message: 'none of these photos are on this device.', tone: 'info' });
+      return;
+    }
+
     if (format === 'album') {
-      const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
-      const skipped = albumPhotos.length - localCount;
       if (skipped > 0) {
         const yes = await confirm({
           title: 'remote photos',
           message: `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
           confirmLabel: 'continue',
         });
-        if (!yes || localCount === 0) return;
+        if (!yes) return;
         haptics.tap(); // the export starts
       }
       setExportLabel('saving to photo album...');
@@ -190,22 +200,20 @@ function AlbumSettingsScreen() {
         notify({ title: 'export complete', message: `${result.exported} photo${result.exported !== 1 ? 's' : ''} saved to your photo library.${skippedMsg}`, tone: 'success' });
       } catch (err: unknown) {
         setExporting(false);
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = err instanceof Error ? err.message : 'unknown error';
         if (message !== 'Cancelled') {
           const detail = lastSaved > 0 ? `saved ${lastSaved} of ${localCount} before failing. ${message}` : message;
           notify({ title: 'export failed', message: detail, tone: 'error' });
         }
       }
     } else if (format === 'backup') {
-      const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
-      const skipped = albumPhotos.length - localCount;
       if (skipped > 0) {
         const yes = await confirm({
           title: 'remote photos',
           message: `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
           confirmLabel: 'continue',
         });
-        if (!yes || localCount === 0) return;
+        if (!yes) return;
         haptics.tap(); // the export starts
       }
       setExportLabel('creating backup...');
@@ -230,7 +238,7 @@ function AlbumSettingsScreen() {
       } catch (err: unknown) {
         setExporting(false);
         await cleanupExportDir();
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = err instanceof Error ? err.message : 'unknown error';
         if (message !== 'Cancelled') notify({ title: 'export failed', message, tone: 'error' });
       }
     }
@@ -278,10 +286,10 @@ function AlbumSettingsScreen() {
         if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
         if (result.unreadable > 0) parts.push(`${result.unreadable} couldn't be read`);
         const msg = parts.length > 1 ? `${parts.join('. ')}.` : `${parts[0]} from backup.`;
-        notify({ title: 'import complete', message: msg, tone: 'success' });
+        notify({ title: 'import complete', message: msg, tone: importTone(added, result.unreadable) });
       } catch (e: unknown) {
         setImporting(false);
-        const message = e instanceof Error ? e.message : 'Unknown error';
+        const message = e instanceof Error ? e.message : 'unknown error';
         if (message !== 'Cancelled') notify({ title: 'import failed', message, tone: 'error' });
       }
     }
@@ -311,15 +319,14 @@ function AlbumSettingsScreen() {
     if (added > 0) parts.push(`${added} photo${added !== 1 ? 's' : ''} added`);
     if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
     if (copyFailed > 0) parts.push(`${copyFailed} failed to copy`);
-    notify({ title: 'import complete', message: parts.length > 0 ? parts.join(', ') + '.' : 'no photos imported.', tone: 'success' });
+    notify({ title: 'import complete', message: parts.length > 0 ? parts.join(', ') + '.' : 'no photos imported.', tone: importTone(added, copyFailed) });
   }
 
   // --- PIN / Lock ---
   // Locked now, so this screen (behind the lock gate) would turn into the unlock prompt:
-  // leave for home instead.
+  // leave for home instead. No haptic: the caller's action already gave one.
   function lockAndLeave() {
     updateAlbum(albumId, { isLocked: true });
-    haptics.success();
     leaveForHome();
   }
 
@@ -388,20 +395,21 @@ function AlbumSettingsScreen() {
             value={album.isLocked ? 'on' : 'off'}
             highlight={album.isLocked}
             onPress={async () => {
-              haptics.tap();
+              // One haptic per action: a tap on to the passcode screen (which plays the outcome),
+              // or the success of locking straight away.
               if (album.isLocked) {
+                haptics.tap();
                 setPendingLockAction('unlock');
                 setPinIntent('unlock');
                 setShowPinModal(true);
+              } else if (await hasPin()) {
+                haptics.success();
+                lockAndLeave();
               } else {
-                const pinExists = await hasPin();
-                if (pinExists) {
-                  lockAndLeave();
-                } else {
-                  setPendingLockAction('lock');
-                  setPinIntent('set');
-                  setShowPinModal(true);
-                }
+                haptics.tap();
+                setPendingLockAction('lock');
+                setPinIntent('set');
+                setShowPinModal(true);
               }
             }}
             accessibilityLabel={album.isLocked ? 'Unlock album' : 'Lock album'}
