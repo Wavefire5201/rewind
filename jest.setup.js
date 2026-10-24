@@ -21,6 +21,9 @@ jest.mock('react-native-gesture-handler', () => require('./__tests__/helpers/ges
 // bottom sheet pads by the bottom inset.
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
+// expo-sqlite — real SQL on Node's built-in SQLite (in-memory, one db per name); see the helper.
+jest.mock('expo-sqlite', () => require('./__tests__/helpers/sqliteMock').sqliteMock);
+
 // expo-haptics — silent stubs; assertions go through these fns
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => {}),

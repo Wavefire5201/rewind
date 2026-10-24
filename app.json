@@ -9,7 +9,7 @@
     "backgroundColor": "#1A1A1C",
     "scheme": "rewind",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000"
@@ -103,7 +103,8 @@
         }
       ],
       "expo-localization",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-sqlite"
     ]
   }
 }
