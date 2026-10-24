@@ -57,11 +57,13 @@ it('does nothing while disabled', async () => {
   expect(thumb).not.toHaveBeenCalled();
 });
 
-it('deletes the thumbnails it made when the save fails, so none are left unreferenced', async () => {
+it('keeps the thumbnails it made when the save fails: the entries point at them, and the next save stores them', async () => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   mockUpdatePhotos.mockResolvedValue(false);
   await renderHook(() => useThumbnailBackfill([makePhoto(0)], true));
-  await waitFor(() => expect(deletedUris).toContain('file:///document/2026-01-01_q95_thumb.jpg'));
+  await waitFor(() => expect(mockUpdatePhotos).toHaveBeenCalledTimes(1));
+  await new Promise((r) => setTimeout(r, 20));
+  expect(deletedUris).not.toContain('file:///document/2026-01-01_q95_thumb.jpg');
 });
 
 it("drops the thumbnail of a photo deleted while it was being made", async () => {

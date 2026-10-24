@@ -19,8 +19,9 @@ function deleteQuietly(uri: string | undefined) {
  * (makeThumbnail), one photo at a time while `enabled`, saved in batches. It shows no
  * progress: until a photo has a thumbnail its tiles decode the full photo, as before.
  *
- * A thumbnail is kept only once its entry is saved: if the save fails or the photo is
- * deleted meanwhile, the file is removed, so none is ever left unreferenced.
+ * A photo deleted while its thumbnail was made has the file removed. A failed save keeps the
+ * files: the entries in state already point at them, and storage writes the change with the
+ * next save, so removing them would leave the entries pointing at nothing.
  */
 export function useThumbnailBackfill(photos: PhotoEntry[], enabled: boolean): void {
   const { updatePhotos } = useAppContext();
@@ -36,7 +37,7 @@ export function useThumbnailBackfill(photos: PhotoEntry[], enabled: boolean): vo
     let cancelled = false;
     let batch: Record<string, Partial<PhotoEntry>> = {};
 
-    /** Saves the batch. False = the save failed (its files are removed); stop. */
+    /** Saves the batch. False = the save failed; stop (the files stay, see above). */
     const flush = async (): Promise<boolean> => {
       const pending = batch;
       batch = {};
@@ -48,9 +49,7 @@ export function useThumbnailBackfill(photos: PhotoEntry[], enabled: boolean): vo
         }
       }
       if (Object.keys(pending).length === 0) return true;
-      if (await updatePhotos(pending)) return true;
-      Object.values(pending).forEach((patch) => deleteQuietly(patch.thumbUri));
-      return false;
+      return updatePhotos(pending);
     };
 
     (async () => {
