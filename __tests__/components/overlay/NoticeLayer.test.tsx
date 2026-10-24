@@ -20,6 +20,9 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+// Clears the store's auto-dismiss timers, so none outlive the test file.
+afterEach(() => resetNoticesForTests());
+
 it('only the most recently mounted layer renders notices', async () => {
   const { rerender } = await inFonts(<><NoticeLayer testID="a" /><NoticeLayer testID="b" /></>);
   await act(async () => { notify({ title: 'saved' }); });
