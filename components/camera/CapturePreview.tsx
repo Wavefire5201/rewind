@@ -11,6 +11,10 @@ import { cachePolicyFor } from '@/utils/imageSource';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
 import { confirm } from '@/utils/confirm';
 import { notify } from '@/utils/notify';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
+/** Room kept under the focused caption: the save/retake row (24 margin, ~40 tall) and a gap. */
+const BUTTON_ROW_CLEARANCE = 80;
 
 interface CapturePreviewProps {
   visible: boolean;
@@ -71,32 +75,42 @@ export default function CapturePreview({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
       <SafeAreaView style={styles.container}>
-        <Image
-          source={{ uri: imageUri }}
-          cachePolicy={cachePolicyFor(imageUri)}
-          style={[styles.photo, { width: width - 48, height: photoHeight }]}
-          contentFit="cover"
-        />
-
-        <TextInput
-          value={caption}
-          onChangeText={(text) => setCaption(text.slice(0, 140))}
-          placeholder="add a caption..."
-          placeholderTextColor={Colors.textTertiary}
-          style={[styles.captionInput, { fontFamily: fonts.regular }]}
-          multiline
-        />
-        <View style={styles.buttonRow}>
-          <PillButton
-            label={saving ? 'saving…' : 'save'}
-            onPress={handleSave}
-            variant="filled"
-            style={styles.buttonFlex}
-            // Saving ends in its own success (or error) haptic.
-            haptic={false}
+        {/* Scrolls the caption, and the buttons under it, above the keyboard. keyboard-controller
+            tracks this Modal's own window, which RN's Keyboard can't. */}
+        <KeyboardAwareScrollView
+          testID="capture-preview-scroll"
+          contentContainerStyle={styles.content}
+          bottomOffset={BUTTON_ROW_CLEARANCE}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Image
+            source={{ uri: imageUri }}
+            cachePolicy={cachePolicyFor(imageUri)}
+            style={[styles.photo, { width: width - 48, height: photoHeight }]}
+            contentFit="cover"
           />
-          <PillButton label="retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
-        </View>
+
+          <TextInput
+            value={caption}
+            onChangeText={(text) => setCaption(text.slice(0, 140))}
+            placeholder="add a caption..."
+            placeholderTextColor={Colors.textTertiary}
+            style={[styles.captionInput, { fontFamily: fonts.regular }]}
+            multiline
+          />
+          <View style={styles.buttonRow}>
+            <PillButton
+              label={saving ? 'saving…' : 'save'}
+              onPress={handleSave}
+              variant="filled"
+              style={styles.buttonFlex}
+              // Saving ends in its own success (or error) haptic.
+              haptic={false}
+            />
+            <PillButton label="retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
       <OverlayHost />
     </Modal>
@@ -107,6 +121,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bgPage,
+  },
+  content: {
     alignItems: 'center',
     paddingHorizontal: 24,
   },
