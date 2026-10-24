@@ -18,15 +18,17 @@ it("won't delete the last album, with an error buzz", () => {
   expect(onDelete).not.toHaveBeenCalled();
 });
 
-it('warns, names the album, and deletes only on confirm (then a success buzz)', () => {
+it('asks without a haptic, names the album, and deletes only on confirm (then one success haptic)', () => {
   const onDelete = jest.fn();
   confirmDeleteAlbum({ name: 'daily' }, 2, onDelete);
-  expect(Haptics.notificationAsync).toHaveBeenLastCalledWith('warning');
+  // The press that opened this already tapped: asking adds no haptic of its own.
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
   expect(alertSpy.mock.calls[0][0]).toBe('Delete album?');
   expect(alertSpy.mock.calls[0][1]).toContain('"daily"');
   expect(onDelete).not.toHaveBeenCalled();
 
   buttons().find((b) => b.style === 'destructive')!.onPress!();
   expect(onDelete).toHaveBeenCalled();
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
   expect(Haptics.notificationAsync).toHaveBeenLastCalledWith('success');
 });

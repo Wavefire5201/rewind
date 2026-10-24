@@ -187,7 +187,6 @@ export default function PhotoModal({
 
   function handleDeletePress() {
     if (!currentPhoto) return;
-    haptics.warning();
     Alert.alert(
       'Delete photo?',
       'This photo will be permanently deleted.',

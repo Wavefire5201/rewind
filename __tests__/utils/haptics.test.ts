@@ -9,7 +9,12 @@ let ExpoHaptics: {
   impactAsync: jest.Mock;
   notificationAsync: jest.Mock;
   selectionAsync: jest.Mock;
+  performAndroidHapticsAsync: jest.Mock;
 };
+const onAndroid = () => jest.replaceProperty(require('react-native').Platform, 'OS', 'android');
+const androidCalls = () => ExpoHaptics.performAndroidHapticsAsync.mock.calls.map((c) => c[0]);
+/** Lets a rejected haptic's fallback run. */
+const settle = async () => { for (let i = 0; i < 4; i++) await Promise.resolve(); };
 let now = 10_000;
 
 beforeEach(() => {
@@ -22,18 +27,61 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  (Date.now as unknown as jest.Mock).mockRestore();
+  jest.restoreAllMocks();
 });
 
 describe('haptics', () => {
-  it('routes shutter/tap/success/warning/error to expo-haptics', () => {
-    haptics.shutter();
-    haptics.tap();
-    haptics.success();
-    haptics.warning();
-    haptics.error();
-    expect(ExpoHaptics.impactAsync).toHaveBeenCalledTimes(2);
-    expect(ExpoHaptics.notificationAsync).toHaveBeenCalledTimes(3);
+  it('maps each named haptic on Android to one system haptic', () => {
+    onAndroid();
+    haptics.tap(); haptics.tick(); haptics.shutter(); haptics.success(); haptics.error();
+    expect(androidCalls()).toEqual(['context-click', 'segment-tick', 'long-press', 'confirm', 'reject']);
+    expect(ExpoHaptics.notificationAsync).not.toHaveBeenCalled();
+    expect(ExpoHaptics.impactAsync).not.toHaveBeenCalled();
+    expect(ExpoHaptics.selectionAsync).not.toHaveBeenCalled();
+  });
+
+  it('maps each named haptic on iOS to the Taptic Engine', () => {
+    haptics.tap(); haptics.tick(); haptics.shutter(); haptics.success(); haptics.error();
+    expect(ExpoHaptics.impactAsync.mock.calls.map((c) => c[0])).toEqual(['light', 'medium']);
+    expect(ExpoHaptics.selectionAsync).toHaveBeenCalledTimes(1);
+    expect(ExpoHaptics.notificationAsync.mock.calls.map((c) => c[0])).toEqual(['success', 'error']);
+    expect(ExpoHaptics.performAndroidHapticsAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['success', 'confirm', 'virtual-key'],
+    ['error', 'reject', 'long-press'],
+    ['tick', 'segment-tick', 'clock-tick'],
+  ] as const)('falls back when the Android version lacks the %s haptic', async (name, first, fallback) => {
+    onAndroid();
+    ExpoHaptics.performAndroidHapticsAsync.mockRejectedValueOnce(new Error('not supported'));
+    haptics[name]();
+    await settle();
+    expect(androidCalls()).toEqual([first, fallback]);
+  });
+
+  it('swallows a failed fallback', async () => {
+    onAndroid();
+    ExpoHaptics.performAndroidHapticsAsync.mockRejectedValue(new Error('no haptics'));
+    expect(() => haptics.success()).not.toThrow();
+    await settle();
+    expect(androidCalls()).toEqual(['confirm', 'virtual-key']);
+  });
+
+  it('has no warning haptic', () => {
+    expect((haptics as Record<string, unknown>).warning).toBeUndefined();
+  });
+
+  it('grades alignment on Android from a light tick to a frequent tick', () => {
+    onAndroid();
+    haptics.alignment(0.1);
+    now += 500;
+    haptics.alignment(0.5);
+    now += 500;
+    haptics.alignment(0.9);
+    expect(androidCalls()).toEqual(['clock-tick', 'segment-tick', 'segment-frequent-tick']);
+    expect(ExpoHaptics.impactAsync).not.toHaveBeenCalled();
+    expect(ExpoHaptics.selectionAsync).not.toHaveBeenCalled();
   });
 
   it('fires high alignment scores immediately via selection feedback', () => {

@@ -1,47 +1,79 @@
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { AndroidHaptics } from 'expo-haptics';
 
 let lastAlignmentHaptic = 0;
 
+/**
+ * One Android system haptic: crisp, follows the phone's touch-feedback setting. Newer constants
+ * (Confirm/Reject: API 30, Segment_*: API 34) reject on older phones, so fall back to one every
+ * version has; a failed fallback is dropped (a missed haptic must never throw).
+ */
+function android(type: AndroidHaptics, fallback?: AndroidHaptics): void {
+  Haptics.performAndroidHapticsAsync(type)
+    .catch(() => (fallback ? Haptics.performAndroidHapticsAsync(fallback) : undefined))
+    .catch(() => {});
+}
+
+const isAndroid = () => Platform.OS === 'android';
+
+/**
+ * The app's haptics by meaning. Each is one native haptic on each platform (never a buzz
+ * pattern): Android system haptics, the Taptic Engine on iOS. Fire one per user action.
+ */
 export const haptics = {
-  /** Photo capture — medium impact */
-  shutter: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+  /** Button press, tab switch, opening a sheet */
+  tap: () => {
+    if (isAndroid()) android(AndroidHaptics.Context_Click);
+    else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  },
 
-  /** Button press, tab switch — light impact */
-  tap: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+  /** A small step: picking a day, changing month */
+  tick: () => {
+    if (isAndroid()) android(AndroidHaptics.Segment_Tick, AndroidHaptics.Clock_Tick);
+    else Haptics.selectionAsync();
+  },
 
-  /** Photo saved, export complete — success notification */
-  success: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+  /** Photo capture */
+  shutter: () => {
+    if (isAndroid()) android(AndroidHaptics.Long_Press);
+    else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  },
 
-  /** Delete confirmation — warning notification */
-  warning: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
+  /** An action completed: photo saved, album deleted, export done */
+  success: () => {
+    if (isAndroid()) android(AndroidHaptics.Confirm, AndroidHaptics.Virtual_Key);
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  },
 
-  /** Permission denied, failed action — error notification */
-  error: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
+  /** An action failed or was refused */
+  error: () => {
+    if (isAndroid()) android(AndroidHaptics.Reject, AndroidHaptics.Long_Press);
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  },
 
   /**
    * Graduated alignment feedback based on score (0-1).
-   * - score < 0.3: light impact, debounced at 400ms
-   * - score 0.3–0.7: medium impact, debounced at 200ms
-   * - score > 0.7: continuous selection feedback
+   * - score < 0.3: lightest tick, debounced at 400ms
+   * - score 0.3–0.7: a firmer tick, debounced at 200ms
+   * - score > 0.7: continuous ticks
    */
   alignment: (score: number) => {
     const now = Date.now();
     if (score > 0.7) {
-      // Continuous selection feedback — no debounce needed
-      Haptics.selectionAsync();
+      if (isAndroid()) android(AndroidHaptics.Segment_Frequent_Tick, AndroidHaptics.Clock_Tick);
+      else Haptics.selectionAsync();
       lastAlignmentHaptic = now;
     } else if (score >= 0.3) {
-      const debounce = 200;
-      if (now - lastAlignmentHaptic >= debounce) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (now - lastAlignmentHaptic >= 200) {
+        if (isAndroid()) android(AndroidHaptics.Segment_Tick, AndroidHaptics.Clock_Tick);
+        else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         lastAlignmentHaptic = now;
       }
-    } else {
-      const debounce = 400;
-      if (now - lastAlignmentHaptic >= debounce) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        lastAlignmentHaptic = now;
-      }
+    } else if (now - lastAlignmentHaptic >= 400) {
+      if (isAndroid()) android(AndroidHaptics.Clock_Tick);
+      else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      lastAlignmentHaptic = now;
     }
   },
 };

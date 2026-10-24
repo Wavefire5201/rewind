@@ -11,7 +11,6 @@ export function confirmDeleteAlbum(album: { name: string }, albumCount: number, 
     Alert.alert("Can't delete", 'You need at least one album.');
     return;
   }
-  haptics.warning();
   Alert.alert('Delete album?', `"${album.name}" and all its photos will be deleted. This can't be undone.`, [
     { text: 'Cancel', style: 'cancel' },
     {
