@@ -6,8 +6,11 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { AppProvider, useAppContext } from '@/context/AppContext';
 import { getNotices, resetNoticesForTests } from '@/utils/notify';
-import type { PhotoEntry, Album } from '@/types';
+import { getDb, resetDbForTests, photoToRow, albumToRow, rowToPhoto, rowToAlbum, type PhotoRow, type AlbumRow } from '@/utils/db';
+import { resetStorageForTests } from '@/utils/storage';
+import type { PhotoEntry, Album, UserProfile } from '@/types';
 import { fileStore, deletedUris, resetFileSystemMock } from '../helpers/fileSystemMock';
+import { sqliteLog, failNextTransaction, resetSqliteForTests } from '../helpers/sqliteMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 
@@ -59,11 +62,44 @@ function album(overrides: Partial<Album> = {}): Album {
   };
 }
 
-async function storedPhotos(): Promise<PhotoEntry[]> {
-  return JSON.parse((await AsyncStorage.getItem('@rewind/photos')) ?? '[]');
+/** Puts data straight into the database, as a previous launch would have left it. */
+async function seed({ photos = [], albums = [], profile, settings }: {
+  photos?: PhotoEntry[]; albums?: Album[]; profile?: UserProfile; settings?: object;
+}) {
+  const db = await getDb();
+  const insert = async (table: string, row: object) => {
+    const cols = Object.keys(row);
+    await db.runAsync(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, ...Object.values(row));
+  };
+  for (const p of photos) await insert('photos', photoToRow(p));
+  for (const [i, a] of albums.entries()) await insert('albums', albumToRow(a, i));
+  if (profile) await insert('kv', { key: 'profile', value: JSON.stringify(profile) });
+  if (settings) await insert('kv', { key: 'settings', value: JSON.stringify(settings) });
+  // Count only the app's writes from here.
+  sqliteLog.statements.length = 0;
+  sqliteLog.transactions = 0;
 }
 
+async function storedPhotos(): Promise<PhotoEntry[]> {
+  return (await (await getDb()).getAllAsync<PhotoRow>('SELECT * FROM photos ORDER BY date')).map(rowToPhoto);
+}
+
+async function storedAlbums(): Promise<Album[]> {
+  return (await (await getDb()).getAllAsync<AlbumRow>('SELECT * FROM albums ORDER BY position')).map(rowToAlbum);
+}
+
+async function stored<T>(key: 'profile' | 'settings'): Promise<T | null> {
+  const row = await (await getDb()).getFirstAsync<{ value: string }>('SELECT value FROM kv WHERE key = ?', key);
+  return row ? JSON.parse(row.value) : null;
+}
+
+const kvWrites = () => sqliteLog.statements.filter((s) => s.startsWith('INSERT INTO kv'));
+const photoWrites = () => sqliteLog.statements.filter((s) => /^(INSERT INTO|DELETE FROM) photos/.test(s));
+
 beforeEach(async () => {
+  resetSqliteForTests();
+  resetDbForTests();
+  resetStorageForTests();
   await AsyncStorage.clear();
   resetFileSystemMock();
   jest.clearAllMocks();
@@ -73,11 +109,11 @@ describe('AppContext', () => {
   // Between onboarding and the first photo (or after deleting every photo) nothing is in the
   // photos key, but the profile and settings the user chose are.
   it('loads the stored profile and settings when no photos are stored', async () => {
-    await AsyncStorage.multiSet([
-      ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-01' })],
-      ['@rewind/settings', JSON.stringify({ mirrorSelfies: false, use24hClock: true })],
-      ['@rewind/albums', JSON.stringify([album()])],
-    ]);
+    await seed({
+      profile: { name: 'Ada', avatarUri: null, joinDate: '2026-03-01' },
+      settings: { mirrorSelfies: false, use24hClock: true },
+      albums: [album()],
+    });
     const { unmount } = await renderProvider();
     expect(ctx!.photos).toHaveLength(0);
     expect(ctx!.profile).toEqual({ name: 'Ada', avatarUri: null, joinDate: '2026-03-01' });
@@ -89,41 +125,30 @@ describe('AppContext', () => {
       ctx!.updateSettings({ alignFaces: false });
     });
     await waitFor(async () => {
-      const saved = JSON.parse((await AsyncStorage.getItem('@rewind/settings')) ?? '{}');
-      expect(saved).toMatchObject({ mirrorSelfies: false, use24hClock: true, alignFaces: false });
+      expect(await stored('settings')).toMatchObject({ mirrorSelfies: false, use24hClock: true, alignFaces: false });
     });
     await unmount();
   });
 
-  it("doesn't start a new profile over one that failed to read", async () => {
-    await AsyncStorage.multiSet([
-      ['@rewind/photos', JSON.stringify([photo({ id: 'p1', date: '2026-03-01' })])],
-      ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-02-01' })],
-    ]);
-    const getItem = jest.mocked(AsyncStorage.getItem);
-    const realGetItem = getItem.getMockImplementation()!;
-    getItem.mockImplementation((key, ...rest) =>
-      key === '@rewind/profile' ? Promise.reject(new Error('read failed')) : realGetItem(key, ...rest),
-    );
-    try {
-      const { unmount } = await renderProvider();
-      expect(ctx!.photos).toHaveLength(1);
-      expect(jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/profile')).toEqual([]);
-      await unmount();
-    } finally {
-      getItem.mockImplementation(realGetItem);
-    }
-    expect(JSON.parse((await AsyncStorage.getItem('@rewind/profile'))!).name).toBe('Ada');
+  it("a failed load starts no new profile over the stored one", async () => {
+    await seed({ photos: [photo({ id: 'p1', date: '2026-03-01' })], profile: { name: 'Ada', avatarUri: null, joinDate: '2026-02-01' } });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(await getDb(), 'getAllAsync').mockRejectedValueOnce(new Error('read failed'));
+    const { unmount } = await renderProvider();
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(kvWrites()).toEqual([]);
+    expect((await stored<UserProfile>('profile'))?.name).toBe('Ada');
+    errorSpy.mockRestore();
+    await unmount();
   });
 
   it('loads persisted photos/profile/settings/albums on mount', async () => {
-    await AsyncStorage.multiSet([
-      ['@rewind/photos', JSON.stringify([photo({ id: 'p1' })])],
-      ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-01' })],
-      ['@rewind/settings', JSON.stringify({ mirrorSelfies: false })],
-      ['@rewind/albums', JSON.stringify([album()])],
-      ['@rewind/unlocked-albums', JSON.stringify(['a1'])],
-    ]);
+    await seed({
+      photos: [photo({ id: 'p1' })],
+      profile: { name: 'Ada', avatarUri: null, joinDate: '2026-03-01' },
+      settings: { mirrorSelfies: false },
+      albums: [album()],
+    });
     const { unmount } = await renderProvider();
     expect(ctx!.photos).toHaveLength(1);
     expect(ctx!.profile.name).toBe('Ada');
@@ -132,14 +157,19 @@ describe('AppContext', () => {
     await unmount();
   });
 
-  it('ignores and removes unlocks saved by older versions', async () => {
-    await AsyncStorage.multiSet([
-      ['@rewind/albums', JSON.stringify([album({ isLocked: true })])],
-      ['@rewind/unlocked-albums', JSON.stringify(['a1'])],
-    ]);
+  it("an album's framing survives a restart", async () => {
+    // The old load step rebuilt each album from a fixed list of fields and dropped this one.
+    const first = await renderProvider();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+    });
+    await act(async () => {
+      ctx!.updateAlbum('a1', { framing: { x: 0.5, y: 0.42, dist: 0.3 } });
+    });
+    await waitFor(async () => expect((await storedAlbums())[0]?.framing).toEqual({ x: 0.5, y: 0.42, dist: 0.3 }));
+    await first.unmount();
     const { unmount } = await renderProvider();
-    expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
-    await waitFor(async () => expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull());
+    expect(ctx!.albums[0].framing).toEqual({ x: 0.5, y: 0.42, dist: 0.3 });
     await unmount();
   });
 
@@ -158,9 +188,7 @@ describe('AppContext', () => {
 
   it('keeps photos sorted by date from the moment they load', async () => {
     // Hooks rely on this order instead of re-sorting on every update.
-    await AsyncStorage.setItem('@rewind/photos', JSON.stringify([
-      photo({ id: 'c', date: '2026-03-10' }), photo({ id: 'a', date: '2026-03-08' }), photo({ id: 'b', date: '2026-03-09' }),
-    ]));
+    await seed({ photos: [photo({ id: 'c', date: '2026-03-10' }), photo({ id: 'a', date: '2026-03-08' }), photo({ id: 'b', date: '2026-03-09' })] });
     const { unmount } = await renderProvider();
     expect(ctx!.photos.map((p) => p.id)).toEqual(['a', 'b', 'c']);
     await unmount();
@@ -206,160 +234,50 @@ describe('AppContext', () => {
     await unmount();
   });
 
-  it('migrates legacy photos missing albumId', async () => {
-    const legacy = { ...photo(), albumId: undefined };
-    await AsyncStorage.setItem('@rewind/photos', JSON.stringify([legacy]));
-    const { unmount } = await renderProvider();
-    expect(ctx!.photos[0].albumId).toBe('daily-selfie');
-    // Migration is written back to storage
-    await waitFor(async () => {
-      expect((await storedPhotos())[0].albumId).toBe('daily-selfie');
+  it('a failed photo load says so, and new photos still save without touching the unread rows', async () => {
+    await seed({ photos: [photo({ id: 'p1', date: '2026-03-01' }), photo({ id: 'p2', date: '2026-03-02' })], albums: [album()] });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(await getDb(), 'getAllAsync').mockRejectedValueOnce(new Error('disk I/O error'));
+    const first = await renderProvider();
+    expect(ctx!.photos).toEqual([]);
+    expect(getNotices()).toEqual([expect.objectContaining({
+      title: "couldn't load your photos",
+      message: "nothing has been deleted, but rewind couldn't read your saved photos. try restarting the app.",
+      tone: 'error',
+      sticky: true,
+      key: 'photos-load-failed',
+    })]);
+
+    // A save writes only its own row: it can't replace the photos it never read.
+    await act(async () => {
+      ctx!.addPhoto(photo({ id: 'p3', date: '2026-03-03' }));
     });
+    await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p1', 'p2', 'p3']));
+    await first.unmount();
+
+    // The next launch that can read them has all three.
+    const { unmount } = await renderProvider();
+    expect(ctx!.photos.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+    errorSpy.mockRestore();
     await unmount();
   });
 
-  describe("when the stored photos can't be read", () => {
-    const stored = JSON.stringify([photo({ id: 'p1', date: '2026-03-01' }), photo({ id: 'p2', date: '2026-03-02' })]);
-    const getItem = jest.mocked(AsyncStorage.getItem);
-    let realGetItem: NonNullable<ReturnType<typeof getItem.getMockImplementation>>;
-    let errorSpy: jest.SpyInstance;
-
-    beforeEach(async () => {
-      await AsyncStorage.multiSet([['@rewind/photos', stored], ['@rewind/albums', JSON.stringify([album()])]]);
-      // Android: a row past the 2 MB cursor window saves but won't read back.
-      realGetItem = getItem.getMockImplementation()!;
-      getItem.mockImplementation((key, ...rest) =>
-        key === '@rewind/photos' ? Promise.reject(new Error('Row too big to fit into CursorWindow')) : realGetItem(key, ...rest),
-      );
-      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
-    afterEach(() => {
-      getItem.mockImplementation(realGetItem);
-      errorSpy.mockRestore();
-    });
-
-    const photoWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/photos');
-
-    it("doesn't move the join date for photos it refused to save", async () => {
-      await AsyncStorage.setItem('@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate: '2026-03-05' }));
-      const { unmount } = await renderProvider();
-      jest.mocked(AsyncStorage.setItem).mockClear();
-      await act(async () => {
-        ctx!.addPhotos([photo({ id: 'old', date: '2025-01-01' })]);
-        ctx!.addPhoto(photo({ id: 'older', date: '2024-01-01' }));
-      });
-      expect(ctx!.profile.joinDate).toBe('2026-03-05');
-      expect(jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === '@rewind/profile')).toEqual([]);
-      await unmount();
-    });
-
-    it('opens without them, says so, and never writes over them', async () => {
-      const { unmount } = await renderProvider();
-      expect(ctx!.photos).toEqual([]);
-      expect(ctx!.photosLoadFailed).toBe(true);
-      expect(ctx!.albums).toHaveLength(1); // the rest of the data still loads
-      expect(getNotices()).toEqual([expect.objectContaining({
-        title: "couldn't load your photos",
-        message: expect.stringContaining('nothing has been deleted'),
-        tone: 'error',
-        sticky: true,
-        key: 'photos-load-failed',
-      })]);
-      expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
-
-      let updated: Promise<boolean> | undefined;
-      await act(async () => {
-        ctx!.addPhoto(photo({ id: 'new', date: '2026-03-09' }));
-        ctx!.addPhotos([photo({ id: 'imported', date: '2026-03-08' })]);
-        updated = ctx!.updatePhotos({ p1: { caption: 'x' } });
-        ctx!.seedMockPhotos('a1');
-      });
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 20));
-      });
-
-      expect(await updated).toBe(false);
-      expect(photoWrites()).toEqual([]);
-      expect(await realGetItem('@rewind/photos')).toBe(stored);
-      // Refused photos aren't shown either: they'd be gone on the next launch.
-      expect(ctx!.photos.filter((p) => p.id === 'new' || p.id === 'imported')).toEqual([]);
-      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Photos not saved'));
-      // Each refusal says so, as one notice rather than a stack of them.
-      expect(getNotices().filter((n) => n.key === 'cant-save-photos')).toEqual([
-        expect.objectContaining({ title: "can't save photos", tone: 'error', sticky: true }),
-      ]);
-      await unmount();
-    });
-
-    it('saves photos again on the next launch that reads them', async () => {
-      const first = await renderProvider();
-      await first.unmount();
-      getItem.mockImplementation(realGetItem);
-
-      const { unmount } = await renderProvider();
-      expect(ctx!.photosLoadFailed).toBe(false);
-      expect(ctx!.photos.map((p) => p.id)).toEqual(['p1', 'p2']);
-      await act(async () => {
-        ctx!.addPhoto(photo({ id: 'p3', date: '2026-03-03' }));
-      });
-      await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p1', 'p2', 'p3']));
-      await unmount();
-    });
-
-    it('lets photos be saved again once the user clears all data', async () => {
-      const { unmount } = await renderProvider();
-      await act(async () => {
-        await ctx!.resetAllData();
-      });
-      expect(ctx!.photosLoadFailed).toBe(false);
-      await act(async () => {
-        ctx!.addPhoto(photo({ id: 'fresh' }));
-      });
-      await waitFor(async () => {
-        const saved: PhotoEntry[] = JSON.parse((await realGetItem('@rewind/photos')) ?? '[]');
-        expect(saved.map((p) => p.id)).toEqual(['fresh']);
-      });
-      await unmount();
-    });
-  });
-
-  describe('when the stored photos are corrupt', () => {
-    let errorSpy: jest.SpyInstance;
-    beforeEach(() => {
-      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
-    afterEach(() => errorSpy.mockRestore());
-
-    it('keeps a copy, then starts over with no photos and saves normally', async () => {
-      await AsyncStorage.setItem('@rewind/photos', '[{"id":"p1",');
-      const { unmount } = await renderProvider();
-      expect(ctx!.photos).toEqual([]);
-      expect(ctx!.photosLoadFailed).toBe(false);
-      expect(getNotices()).toEqual([]);
-      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
-
-      await act(async () => {
-        ctx!.addPhoto(photo({ id: 'p2' }));
-      });
-      await waitFor(async () => expect((await storedPhotos()).map((p) => p.id)).toEqual(['p2']));
-      expect(await AsyncStorage.getItem('@rewind/photos-corrupt-backup')).toBe('[{"id":"p1",');
-      await unmount();
-    });
-  });
-
-  it("still loads legacy photos when their migration can't be written", async () => {
-    // Before, the failed write left the photos out of state, so the next save replaced them.
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    await AsyncStorage.multiSet([
-      ['@rewind/photos', JSON.stringify([{ ...photo({ id: 'old' }), albumId: undefined }])],
-      ['@rewind/albums', JSON.stringify([album()])],
-    ]);
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+  it('nothing reads or writes AsyncStorage for app data', async () => {
     const { unmount } = await renderProvider();
-    expect(ctx!.photos.map((p) => [p.id, p.albumId])).toEqual([['old', 'daily-selfie']]);
-    expect(ctx!.albums).toHaveLength(1);
-    expect(errorSpy).toHaveBeenCalledWith('Photo migration not saved:', expect.any(Error));
-    errorSpy.mockRestore();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+      ctx!.addPhoto(photo({ id: 'p1' }));
+      ctx!.updateProfile({ name: 'Grace' });
+      ctx!.updateSettings({ use24hClock: true });
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+    await act(async () => {
+      ctx!.deletePhoto('p1');
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(0));
+    for (const fn of ['getItem', 'setItem', 'multiGet', 'multiSet', 'removeItem', 'multiRemove'] as const) {
+      expect(jest.mocked(AsyncStorage[fn])).not.toHaveBeenCalled();
+    }
     await unmount();
   });
 
@@ -397,14 +315,11 @@ describe('AppContext', () => {
 
   describe('join date', () => {
     async function storedJoinDate(): Promise<string | undefined> {
-      return JSON.parse((await AsyncStorage.getItem('@rewind/profile')) ?? '{}').joinDate;
+      return (await stored<UserProfile>('profile'))?.joinDate;
     }
 
     async function renderWith(joinDate: string, existing: PhotoEntry[]) {
-      await AsyncStorage.multiSet([
-        ['@rewind/photos', JSON.stringify(existing)],
-        ['@rewind/profile', JSON.stringify({ name: 'Ada', avatarUri: null, joinDate })],
-      ]);
+      await seed({ photos: existing, profile: { name: 'Ada', avatarUri: null, joinDate } });
       return renderProvider();
     }
 
@@ -438,8 +353,7 @@ describe('AppContext', () => {
 
     it('stays put, without a profile write, when nothing earlier is added', async () => {
       const { unmount } = await renderWith('2026-03-01', [photo({ id: 'old', date: '2026-03-01' })]);
-      const setItem = jest.mocked(AsyncStorage.setItem);
-      setItem.mockClear();
+      sqliteLog.statements.length = 0;
       await act(async () => {
         ctx!.addPhotos([photo({ id: 'later', date: '2026-03-09' })]);
         ctx!.addPhotos([photo({ id: 'dupe', date: '2026-03-01' })]);
@@ -447,7 +361,7 @@ describe('AppContext', () => {
       });
       await waitFor(async () => expect(await storedPhotos()).toHaveLength(3));
       expect(ctx!.profile.joinDate).toBe('2026-03-01');
-      expect(setItem.mock.calls.filter(([key]) => key === '@rewind/profile')).toHaveLength(0);
+      expect(kvWrites()).toHaveLength(0);
       await unmount();
     });
 
@@ -461,14 +375,10 @@ describe('AppContext', () => {
       await unmount();
     });
 
-    it('keeps the earlier join date in state when its save fails (log + haptic, no throw)', async () => {
+    it('keeps the photo and the earlier join date in state when their save fails (log + haptic, no throw)', async () => {
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const { unmount } = await renderWith('2026-03-10', [photo({ id: 'p1', date: '2026-03-10' })]);
-      const setItem = jest.mocked(AsyncStorage.setItem);
-      const realSetItem = setItem.getMockImplementation()!;
-      setItem.mockImplementation((key, value) =>
-        key === '@rewind/profile' ? Promise.reject(new Error('disk full')) : realSetItem(key, value),
-      );
+      failNextTransaction(new Error('disk full'));
       try {
         await act(async () => {
           ctx!.addPhotos([photo({ id: 'p0', date: '2026-03-02' })]);
@@ -478,7 +388,6 @@ describe('AppContext', () => {
         expect(ctx!.profile.joinDate).toBe('2026-03-02');
         expect(ctx!.photos.map((p) => p.id)).toEqual(['p0', 'p1']);
       } finally {
-        setItem.mockImplementation(realSetItem);
         errorSpy.mockRestore();
       }
       await unmount();
@@ -529,7 +438,7 @@ describe('AppContext', () => {
       });
       await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
 
-      jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+      failNextTransaction(new Error('disk full'));
       await act(async () => {
         ctx!.deletePhoto('p1');
       });
@@ -551,10 +460,8 @@ describe('AppContext', () => {
       });
       await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
 
-      // Both saves fail: the albums and the photos.
-      jest.mocked(AsyncStorage.setItem)
-        .mockRejectedValueOnce(new Error('disk full'))
-        .mockRejectedValueOnce(new Error('disk full'));
+      // The album and its photos go in one transaction, and it fails.
+      failNextTransaction(new Error('disk full'));
       await act(async () => {
         ctx!.deleteAlbum('a2');
       });
@@ -647,8 +554,8 @@ describe('AppContext', () => {
     });
     await waitFor(async () => expect(await storedPhotos()).toHaveLength(3));
 
-    const setItem = jest.mocked(AsyncStorage.setItem);
-    setItem.mockClear();
+    sqliteLog.statements.length = 0;
+    sqliteLog.transactions = 0;
     await act(async () => {
       // 'gone' = a photo deleted while its face scan was in flight
       ctx!.updatePhotos({ p1: { caption: 'one' }, p3: { caption: 'three' }, gone: { caption: 'x' } });
@@ -657,7 +564,9 @@ describe('AppContext', () => {
     await waitFor(async () =>
       expect((await storedPhotos()).map((p) => p.caption)).toEqual(['one', '', 'three']),
     );
-    expect(setItem.mock.calls.filter(([key]) => key === '@rewind/photos')).toHaveLength(1);
+    // One transaction, writing only the two patched rows.
+    expect(sqliteLog.transactions).toBe(1);
+    expect(photoWrites()).toHaveLength(2);
     expect(ctx!.photos.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
     await unmount();
   });
@@ -670,7 +579,7 @@ describe('AppContext', () => {
     });
     await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
 
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+    failNextTransaction(new Error('disk full'));
     await act(async () => {
       ctx!.updatePhoto('p1', { caption: 'lost' });
     });
@@ -693,10 +602,12 @@ describe('AppContext', () => {
       ctx!.addPhoto(photo({ id: 'p1', caption: 'old' }));
     });
     await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full')).mockRejectedValueOnce(new Error('disk full'));
+    failNextTransaction(new Error('disk full'));
     await act(async () => {
       ctx!.updatePhoto('p1', { caption: 'a' });
     });
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(1));
+    failNextTransaction(new Error('disk full'));
     await act(async () => {
       ctx!.updatePhoto('p1', { caption: 'b' });
     });
@@ -721,52 +632,50 @@ describe('AppContext', () => {
     await unmount();
   });
 
-  it('updatePhotos resolves false when the save fails', async () => {
+  it('updatePhotos resolves false when its commit fails, and the stored row keeps its old value', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const { unmount } = await renderProvider();
     await act(async () => {
       ctx!.addPhoto(photo({ id: 'p1' }));
     });
     await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('disk full'));
+    failNextTransaction(new Error('disk full'));
     let pending: Promise<boolean> | undefined;
     await act(async () => {
       pending = ctx!.updatePhotos({ p1: { caption: 'x' } });
     });
     expect(await pending).toBe(false);
+    // Callers keep the files the old value points at (see usePhotoEncodeBackfill's tests).
+    expect((await storedPhotos())[0].caption).toBe('');
     errorSpy.mockRestore();
     await unmount();
   });
 
-  it('writes a burst of photo changes as one or two saves, with every change in the last', async () => {
-    // Each save writes the whole array (~1 MB at 1000 photos); the in-between states
-    // are never read back, so only the newest needs writing.
+  it('writes a burst of photo changes as one or two transactions, with every change in the last', async () => {
+    // The in-between states are never read back, so only the newest needs writing.
     const { unmount } = await renderProvider();
     await act(async () => {
       ctx!.addPhotos(Array.from({ length: 10 }, (_, i) => photo({ id: `p${i}`, date: `2026-03-${String(i + 1).padStart(2, '0')}` })));
     });
     await waitFor(async () => expect(await storedPhotos()).toHaveLength(10));
-    const setItem = jest.mocked(AsyncStorage.setItem);
-    setItem.mockClear();
+    sqliteLog.transactions = 0;
     const results: Promise<boolean>[] = [];
     await act(async () => {
       for (let i = 0; i < 10; i++) results.push(ctx!.updatePhotos({ [`p${i}`]: { caption: `c${i}` } }));
     });
     expect(await Promise.all(results)).toEqual(Array(10).fill(true));
-    const writes = setItem.mock.calls.filter(([key]) => key === '@rewind/photos');
-    expect(writes.length).toBeLessThanOrEqual(2);
+    expect(sqliteLog.transactions).toBeLessThanOrEqual(2);
     expect((await storedPhotos()).map((p) => p.caption)).toEqual(Array.from({ length: 10 }, (_, i) => `c${i}`));
     await unmount();
   });
 
   it('updatePhotos with no patches does not write photos', async () => {
     const { unmount } = await renderProvider();
-    const setItem = jest.mocked(AsyncStorage.setItem);
-    setItem.mockClear();
+    sqliteLog.statements.length = 0;
     await act(async () => {
       ctx!.updatePhotos({});
     });
-    expect(setItem.mock.calls.filter(([key]) => key === '@rewind/photos')).toHaveLength(0);
+    expect(photoWrites()).toHaveLength(0);
     await unmount();
   });
 
@@ -805,6 +714,25 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it('deleting an album removes it and its photos together', async () => {
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+      ctx!.addAlbum(album({ id: 'a2' }));
+      ctx!.addPhoto(photo({ id: 'p1', albumId: 'a2' }));
+      ctx!.addPhoto(photo({ id: 'p2', albumId: 'a1' }));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(2));
+    sqliteLog.transactions = 0;
+    await act(async () => {
+      ctx!.deleteAlbum('a2');
+    });
+    await waitFor(async () => expect((await storedAlbums()).map((a) => a.id)).toEqual(['a1']));
+    expect((await storedPhotos()).map((p) => p.id)).toEqual(['p2']);
+    expect(sqliteLog.transactions).toBe(1);
+    await unmount();
+  });
+
   describe('album unlocks', () => {
     async function renderWithUnlockedAlbum() {
       const utils = await renderProvider();
@@ -823,7 +751,8 @@ describe('AppContext', () => {
     it('last only for this session: a remount starts locked and nothing is saved', async () => {
       const first = await renderWithUnlockedAlbum();
       await first.unmount();
-      expect(await AsyncStorage.getItem('@rewind/unlocked-albums')).toBeNull();
+      expect(await AsyncStorage.getAllKeys()).toEqual([]);
+      expect(await (await getDb()).getAllAsync('SELECT key FROM kv WHERE key NOT IN (?, ?)', 'profile', 'settings')).toEqual([]);
 
       const second = await renderProvider();
       expect(ctx!.unlockedAlbumIds.has('a1')).toBe(false);
@@ -899,11 +828,36 @@ describe('AppContext', () => {
     });
     expect(ctx!.photos).toEqual([]);
     expect(ctx!.albums).toEqual([]);
-    expect(await AsyncStorage.getItem('@rewind/photos')).toBeNull();
+    expect(await storedPhotos()).toEqual([]);
+    expect(await storedAlbums()).toEqual([]);
     expect(deletedUris).toContain('file:///document/p.jpg');
     expect(deletedUris).toContain('file:///document/p_thumb.jpg');
     // The deleted albums' daily reminders must stop too.
     expect(Notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
+    await unmount();
+  });
+
+  it("resetAllData keeps everything when the clear can't be saved", async () => {
+    fileStore.set('file:///document/p.jpg', 'QUJD');
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { unmount } = await renderProvider();
+    await act(async () => {
+      ctx!.addAlbum(album({ id: 'a1' }));
+      ctx!.addPhoto(photo({ id: 'p1', imageUri: 'file:///document/p.jpg' }));
+    });
+    await waitFor(async () => expect(await storedPhotos()).toHaveLength(1));
+
+    failNextTransaction(new Error('disk full'));
+    await act(async () => {
+      await ctx!.resetAllData();
+    });
+    // The rows are still stored, so their files and the app's view of them stay too.
+    expect((await storedPhotos()).map((p) => p.id)).toEqual(['p1']);
+    expect(ctx!.photos.map((p) => p.id)).toEqual(['p1']);
+    expect(ctx!.albums.map((a) => a.id)).toEqual(['a1']);
+    expect(deletedUris).not.toContain('file:///document/p.jpg');
+    expect(getNotices()).toEqual([expect.objectContaining({ key: 'save-failed' })]);
+    errorSpy.mockRestore();
     await unmount();
   });
 
