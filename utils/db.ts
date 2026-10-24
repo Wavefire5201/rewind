@@ -10,8 +10,10 @@ import type { Album, PhotoEntry } from '@/types';
 export const DB_NAME = 'rewind.db';
 export const SCHEMA_VERSION = 1;
 
-// WAL for concurrent reads during a write; synchronous FULL because callers delete files once a
-// save resolves, so a committed transaction must survive a power loss (NORMAL can roll one back).
+// WAL because a commit then appends to one log file with one sync, rather than writing a rollback
+// journal and the database file (there's one connection, so WAL's concurrent reads don't matter);
+// synchronous FULL because callers delete files once a save resolves, so a committed transaction
+// must survive a power loss (NORMAL can roll one back).
 // No foreign keys: integrity stays in app logic, and an album row written after its photos must
 // not fail the save.
 const SCHEMA = `
@@ -94,6 +96,22 @@ export interface AlbumRow {
   framing: string | null;
   position: number;
 }
+
+// Each field's column. `satisfies` makes a PhotoEntry or Album field with no column a type error:
+// add it to the schema, the row type, these maps and the two mapping functions below.
+const PHOTO_FIELDS = {
+  id: 'id', albumId: 'album_id', date: 'date', imageUri: 'image_uri', thumbUri: 'thumb_uri', caption: 'caption',
+  capturedAt: 'captured_at', cameraDirection: 'camera_direction', encoding: 'encoding', faceScan: 'face_scan',
+  faceLandmarks: 'face_landmarks',
+} as const satisfies Record<keyof PhotoEntry, keyof PhotoRow>;
+const ALBUM_FIELDS = {
+  id: 'id', name: 'name', createdAt: 'created_at', reminderEnabled: 'reminder_enabled', reminderTime: 'reminder_time',
+  isLocked: 'is_locked', framing: 'framing',
+} as const satisfies Record<keyof Album, keyof AlbumRow>;
+
+export const PHOTO_COLUMNS: (keyof PhotoRow)[] = Object.values(PHOTO_FIELDS);
+/** The album columns, plus `position`: its place in the user's list. */
+export const ALBUM_COLUMNS: (keyof AlbumRow)[] = [...Object.values(ALBUM_FIELDS), 'position'];
 
 const json = (value: unknown): string | null => (value === undefined ? null : JSON.stringify(value));
 

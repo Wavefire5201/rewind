@@ -1,4 +1,4 @@
-import { getDb, resetDbForTests, photoToRow, rowToPhoto, albumToRow, rowToAlbum, SCHEMA_VERSION } from '@/utils/db';
+import { getDb, resetDbForTests, photoToRow, rowToPhoto, albumToRow, rowToAlbum, SCHEMA_VERSION, PHOTO_COLUMNS, ALBUM_COLUMNS } from '@/utils/db';
 import { sqliteLog, resetSqliteForTests } from '../helpers/sqliteMock';
 import type { PhotoEntry, Album } from '@/types';
 
@@ -104,4 +104,17 @@ it("a JSON column that won't parse is left out, so one bad row can't stop the ap
   };
   expect(rowToAlbum({ ...albumToRow(album, 0), framing: 'nope' })).toEqual(album);
   warn.mockRestore();
+});
+
+it('the schema, the row mapping and the column lists name the same columns', async () => {
+  const db = await getDb();
+  const columnsOf = async (table: string) =>
+    (await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((c) => c.name).sort();
+  const album: Album = {
+    id: 'a1', name: 'daily', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false,
+  };
+  expect(await columnsOf('photos')).toEqual([...PHOTO_COLUMNS].sort());
+  expect(Object.keys(photoToRow(fullPhoto)).sort()).toEqual([...PHOTO_COLUMNS].sort());
+  expect(await columnsOf('albums')).toEqual([...ALBUM_COLUMNS].sort());
+  expect(Object.keys(albumToRow(album, 0)).sort()).toEqual([...ALBUM_COLUMNS].sort());
 });

@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
-import { getDb, photoToRow, rowToPhoto, albumToRow, rowToAlbum, type PhotoRow, type AlbumRow } from '@/utils/db';
+import { getDb, photoToRow, rowToPhoto, albumToRow, rowToAlbum, PHOTO_COLUMNS, ALBUM_COLUMNS, type PhotoRow, type AlbumRow } from '@/utils/db';
 import { notify } from '@/utils/notify';
 
 /**
@@ -58,12 +58,6 @@ let failed: Pending = {};
 // Whether the database's contents are known: loaded, or cleared.
 let loaded = false;
 
-const PHOTO_COLUMNS: (keyof PhotoRow)[] = [
-  'id', 'album_id', 'date', 'image_uri', 'thumb_uri', 'caption', 'captured_at', 'camera_direction', 'encoding', 'face_scan', 'face_landmarks',
-];
-const ALBUM_COLUMNS: (keyof AlbumRow)[] = [
-  'id', 'name', 'created_at', 'reminder_enabled', 'reminder_time', 'is_locked', 'framing', 'position',
-];
 const upsertSql = (table: string, columns: string[]) =>
   `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')}) `
   + `ON CONFLICT(id) DO UPDATE SET ${columns.filter((c) => c !== 'id').map((c) => `${c} = excluded.${c}`).join(', ')}`;
@@ -153,12 +147,29 @@ async function runFlushes(): Promise<void> {
     // A clear wipes the failed change too, rather than retrying it.
     const batch = pending.clear ? pending : { ...failed, ...pending };
     const batchWaiters = waiters;
+    const earlierFailure = failed;
     pending = {};
     waiters = [];
     failed = {};
-    const saved = await flush(batch);
-    // Kept for the next save to retry, not retried here: a failing disk would loop.
-    if (!saved && !batch.clear) failed = batch;
+    let saved = false;
+    try {
+      saved = await flush(batch);
+    } catch (e) {
+      // Only reporting the failure can throw; the waiters still hear, and later saves still run.
+      console.error('Storage write failed:', e);
+    }
+    if (!saved && batch.clear) {
+      // Nothing was wiped: the earlier failed change still needs its retry, and saves made
+      // meanwhile were built on the emptied app, so applied to the rows still there they would
+      // delete them. They are dropped.
+      failed = earlierFailure;
+      batchWaiters.push(...waiters);
+      pending = {};
+      waiters = [];
+    } else if (!saved) {
+      // Kept for the next save to retry, not retried here: a failing disk would loop.
+      failed = batch;
+    }
     batchWaiters.forEach((resolve) => resolve(saved));
   }
   scheduled = false;
@@ -217,9 +228,7 @@ async function writePhotos(db: SQLiteDatabase, committed: Map<string, PhotoEntry
       await upsert.finalizeAsync();
     }
   }
-  for (const id of committed.keys()) {
-    if (!next.has(id)) await db.runAsync('DELETE FROM photos WHERE id = ?', id);
-  }
+  await deleteRows(db, 'photos', [...committed.keys()].filter((id) => !next.has(id)));
   return next;
 }
 
@@ -242,10 +251,13 @@ async function writeAlbums(db: SQLiteDatabase, committed: Map<string, { album: A
       await upsert.finalizeAsync();
     }
   }
-  for (const id of committed.keys()) {
-    if (!next.has(id)) await db.runAsync('DELETE FROM albums WHERE id = ?', id);
-  }
+  await deleteRows(db, 'albums', [...committed.keys()].filter((id) => !next.has(id)));
   return next;
+}
+
+// One statement however many rows: deleting a 2,000-photo album is one call, not 2,000.
+async function deleteRows(db: SQLiteDatabase, table: 'photos' | 'albums', ids: string[]) {
+  if (ids.length > 0) await db.runAsync(`DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(ids));
 }
 
 export function resetStorageForTests(): void {

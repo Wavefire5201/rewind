@@ -1,3 +1,4 @@
+import * as notifyModule from '@/utils/notify';
 import {
   loadAll, savePhotos, saveAlbums, saveProfile, saveSettings, clearAllData, getDefaultSettings, resetStorageForTests,
 } from '@/utils/storage';
@@ -178,6 +179,60 @@ it('a clear drops a failed change instead of retrying it', async () => {
   await expect(clearAllData()).resolves.toBe(true);
   await expect(saveAlbums([album('a1')])).resolves.toBe(true);
   expect(await rows('photos')).toEqual([]);
+});
+
+it('a flush that throws while reporting its failure still answers, and later saves run', async () => {
+  jest.spyOn(notifyModule, 'notify').mockImplementationOnce(() => { throw new Error('notice failed'); });
+  failNextTransaction(new Error('disk full'));
+  const hung = new Promise((resolve) => setTimeout(() => resolve('hung'), 200));
+  await expect(Promise.race([savePhotos([photo('p1', '2026-03-01')]), hung])).resolves.toBe(false);
+  await expect(Promise.race([savePhotos([photo('p1', '2026-03-01')]), hung])).resolves.toBe(true);
+});
+
+it('removing many photos deletes them in one statement', async () => {
+  const photos = Array.from({ length: 50 }, (_, i) => photo(`p${i}`, `2026-03-${String((i % 28) + 1).padStart(2, '0')}`));
+  await savePhotos(photos);
+  await saveAlbums([album('a1'), album('a2'), album('a3')]);
+  sqliteLog.statements.length = 0;
+  await expect(Promise.all([savePhotos(photos.slice(0, 1)), saveAlbums([album('a1')])])).resolves.toEqual([true, true]);
+  expect(writes(/^DELETE FROM photos/)).toHaveLength(1);
+  expect(writes(/^DELETE FROM albums/)).toHaveLength(1);
+  expect((await rows('photos')).map((r) => r.id)).toEqual(['p0']);
+  expect((await rows('albums')).map((r) => r.id)).toEqual(['a1']);
+});
+
+it('a row failing partway through a flush rolls back the rows before it', async () => {
+  const good = [photo('p1', '2026-03-01'), photo('p2', '2026-03-02')];
+  // The third row breaks a NOT NULL column, so SQLite itself fails the flush midway.
+  const bad = { ...photo('p3', '2026-03-03'), caption: null } as unknown as PhotoEntry;
+  await expect(savePhotos([...good, bad])).resolves.toBe(false);
+  expect(await rows('photos')).toEqual([]);
+  await expect(savePhotos([...good, photo('p3', '2026-03-03')])).resolves.toBe(true);
+  expect((await rows('photos')).map((r) => r.id)).toEqual(['p1', 'p2', 'p3']);
+});
+
+it('saves made while a clear runs are dropped if it fails, not applied to the rows it left', async () => {
+  await savePhotos([photo('p1', '2026-03-01'), photo('p2', '2026-03-02')]);
+  failNextTransaction(new Error('disk full'));
+  const clear = clearAllData();
+  await Promise.resolve(); // the clear is under way
+  const emptied = savePhotos([]); // built on the app emptied for the reset
+  await expect(clear).resolves.toBe(false);
+  await expect(emptied).resolves.toBe(false);
+  expect((await rows('photos')).map((r) => r.id)).toEqual(['p1', 'p2']);
+});
+
+it('a clear that fails keeps the earlier failed change for the next save', async () => {
+  const a1 = album('a1');
+  const p1 = photo('p1', '2026-03-01');
+  await Promise.all([saveAlbums([a1, album('a2')]), savePhotos([p1, photo('p2', '2026-03-02', { albumId: 'a2' })])]);
+  failNextTransaction(new Error('disk full'));
+  await expect(Promise.all([saveAlbums([a1]), savePhotos([p1])])).resolves.toEqual([false, false]);
+  failNextTransaction(new Error('disk full'));
+  await expect(clearAllData()).resolves.toBe(false);
+  await expect(saveProfile(profile)).resolves.toBe(true);
+  expect((await rows('albums')).map((r) => r.id)).toEqual(['a1']);
+  expect((await rows('photos')).map((r) => r.id)).toEqual(['p1']);
 });
 
 it('saves during a commit coalesce into one later flush, in order', async () => {
