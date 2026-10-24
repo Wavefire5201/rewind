@@ -27,8 +27,8 @@ your phone.
 
 ## Privacy
 
-Photos, face measurements and settings live only on the device (app storage and
-AsyncStorage). Face detection and measurement run on-device. There is no account and no
+Photos, face measurements and settings live only on the device (app storage and a
+local SQLite database). Face detection and measurement run on-device. There is no account and no
 server.
 
 ## Getting started
@@ -37,7 +37,7 @@ Rewind uses native modules (VisionCamera, MLKit and a MediaPipe module in `modul
 so it runs in a **development build**, not Expo Go.
 
 **Prerequisites:** [Bun](https://bun.sh) 1.3+, and Android Studio (JDK 21, Android SDK) and/or
-Xcode.
+Xcode. The tests also need Node 22.13+ (for its built-in SQLite).
 
 ```bash
 bun install            # also applies patches/ to dependencies

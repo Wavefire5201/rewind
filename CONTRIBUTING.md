@@ -6,7 +6,8 @@ code follows, and how changes get verified and released.
 ## Setup
 
 1. Install [Bun](https://bun.sh) 1.3+ (the only supported package manager — don't use npm or
-   yarn), plus Android Studio (JDK 21, Android SDK) and/or Xcode.
+   yarn), plus Android Studio (JDK 21, Android SDK) and/or Xcode. Jest runs on Node, which must
+   be 22.13+: the storage tests use its built-in `node:sqlite` (CI uses Node 24).
 2. `bun install`. This also applies `patches/` to dependencies (Bun's built-in patching).
 3. `bun run android` (or `bun run ios`) builds a development build and installs it.
 4. `bun start` runs Metro for that build. `bun run start:mock` seeds mock data.
@@ -31,9 +32,11 @@ by editing the generated folders.
 
 ## How the main pieces work
 
-- **Data.** `AppContext` loads everything from AsyncStorage on launch. Mutations update React
-  state, then save through a serial queue; `updatePhotos` resolves with whether its save reached
-  storage. Read and write app data through `AppContext`, not `utils/storage`.
+- **Data.** App data lives in a SQLite database (`utils/db.ts` has the schema). `AppContext` loads
+  it once on launch; mutations update React state, then save through `utils/storage`, which
+  writes only the rows that changed, one transaction per tick. `updatePhotos` resolves with
+  whether its save reached storage. Read and write app data through `AppContext`, not
+  `utils/storage`. The app PIN stays in AsyncStorage (`utils/pin.ts`).
 - **Photos** are files in the app's document directory, stored as q95 JPEGs. A background pass
   (`usePhotoEncodeBackfill`, on the album screen) re-encodes any photo that isn't yet, deleting
   an original only after the entry pointing at its replacement is saved.
@@ -57,7 +60,8 @@ by editing the generated folders.
 - Use the design tokens in `constants/theme.ts` (`Colors`, `Fonts`, `Spacing`, …) and the mono
   font; don't hardcode colors or font families.
 - Haptics go through `@/utils/haptics`, never `expo-haptics` directly.
-- Storage reads guard `JSON.parse` and fall back to defaults on corrupt data.
+- Storage reads guard `JSON.parse` and fall back to defaults on corrupt data (an unreadable JSON
+  column is left out of its row, not a failed load).
 - Comments explain *why* (a measured number, a platform quirk), not what the code does.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org):
   `type(scope): description`, with types `feat`, `fix`, `perf`, `refactor`, `docs`, `test`,

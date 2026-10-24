@@ -14,7 +14,7 @@ Always use `bun` — never npm or npx. Use `bun install`, `bun run`, `bunx` for 
 - `bun run start:mock` — Metro with `EXPO_PUBLIC_MOCK_DATA=1` (seeds mock photos/profile)
 - `bun run typecheck` — `tsc --noEmit`
 - `bun run lint` — ESLint (Expo config; React Compiler rules are off on purpose, see `eslint.config.js`)
-- `bun run test` — Jest (`bun run test:coverage` for coverage). Not bare `bun test`, which runs Bun's own runner.
+- `bun run test` — Jest (`bun run test:coverage` for coverage). Not bare `bun test`, which runs Bun's own runner. Needs Node 22.13+: the expo-sqlite stand-in (`__tests__/helpers/sqliteMock.ts`) runs real SQL on `node:sqlite`.
 - `bunx expo-doctor` — dependency check CI runs; fix drift with `bunx expo install --fix`
 - `eas build --profile development|preview|production`, `eas update --branch preview` — EAS (CI does both, see `CONTRIBUTING.md`)
 
@@ -28,14 +28,14 @@ performance only in a release build.
 - **MediaPipe Face Landmarker** (`modules/face-mesh`, local Expo module) — per-photo eye positions and face measurements
 - **react-native-reanimated 4** / **react-native-worklets 0.10** — UI-thread animation, timelapse clock
 - **expo-image** — photo display (local files use `cachePolicy` 'memory', see `utils/imageSource.ts`)
-- Persistence: **AsyncStorage** (metadata) + **expo-file-system** (photo files, stored as q95 JPEGs)
+- Persistence: **expo-sqlite** (photos, albums, profile/settings; schema in `utils/db.ts`) + **expo-file-system** (photo files, stored as q95 JPEGs). Only the app PIN uses AsyncStorage (`utils/pin.ts`).
 - Type-only `@/types` (`PhotoEntry`, `FaceScan`, `FaceMeasure`, `Framing`, `UserProfile`, `AppSettings`, `Album`)
 
 ## Architecture
 
 - `app/` — expo-router screens. `(tabs)/` = home/camera/profile; `album/[id]`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding`.
 - `components/` — grouped by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `profile/`, `ui/`.
-- `context/AppContext.tsx` — **single source of truth** for photos/profile/settings/albums. Loads from storage on mount; mutations update React state then save through a serial queue (errors log + haptic, never throw); `updatePhotos` resolves with whether its save succeeded. Also owns album unlock state.
+- `context/AppContext.tsx` — **single source of truth** for photos/profile/settings/albums. Loads everything once on mount; mutations update React state then save through `utils/storage`, which writes only the changed rows, one transaction per tick (errors log + notice, never throw); `updatePhotos` resolves with whether its save succeeded. Also owns album unlock state.
 - `hooks/` — feature logic (`usePhotos`, `useStreak`, `useTimelapse`, `useFaceDetection`, `useAutoCapture`, `useAlbumLock`, `useFaceScanBackfill`, `usePhotoEncodeBackfill`).
 - `utils/` — pure helpers: `faceScan` (MediaPipe scan), `faceMetrics` / `faceTrend` (measurements, trend), `faceAlign` / `ghost` (eye-anchored layouts, album framing), `cameraPreview` (detector → preview coordinates), `playback`, `photoEncode`, `storage`, `import` / `export`, `pin`, `notifications`, `haptics`.
 - `modules/face-mesh/` — native module (Kotlin + Swift) + bundled `face_landmarker.task`.
@@ -47,7 +47,7 @@ performance only in a release build.
 - Import via the `@/` alias (maps to repo root) — `@/utils/storage`, `@/types`, etc.
 - **Read/write app data through `AppContext`, not `utils/storage` directly**, so React state stays in sync. `storage.ts` is the persistence layer behind it.
 - Use the `Colors` / `Typography` / `Spacing` / `BorderRadius` / `Sizes` tokens from `constants/theme.ts` — don't hardcode colors or font families (the app uses the CommitMono mono font throughout).
-- Storage reads guard `JSON.parse` and fall back to empty/defaults on corruption — preserve that resilience.
+- Storage reads guard `JSON.parse` (kv values, JSON columns) and fall back to defaults or leave the field out — preserve that resilience.
 - Haptics go through `utils/haptics` (`haptics.error()`, etc.), never `expo-haptics` directly.
 - Conventional Commits (`type(scope): description`).
 
@@ -58,6 +58,7 @@ performance only in a release build.
 - **Camera coordinates**: MLKit frame-processor px are in the upright, unmirrored frame; VisionCamera always mirrors the front preview. Map with `utils/cameraPreview.ts`. Frame-processor results reach JS as **read-only arrays** — map into new arrays, never in place.
 - **Photos are re-encoded once** (`encoding: 'q95'`); never re-encode a flagged photo. Bump `FACE_SCAN_VERSION` in `utils/faceScan.ts` to rescan after changing what a scan stores.
 - **Layout**: a bordered `flex: 1` item comes out bigger than its siblings (Yoga floors its base size at the border) — draw borders as an inner overlay. `StyleSheet.absoluteFillObject` no longer exists in RN 0.86.
+- **SQLite**: `utils/storage.ts` is the only database user. `withTransactionAsync` isn't exclusive, so any other query on the connection would run inside its transactions. Saves diff each slice by object identity against what was committed, so update state immutably (a photo mutated in place is never saved). No migrations before release: after changing the schema in `utils/db.ts`, reinstall or clear app data (`CREATE TABLE IF NOT EXISTS` won't alter an existing table).
 - `REFINEMENT_BACKLOG.md` (untracked, local) tracks audit findings and remaining taste calls.
 
 ## Skill routing
