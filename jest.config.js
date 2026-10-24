@@ -7,6 +7,10 @@ module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
+  // The first test in a file loads and transforms the screen's whole component tree (imports are
+  // lazy): album settings' first test takes 2 s here with a cold cache, and passed the default 5 s on
+  // CI (cold, with coverage, sharing two cores). Later tests in a file take milliseconds.
+  testTimeout: 20000,
   collectCoverageFrom: [
     'utils/**/*.ts',
     'hooks/**/*.ts',
