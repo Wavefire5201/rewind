@@ -92,6 +92,8 @@ export default function CapturePreview({
             onPress={handleSave}
             variant="filled"
             style={styles.buttonFlex}
+            // Saving ends in its own success (or error) haptic.
+            haptic={false}
           />
           <PillButton label="retake" onPress={handleRetake} variant="outlined" style={styles.buttonFlex} />
         </View>

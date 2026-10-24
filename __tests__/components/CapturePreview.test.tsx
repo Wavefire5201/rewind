@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ConfirmOptions } from '@/utils/confirm';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import CapturePreview from '@/components/camera/CapturePreview';
 import { FontProvider } from '@/context/FontContext';
 import { fileStore, resetFileSystemMock } from '../helpers/fileSystemMock';
@@ -91,4 +92,13 @@ it('a save that fails says so and keeps the preview open', async () => {
   expect(onSave).not.toHaveBeenCalled();
   expect(getNotices()).toEqual([expect.objectContaining({ title: 'save failed', tone: 'error' })]);
   resetNoticesForTests();
+});
+
+it('a confirmed save plays one success haptic, not a tap as well', async () => {
+  jest.clearAllMocks();
+  await renderPreview(async () => true);
+  await act(async () => fireEvent.press(screen.getByText('save')));
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+  expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
 });

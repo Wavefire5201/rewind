@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import TextInputModal from '@/components/ui/TextInputModal';
 import { FontProvider } from '@/context/FontContext';
 import { Colors } from '@/constants/theme';
@@ -30,4 +31,13 @@ it('confirms the trimmed text from its primary button', async () => {
   await act(async () => fireEvent.changeText(screen.getByLabelText('album name'), '  trip  '));
   await act(async () => fireEvent.press(screen.getByRole('button', { name: 'rename' })));
   expect(onConfirm).toHaveBeenCalledWith('trip');
+});
+
+it('confirming plays no haptic of its own: the caller plays the one for the outcome', async () => {
+  jest.clearAllMocks();
+  await renderModal({ placeholder: 'album name', confirmLabel: 'rename', onConfirm: jest.fn() });
+  await act(async () => fireEvent.changeText(screen.getByLabelText('album name'), 'trip'));
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: 'rename' })));
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });

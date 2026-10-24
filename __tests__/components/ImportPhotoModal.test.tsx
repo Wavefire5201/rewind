@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import { FontProvider } from '@/context/FontContext';
 
@@ -29,4 +30,20 @@ it('changing the date uses the themed picker', async () => {
   await act(async () => fireEvent.press(screen.getByLabelText('october 3, 2026')));
   await act(async () => fireEvent.press(screen.getByRole('button', { name: 'use oct 3' })));
   expect(screen.getByText('oct 3, 2026')).toBeTruthy();
+});
+
+it.each([
+  ['saving', 'save'],
+  ['skipping', 'Skip this photo'],
+] as const)('%s the last photo plays one success haptic, not a tap as well', async (_what, button) => {
+  jest.clearAllMocks();
+  await render(
+    <FontProvider>
+      <ImportPhotoModal visible photos={[{ uri: 'file:///picked.jpg', suggestedDate: '2026-10-21' }]} photoDates={new Set()} onSave={jest.fn()} onCancel={jest.fn()} />
+    </FontProvider>,
+  );
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: button })));
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+  expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
 });

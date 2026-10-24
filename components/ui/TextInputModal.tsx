@@ -53,7 +53,7 @@ export default function TextInputModal({
       return;
     }
     setShowEmptyError(false);
-    haptics.tap();
+    // No haptic here: every caller plays the one for the outcome (success).
     onConfirm(trimmed);
   }
 
