@@ -88,6 +88,23 @@ it('announces to screen readers', () => {
   announce.mockRestore();
 });
 
+it('a repeat of a notice still on screen is silent; new words are announced again', () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  notify({ title: "couldn't save", key: 'save-failed', tone: 'error' });
+  notify({ title: "couldn't save", key: 'save-failed', tone: 'error' });
+  notify({ title: "couldn't save", key: 'save-failed', tone: 'error' });
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+  expect(announce).toHaveBeenCalledTimes(1);
+  notify({ title: "couldn't save", message: 'disk full', key: 'save-failed', tone: 'error' });
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+  expect(announce).toHaveBeenLastCalledWith("couldn't save. disk full");
+  // Once it has gone, the next one is new again.
+  jest.advanceTimersByTime(5000);
+  notify({ title: "couldn't save", key: 'save-failed', tone: 'error' });
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(2);
+  announce.mockRestore();
+});
+
 it('subscribers hear adds and dismissals', () => {
   const listener = jest.fn();
   const unsubscribe = subscribeNotices(listener);

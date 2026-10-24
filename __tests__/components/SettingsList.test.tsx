@@ -12,7 +12,9 @@ const mockUpdateSettings = jest.fn();
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
 jest.mock('@/utils/pin', () => ({ hasPin: async () => true, clearPin: jest.fn() }));
-jest.mock('@/components/ui/PinModal', () => () => null);
+const mockPinModal = jest.fn();
+jest.mock('@/components/ui/PinModal', () => (props: unknown) => { mockPinModal(props); return null; });
+const pinProps = () => mockPinModal.mock.calls.at(-1)?.[0] as { visible: boolean; onSuccess: () => void };
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 
 const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
@@ -68,6 +70,16 @@ it('asks before removing a passcode that unlocks albums', async () => {
   expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({
     title: 'remove passcode?', message: expect.stringContaining('1 album is'), confirmLabel: 'remove and unlock', destructive: true,
   }));
+});
+
+it.each(['change passcode', 'remove passcode'])('%s: the passcode screen plays the one success haptic, the list adds none', async (name) => {
+  await renderList();
+  await act(async () => fireEvent.press(screen.getByRole('button', { name })));
+  expect(pinProps().visible).toBe(true);
+  jest.mocked(Haptics.notificationAsync).mockClear();
+  await act(async () => pinProps().onSuccess());
+  expect(pinProps().visible).toBe(false);
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });
 
 it('exposes each setting as a labelled button', async () => {

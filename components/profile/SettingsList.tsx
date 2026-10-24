@@ -72,6 +72,7 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
     setShowPinModal(true);
   }
 
+  // PinModal played the success haptic: one per action, so none here.
   function handlePinSuccess() {
     if (pinStep === 'remove') {
       // PIN verified — clear it and unlock any locked albums
@@ -83,13 +84,11 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
       setShowPinModal(false);
       setPinStep(null);
       setPinExists(false);
-      haptics.success();
     } else {
       // 'change' or 'set-new' — new PIN was saved by PinModal internally
       setShowPinModal(false);
       setPinStep(null);
       setPinExists(true);
-      haptics.success();
     }
   }
 
