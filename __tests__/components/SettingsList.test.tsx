@@ -11,7 +11,8 @@ import type { Album } from '@/types';
 const mockUpdateSettings = jest.fn();
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
-jest.mock('@/utils/pin', () => ({ hasPin: async () => true, clearPin: jest.fn() }));
+let mockHasPin = true;
+jest.mock('@/utils/pin', () => ({ hasPin: async () => mockHasPin, clearPin: jest.fn() }));
 const mockPinModal = jest.fn();
 jest.mock('@/components/ui/PinModal', () => (props: unknown) => { mockPinModal(props); return null; });
 const pinProps = () => mockPinModal.mock.calls.at(-1)?.[0] as { visible: boolean; onSuccess: () => void };
@@ -39,6 +40,19 @@ const renderList = async ({ onClearData = jest.fn(), albums = [] as Album[] } = 
 beforeEach(() => {
   jest.clearAllMocks();
   mockConfirm.mockResolvedValue(false);
+  mockHasPin = true;
+});
+
+it('with no passcode, the row offers to set one, and changes once one is set', async () => {
+  mockHasPin = false;
+  await renderList();
+  expect(screen.queryByRole('button', { name: 'change passcode' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'remove passcode' })).toBeNull();
+  await act(async () => fireEvent.press(screen.getByRole('button', { name: 'set passcode' })));
+  expect(pinProps()).toEqual(expect.objectContaining({ visible: true, intent: 'set' }));
+  await act(async () => pinProps().onSuccess());
+  expect(screen.getByRole('button', { name: 'change passcode' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'remove passcode' })).toBeTruthy();
 });
 
 describe('clearing all data', () => {
