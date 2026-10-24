@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
@@ -61,8 +61,7 @@ export default function TextInputModal({
     // Scrim, drag and back cancel; the sheet's scrim tap already plays the tap. Inline: the keyboard
     // only reports to the screen's window, not a Modal's.
     <BottomSheet visible={visible} onClose={onCancel} inline>
-      {/* Pads itself by the keyboard's height, so the field and buttons stay above it. */}
-      <KeyboardAvoidingView behavior="padding" style={styles.body}>
+      <View style={styles.body}>
         <Text style={[styles.title, { fontFamily: fonts.medium }]}>{title}</Text>
         {message ? <Text style={[styles.message, { fontFamily: fonts.regular }]}>{message}</Text> : null}
         <TextInput
@@ -98,7 +97,7 @@ export default function TextInputModal({
             <Text style={[styles.cancelText, { fontFamily: fonts.regular }]}>cancel</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </BottomSheet>
   );
 }

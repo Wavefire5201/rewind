@@ -108,6 +108,9 @@ export const reanimatedMock = {
     return React.useRef<T | null>(null);
   },
   scrollTo: jest.fn(),
+  /** The keyboard's height and state; tests set a height with mockReturnValue. */
+  useAnimatedKeyboard: jest.fn(() => ({ height: { value: 0 }, state: { value: 0 } })),
+  KeyboardState: { UNKNOWN: 0, OPENING: 1, OPEN: 2, CLOSING: 3, CLOSED: 4 },
   /** The system Reduce Motion setting; tests flip it with mockReturnValue(true). */
   useReducedMotion: jest.fn(() => false),
   // UI → JS calls run inline: the mock has no separate UI runtime.

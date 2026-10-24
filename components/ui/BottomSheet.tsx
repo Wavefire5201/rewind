@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
-  Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+  Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,6 +125,7 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     >
       {dragFromHandleOnly ? <GestureDetector gesture={pan}>{handle}</GestureDetector> : handle}
       <View testID={testID}>{children}</View>
+      {inline && <KeyboardSpacer bottomInset={insets.bottom} />}
     </Animated.View>
   );
 
@@ -163,6 +164,16 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
       </GestureHandlerRootView>
     </Modal>
   );
+}
+
+/**
+ * Grows with the keyboard, frame by frame, so an inline sheet's content stays above it. Less the
+ * bottom inset, which the sheet's padding already covers.
+ */
+function KeyboardSpacer({ bottomInset }: { bottomInset: number }) {
+  const keyboard = useAnimatedKeyboard();
+  const style = useAnimatedStyle(() => ({ height: Math.max(0, keyboard.height.value - bottomInset) }));
+  return <Animated.View testID="keyboard-spacer" style={style} />;
 }
 
 const styles = StyleSheet.create({

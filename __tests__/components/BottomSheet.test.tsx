@@ -156,6 +156,20 @@ describe('inline (in the screen, not a Modal)', () => {
     expect(screen.getByText('sheet body')).toBeTruthy();
   });
 
+  it('makes room for the keyboard, following it as it opens', async () => {
+    const { useAnimatedKeyboard } = jest.requireMock('react-native-reanimated') as { useAnimatedKeyboard: jest.Mock };
+    useAnimatedKeyboard.mockReturnValue({ height: { value: 320 }, state: { value: 2 } });
+    await renderOpen({ inline: true });
+    // Less the bottom inset (20 here), which the sheet's own padding already covers.
+    expect(StyleSheet.flatten(screen.getByTestId('keyboard-spacer').props.style).height).toBe(300);
+    useAnimatedKeyboard.mockReturnValue({ height: { value: 0 }, state: { value: 4 } });
+  });
+
+  it('a sheet in a Modal has no keyboard spacer', async () => {
+    await renderOpen();
+    expect(screen.queryByTestId('keyboard-spacer')).toBeNull();
+  });
+
   it('Android back closes it, and is consumed', async () => {
     const addListener = jest.spyOn(BackHandler, 'addEventListener');
     const onClose = jest.fn();
