@@ -94,6 +94,23 @@ it('an action button runs and dismisses', async () => {
   expect(getNotices()).toEqual([]);
 });
 
+it("a screen reader reaches the action through the card, which groups the button (VoiceOver can't focus it)", async () => {
+  const onPress = jest.fn();
+  await inFonts(<NoticeLayer />);
+  await act(async () => { notify({ title: 'notifications are off', tone: 'error', action: { label: 'open settings', onPress } }); });
+  const card = screen.getByRole('alert');
+  expect(card.props.accessibilityActions).toEqual(expect.arrayContaining([{ name: 'activate', label: 'open settings' }]));
+  await act(async () => card.props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } }));
+  expect(onPress).toHaveBeenCalledTimes(1);
+  expect(getNotices()).toEqual([]);
+});
+
+it('a notice without an action offers no activate action', async () => {
+  await inFonts(<NoticeLayer />);
+  await act(async () => { notify({ title: 'export failed', tone: 'error' }); });
+  expect(screen.getByRole('alert').props.accessibilityActions).toEqual([{ name: 'escape', label: 'dismiss' }]);
+});
+
 it('sticky notices show no countdown bar', async () => {
   await inFonts(<NoticeLayer />);
   await act(async () => { notify({ title: "couldn't load your photos", tone: 'error', sticky: true }); });
