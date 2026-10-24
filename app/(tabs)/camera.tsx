@@ -11,6 +11,7 @@ import { useCanAddPhotos } from '@/hooks/useCanAddPhotos';
 import { useAppContext } from '@/context/AppContext';
 import { formatDateLabel } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
+import { confirm } from '@/utils/confirm';
 import Viewfinder, { type FaceState, type ViewfinderRef } from '@/components/camera/Viewfinder';
 import CameraControls from '@/components/camera/CameraControls';
 import TimerSelector from '@/components/camera/TimerSelector';
@@ -258,25 +259,17 @@ function CameraScreen() {
   }, []);
 
   // Asked before the preview copies the photo, so declining leaves nothing behind.
-  const confirmSave = useCallback(() => new Promise<boolean>((resolve) => {
-    if (!canAddPhotos()) {
-      resolve(false);
-      return;
-    }
-    if (!todayPhoto) {
-      resolve(true);
-      return;
-    }
-    Alert.alert(
-      'Replace photo?',
-      "You've already captured today. Replace it with this one?",
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-        { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
-      ],
-      { cancelable: true, onDismiss: () => resolve(false) },
-    );
-  }), [todayPhoto, canAddPhotos]);
+  const confirmSave = useCallback(async () => {
+    if (!canAddPhotos()) return false;
+    if (!todayPhoto) return true;
+    // Any way of dismissing the question keeps today's photo.
+    return confirm({
+      title: 'replace photo?',
+      message: "you've already captured today. replace it with this one?",
+      confirmLabel: 'replace',
+      destructive: true,
+    });
+  }, [todayPhoto, canAddPhotos]);
 
   const handleSave = (caption: string, savedUri: string) => {
     const newPhoto: PhotoEntry = {

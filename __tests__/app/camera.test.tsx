@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ConfirmOptions } from '@/utils/confirm';
 import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import CameraRoute from '@/app/(tabs)/camera';
@@ -29,7 +30,10 @@ jest.mock('@/hooks/useAutoCapture', () => ({
   useAutoCapture: (args: unknown) => { mockAutoCapture(args); return { progress: 0, isInCooldown: false }; },
 }));
 jest.mock('@/hooks/useFaceScanBackfill', () => ({ useFaceScanBackfill: () => ({ scanning: false, done: 0, total: 0 }) }));
-jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ mostRecentPhoto: null, todayPhoto: null, addPhoto: jest.fn() }) }));
+let mockTodayPhoto: { id: string } | null = null;
+jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ mostRecentPhoto: null, todayPhoto: mockTodayPhoto, addPhoto: jest.fn() }) }));
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 jest.mock('@/hooks/useGreeting', () => ({ useGreeting: () => ({ dayNumber: 1 }) }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
 jest.mock('@/context/AppContext', () => ({
@@ -67,6 +71,25 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
   mockPhotosLoadFailed = false;
+  mockTodayPhoto = null;
+  mockConfirm.mockResolvedValue(false);
+});
+
+it('asks before replacing today\'s photo, and a dismissed question keeps the old one', async () => {
+  mockTodayPhoto = { id: 'today' };
+  mockConfirm.mockResolvedValue(false);
+  await render(<FontProvider><CameraRoute /></FontProvider>);
+  await act(async () => last(mockControls).onCapture());
+  await expect(last(mockPreview).confirmSave()).resolves.toBe(false);
+  expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'replace photo?', confirmLabel: 'replace', destructive: true }));
+});
+
+it('replaces today\'s photo after a yes', async () => {
+  mockTodayPhoto = { id: 'today' };
+  mockConfirm.mockResolvedValue(true);
+  await render(<FontProvider><CameraRoute /></FontProvider>);
+  await act(async () => last(mockControls).onCapture());
+  await expect(last(mockPreview).confirmSave()).resolves.toBe(true);
 });
 
 it("won't save a photo when the stored photos couldn't be read, and says why", async () => {

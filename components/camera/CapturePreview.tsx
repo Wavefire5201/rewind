@@ -9,6 +9,7 @@ import PillButton from '@/components/ui/PillButton';
 import { haptics } from '@/utils/haptics';
 import { cachePolicyFor } from '@/utils/imageSource';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
+import { confirm } from '@/utils/confirm';
 
 interface CapturePreviewProps {
   visible: boolean;
@@ -53,27 +54,18 @@ export default function CapturePreview({
     }
   };
 
-  const handleRetake = () => {
+  const handleRetake = async () => {
     if (caption.trim().length > 0) {
-      Alert.alert(
-        'Discard caption?',
-        'You have an unsaved caption. Retaking will discard it.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Retake',
-            style: 'destructive',
-            onPress: () => {
-              setCaption('');
-              onRetake();
-            },
-          },
-        ],
-      );
-    } else {
-      setCaption('');
-      onRetake();
+      const yes = await confirm({
+        title: 'discard caption?',
+        message: 'you have an unsaved caption. retaking will discard it.',
+        confirmLabel: 'retake',
+        destructive: true,
+      });
+      if (!yes) return;
     }
+    setCaption('');
+    onRetake();
   };
 
   return (

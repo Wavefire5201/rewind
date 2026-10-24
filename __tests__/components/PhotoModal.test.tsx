@@ -1,10 +1,14 @@
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import type { ConfirmOptions } from '@/utils/confirm';
+import * as Haptics from 'expo-haptics';
 import PhotoModal from '@/components/timeline/PhotoModal';
 import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
 
 jest.mock('react-native-reanimated', () => require('../helpers/reanimatedMock').reanimatedMock);
 jest.mock('@/components/ui/PhotoImage', () => () => null);
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 jest.mock('react-native-gesture-handler', () => {
   const { View } = require('react-native');
   const chain = (): unknown => new Proxy({}, { get: (_t, prop) => (prop === 'then' ? undefined : () => chain()) });
@@ -27,4 +31,36 @@ it('shows the face readout for the photo on screen', async () => {
     </FontProvider>,
   );
   expect(screen.getByText('face 2% fuller than your 30-day average')).toBeTruthy();
+});
+
+describe('deleting a photo', () => {
+  const renderModal = (onDelete = jest.fn()) => render(
+    <FontProvider>
+      <PhotoModal visible photos={[photo]} initialIndex={0} joinDate="2026-01-01" onClose={jest.fn()} onDelete={onDelete} onUpdateCaption={jest.fn()} />
+    </FontProvider>,
+  );
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockConfirm.mockResolvedValue(false);
+  });
+
+  it('asks first, and a no keeps the photo with only the press tap', async () => {
+    const onDelete = jest.fn();
+    await renderModal(onDelete);
+    await act(async () => fireEvent.press(screen.getByLabelText('Delete photo')));
+    expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'delete photo?', confirmLabel: 'delete', destructive: true }));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+  });
+
+  it('a yes deletes it, then one success haptic', async () => {
+    mockConfirm.mockResolvedValue(true);
+    const onDelete = jest.fn();
+    await renderModal(onDelete);
+    await act(async () => fireEvent.press(screen.getByLabelText('Delete photo')));
+    expect(onDelete).toHaveBeenCalledWith('p1');
+    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
+  });
 });

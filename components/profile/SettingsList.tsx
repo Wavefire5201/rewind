@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
 import { HardDrive, Image, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
 import PinModal from '@/components/ui/PinModal';
@@ -8,6 +8,7 @@ import { Colors } from '@/constants/theme';
 import SectionLabel from '@/components/ui/SectionLabel';
 import SettingsRow from '@/components/ui/SettingsRow';
 import { haptics } from '@/utils/haptics';
+import { confirm } from '@/utils/confirm';
 import type { AppSettings, Album } from '@/types';
 
 interface SettingsListProps {
@@ -56,27 +57,19 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
     haptics.tap();
     const lockedAlbumIds = albums.filter(a => a.isLocked).map(a => a.id);
     if (lockedAlbumIds.length > 0) {
-      Alert.alert(
-        'Remove passcode?',
-        `${lockedAlbumIds.length} album${lockedAlbumIds.length === 1 ? '' : 's'} ${lockedAlbumIds.length === 1 ? 'is' : 'are'} currently locked. Removing the passcode will unlock ${lockedAlbumIds.length === 1 ? 'it' : 'them'}. Continue?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove and unlock',
-            style: 'destructive',
-            onPress: () => {
-              setPinStep('remove');
-              setPinIntent('unlock');
-              setShowPinModal(true);
-            },
-          },
-        ],
-      );
-    } else {
-      setPinStep('remove');
-      setPinIntent('unlock');
-      setShowPinModal(true);
+      const one = lockedAlbumIds.length === 1;
+      const yes = await confirm({
+        title: 'remove passcode?',
+        message: `${lockedAlbumIds.length} album${one ? '' : 's'} ${one ? 'is' : 'are'} currently locked. removing the passcode will unlock ${one ? 'it' : 'them'}. continue?`,
+        confirmLabel: 'remove and unlock',
+        destructive: true,
+      });
+      if (!yes) return;
+      haptics.tap(); // on to PIN entry
     }
+    setPinStep('remove');
+    setPinIntent('unlock');
+    setShowPinModal(true);
   }
 
   function handlePinSuccess() {
@@ -188,12 +181,17 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
               icon={<Trash size={20} color={Colors.danger} weight="light" />}
               label="clear all data"
               danger
-              onPress={() => {
+              onPress={async () => {
                 haptics.tap();
-                Alert.alert('Clear all data?', 'This will permanently delete all photos, albums, and settings. This cannot be undone.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Clear everything', style: 'destructive', onPress: onClearData },
-                ]);
+                const yes = await confirm({
+                  title: 'clear all data?',
+                  message: 'this will permanently delete all photos, albums, and settings. this cannot be undone.',
+                  confirmLabel: 'clear everything',
+                  destructive: true,
+                });
+                if (!yes) return;
+                onClearData();
+                haptics.success();
               }}
             />
 

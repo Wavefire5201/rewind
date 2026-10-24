@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ConfirmOptions } from '@/utils/confirm';
 import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import AlbumSettingsRoute from '@/app/album/settings';
@@ -19,6 +20,12 @@ let mockAlbums: Album[] = [];
 let mockPhotosLoadFailed = false;
 // Called with ImportSheet's props on every render.
 const mockImportSheet = jest.fn();
+const mockExportSheet = jest.fn();
+const mockExportToBackup = jest.fn();
+const mockExportToPhotoAlbum = jest.fn();
+let mockPhotos: PhotoEntry[] = [];
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 type ImportSheetProps = { visible: boolean; onSelect: (source: 'camera-roll' | 'backup') => Promise<void> };
 const sheetProps = () => mockImportSheet.mock.calls.at(-1)?.[0] as ImportSheetProps;
 
@@ -28,7 +35,7 @@ const album = (id: string, overrides: Partial<Album> = {}): Album => ({
 
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
-    profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: [], settings: { use24hClock: false },
+    profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: mockPhotos, settings: { use24hClock: false },
     addPhotos: mockAddPhotos, updateProfile: mockUpdateProfile, updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
     photosLoadFailed: mockPhotosLoadFailed,
   }),
@@ -52,7 +59,12 @@ jest.mock('react-native-reanimated', () => ({
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('expo-media-library', () => ({}));
 jest.mock('expo-sharing', () => ({}));
-jest.mock('@/utils/export', () => ({}));
+jest.mock('@/utils/export', () => ({
+  exportToBackup: (...args: unknown[]) => mockExportToBackup(...args),
+  exportToPhotoAlbum: (...args: unknown[]) => mockExportToPhotoAlbum(...args),
+  shareFile: async () => {},
+  cleanupExportDir: async () => {},
+}));
 jest.mock('@/utils/import', () => ({
   importFromBackup: (...args: unknown[]) => mockImportFromBackup(...args),
   createPhotoEntry: async (uri: string, date: string, caption: string, albumId: string) =>
@@ -62,7 +74,7 @@ jest.mock('@/utils/notifications', () => ({}));
 jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('@/components/ui/TimePicker', () => () => null);
 jest.mock('@/components/ui/TextInputModal', () => () => null);
-jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockExportSheet(props); return null; } }));
 jest.mock('@/components/timelapse/ExportProgress', () => () => null);
 jest.mock('@/components/ImportPhotoModal', () => (props: typeof mockImportModal) => { mockImportModal = props; return null; });
 jest.mock('@/components/ui/ImportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockImportSheet(props); return null; } }));
@@ -74,6 +86,8 @@ beforeEach(() => {
   mockHasPin = true;
   mockAlbums = [album('a'), album('b', { name: 'second' })];
   mockPhotosLoadFailed = false;
+  mockPhotos = [];
+  mockConfirm.mockResolvedValue(false);
 });
 
 it('locks the album and returns home when a PIN already exists', async () => {
@@ -92,11 +106,41 @@ it('keeps a long album name on one line in the rename row', async () => {
 });
 
 it('deletes an album through the shared confirmation', async () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await renderSettings();
   await act(async () => fireEvent.press(screen.getByLabelText('Delete album')));
-  expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
-  alertSpy.mockRestore();
+  expect(mockConfirm).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'delete album?' }));
+});
+
+describe('exporting an album with photos not on this device', () => {
+  const photo = (id: string, imageUri: string) =>
+    ({ id, albumId: 'a', date: `2026-03-0${id}`, imageUri, caption: '', capturedAt: '2026-03-01T12:00:00.000Z', cameraDirection: 'front' }) as PhotoEntry;
+  const exportAs = async (format: 'album' | 'backup') => {
+    mockPhotos = [photo('1', 'file:///document/1.jpg'), photo('2', 'https://example.com/2.jpg')];
+    await renderSettings();
+    await act(async () => { await (mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> }).onSelect(format); });
+  };
+
+  it.each(['album', 'backup'] as const)('asks first before a %s export', async (format) => {
+    await exportAs(format);
+    expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'remote photos', message: expect.stringContaining('1 photo'), confirmLabel: 'continue',
+    }));
+    expect(mockConfirm.mock.calls[0][0].destructive).toBeFalsy();
+  });
+
+  it.each(['album', 'backup'] as const)('cancelling the remote-photos question exports nothing (%s)', async (format) => {
+    mockConfirm.mockResolvedValue(false);
+    await exportAs(format);
+    expect(mockExportToPhotoAlbum).not.toHaveBeenCalled();
+    expect(mockExportToBackup).not.toHaveBeenCalled();
+  });
+
+  it('continuing exports the photos that are on this device', async () => {
+    mockConfirm.mockResolvedValue(true);
+    mockExportToBackup.mockResolvedValue({ filePath: 'file:///cache/daily.zip', exported: 1, skipped: 1 });
+    await exportAs('backup');
+    expect(mockExportToBackup).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('import photos', () => {

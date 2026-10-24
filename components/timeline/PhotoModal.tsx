@@ -6,7 +6,6 @@ import {
   TextInput,
   Pressable,
   FlatList,
-  Alert,
   StyleSheet,
   useWindowDimensions,
   type ViewToken,
@@ -31,6 +30,7 @@ import { getImageSource } from '@/utils/imageSource';
 import { haptics } from '@/utils/haptics';
 import type { PhotoEntry } from '@/types';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
+import { confirm } from '@/utils/confirm';
 
 interface PhotoModalProps {
   visible: boolean;
@@ -186,23 +186,19 @@ export default function PhotoModal({
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 });
 
-  function handleDeletePress() {
+  async function handleDeletePress() {
     if (!currentPhoto) return;
-    Alert.alert(
-      'Delete photo?',
-      'This photo will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            haptics.success();
-            onDelete(currentPhoto.id);
-          },
-        },
-      ],
-    );
+    const photo = currentPhoto;
+    haptics.tap();
+    const yes = await confirm({
+      title: 'delete photo?',
+      message: 'this photo will be permanently deleted.',
+      confirmLabel: 'delete',
+      destructive: true,
+    });
+    if (!yes) return;
+    onDelete(photo.id);
+    haptics.success();
   }
 
   function handleCaptionEditPress() {

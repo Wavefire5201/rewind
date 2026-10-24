@@ -1,34 +1,52 @@
-import { Alert, type AlertButton } from 'react-native';
+import { Alert } from 'react-native';
+import type { ConfirmOptions } from '@/utils/confirm';
 import * as Haptics from 'expo-haptics';
 import { confirmDeleteAlbum } from '@/utils/albumDialogs';
+
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 
 let alertSpy: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
+afterEach(() => alertSpy.mockRestore());
 
-const buttons = () => alertSpy.mock.calls.at(-1)?.[2] as AlertButton[];
-
-it("won't delete the last album, with an error buzz", () => {
+it("won't delete the last album, with an error buzz", async () => {
   const onDelete = jest.fn();
-  confirmDeleteAlbum({ name: 'daily' }, 1, onDelete);
+  await confirmDeleteAlbum({ name: 'daily' }, 1, onDelete);
   expect(alertSpy).toHaveBeenCalledWith("Can't delete", 'You need at least one album.');
   expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+  expect(mockConfirm).not.toHaveBeenCalled();
   expect(onDelete).not.toHaveBeenCalled();
 });
 
-it('asks without a haptic, names the album, and deletes only on confirm (then one success haptic)', () => {
-  const onDelete = jest.fn();
-  confirmDeleteAlbum({ name: 'daily' }, 2, onDelete);
-  // The press that opened this already tapped: asking adds no haptic of its own.
-  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
-  expect(alertSpy.mock.calls[0][0]).toBe('Delete album?');
-  expect(alertSpy.mock.calls[0][1]).toContain('"daily"');
-  expect(onDelete).not.toHaveBeenCalled();
+it('asks before deleting with the album name', async () => {
+  mockConfirm.mockResolvedValue(false);
+  await confirmDeleteAlbum({ name: 'trip' }, 2, jest.fn());
+  expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'delete album?',
+    message: expect.stringContaining('"trip"'),
+    confirmLabel: 'delete',
+    destructive: true,
+  }));
+});
 
-  buttons().find((b) => b.style === 'destructive')!.onPress!();
-  expect(onDelete).toHaveBeenCalled();
+it('a no deletes nothing, with only the press tap', async () => {
+  mockConfirm.mockResolvedValue(false);
+  const onDelete = jest.fn();
+  await confirmDeleteAlbum({ name: 'trip' }, 2, onDelete);
+  expect(onDelete).not.toHaveBeenCalled();
+  expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+});
+
+it('a yes deletes once, then one success haptic', async () => {
+  mockConfirm.mockResolvedValue(true);
+  const onDelete = jest.fn();
+  await confirmDeleteAlbum({ name: 'trip' }, 2, onDelete);
+  expect(onDelete).toHaveBeenCalledTimes(1);
   expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
-  expect(Haptics.notificationAsync).toHaveBeenLastCalledWith('success');
+  expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
 });

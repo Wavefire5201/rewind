@@ -1,9 +1,12 @@
 import React from 'react';
+import type { ConfirmOptions } from '@/utils/confirm';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import SettingsList from '@/components/profile/SettingsList';
 import { FontProvider } from '@/context/FontContext';
 import { getDefaultSettings } from '@/utils/storage';
 import { MockDirectory } from '../helpers/fileSystemMock';
+import * as Haptics from 'expo-haptics';
+import type { Album } from '@/types';
 
 const mockUpdateSettings = jest.fn();
 
@@ -12,15 +15,18 @@ jest.mock('@/utils/pin', () => ({ hasPin: async () => true, clearPin: jest.fn() 
 jest.mock('@/components/ui/PinModal', () => () => null);
 jest.mock('phosphor-react-native', () => new Proxy({}, { get: () => () => null }));
 
-const renderList = async () => {
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
+
+const renderList = async ({ onClearData = jest.fn(), albums = [] as Album[] } = {}) => {
   await render(
     <FontProvider>
       <SettingsList
         settings={{ ...getDefaultSettings(), photoQuality: 'medium' }}
         updateSettings={mockUpdateSettings}
-        onClearData={jest.fn()}
+        onClearData={onClearData}
         onSeedMock={jest.fn()}
-        albums={[]}
+        albums={albums}
         onUnlockAllAlbums={jest.fn()}
       />
     </FontProvider>,
@@ -28,7 +34,41 @@ const renderList = async () => {
   await act(async () => {}); // hasPin resolves
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockConfirm.mockResolvedValue(false);
+});
+
+describe('clearing all data', () => {
+  const clear = () => act(async () => fireEvent.press(screen.getByText('clear all data')));
+
+  it('asks first, and a no clears nothing', async () => {
+    const onClearData = jest.fn();
+    await renderList({ onClearData });
+    await clear();
+    expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'clear all data?', confirmLabel: 'clear everything', destructive: true }));
+    expect(onClearData).not.toHaveBeenCalled();
+  });
+
+  it('a yes clears, then one success haptic', async () => {
+    mockConfirm.mockResolvedValue(true);
+    const onClearData = jest.fn();
+    await renderList({ onClearData });
+    await clear();
+    expect(onClearData).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
+  });
+});
+
+it('asks before removing a passcode that unlocks albums', async () => {
+  const locked = { id: 'a', name: 'trip', createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: true } as Album;
+  await renderList({ albums: [locked] });
+  await act(async () => fireEvent.press(screen.getByText('remove passcode')));
+  expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'remove passcode?', message: expect.stringContaining('1 album is'), confirmLabel: 'remove and unlock', destructive: true,
+  }));
+});
 
 it('exposes each setting as a labelled button', async () => {
   await renderList();

@@ -26,6 +26,7 @@ import { exportToPhotoAlbum, exportToBackup, shareFile, cleanupExportDir } from 
 import TextInputModal from '@/components/ui/TextInputModal';
 import TimePicker from '@/components/ui/TimePicker';
 import ExportSheet, { ExportFormat } from '@/components/timelapse/ExportSheet';
+import { confirm } from '@/utils/confirm';
 import ExportProgress from '@/components/timelapse/ExportProgress';
 import ImportPhotoModal from '@/components/ImportPhotoModal';
 import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
@@ -156,14 +157,13 @@ function AlbumSettingsScreen() {
       const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
       const skipped = albumPhotos.length - localCount;
       if (skipped > 0) {
-        await new Promise<void>(resolve => {
-          Alert.alert(
-            'Remote photos',
-            `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
-            [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
-          );
+        const yes = await confirm({
+          title: 'remote photos',
+          message: `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be exported because the file is not on this device.`,
+          confirmLabel: 'continue',
         });
-        if (localCount === 0) return;
+        if (!yes || localCount === 0) return;
+        haptics.tap(); // the export starts
       }
       setExportLabel('saving to photo album...');
       setExportCurrent(0);
@@ -193,14 +193,13 @@ function AlbumSettingsScreen() {
       const localCount = albumPhotos.filter(p => p.imageUri.startsWith('file://')).length;
       const skipped = albumPhotos.length - localCount;
       if (skipped > 0) {
-        await new Promise<void>(resolve => {
-          Alert.alert(
-            'Remote photos',
-            `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
-            [{ text: 'Continue', onPress: () => resolve() }, { text: 'Cancel', style: 'cancel', onPress: () => resolve() }],
-          );
+        const yes = await confirm({
+          title: 'remote photos',
+          message: `${skipped} photo${skipped !== 1 ? 's' : ''} cannot be included because the file is not on this device.`,
+          confirmLabel: 'continue',
         });
-        if (localCount === 0) return;
+        if (!yes || localCount === 0) return;
+        haptics.tap(); // the export starts
       }
       setExportLabel('creating backup...');
       setExportCurrent(0);

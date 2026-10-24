@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ConfirmOptions } from '@/utils/confirm';
 import { Alert } from 'react-native';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
@@ -29,6 +30,8 @@ jest.mock('@/context/AppContext', () => ({
 }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: jest.fn() }) }));
+const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
+jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
@@ -92,11 +95,9 @@ it('caps album names at the same length as onboarding', async () => {
 });
 
 it('deletes an album through the shared confirmation', async () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await renderHome();
   await act(async () => fireEvent.press(screen.getAllByLabelText('Delete album')[0]));
-  expect(alertSpy.mock.calls.at(-1)?.[0]).toBe('Delete album?');
-  alertSpy.mockRestore();
+  expect(mockConfirm).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'delete album?' }));
 });
 
 it('taps when a swiped row is renamed', async () => {
