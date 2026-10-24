@@ -34,8 +34,53 @@ function makeShared<T>(initial: T) {
   };
 }
 
+/** Layout-animation builders (FadeIn, SlideInUp…): chainable, and tagged with their name so tests
+ *  can tell a fade from a slide. */
+export type AnimationBuilder = { animation: string } & Record<string, unknown>;
+function builder(animation: string): AnimationBuilder {
+  const b: AnimationBuilder = new Proxy({ animation } as AnimationBuilder, {
+    get: (target, prop) => (prop in target ? target[prop as string] : prop === 'then' ? undefined : () => b),
+  });
+  return b;
+}
+const layoutAnimations = Object.fromEntries(
+  ['FadeIn', 'FadeOut', 'FadeInUp', 'FadeOutUp', 'SlideInUp', 'SlideOutUp', 'SlideInDown', 'SlideOutDown', 'SlideOutLeft', 'SlideOutRight', 'LinearTransition']
+    .map((name) => [name, builder(name)]),
+);
+
 export const reanimatedMock = {
   __esModule: true,
+  ...layoutAnimations,
+  ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
+  /** Animations finish at once: the value jumps to its target and the callback reports finished. */
+  withTiming<T>(to: T, _config?: unknown, callback?: (finished: boolean) => void): T {
+    callback?.(true);
+    return to;
+  },
+  withSpring<T>(to: T, _config?: unknown, callback?: (finished: boolean) => void): T {
+    callback?.(true);
+    return to;
+  },
+  withDelay<T>(_delay: number, animation: T): T {
+    return animation;
+  },
+  cancelAnimation: jest.fn(),
+  Easing: {
+    bezier: () => (t: number) => t,
+    linear: (t: number) => t,
+    cubic: (t: number) => t,
+    out: (f: unknown) => f,
+    in: (f: unknown) => f,
+    inOut: (f: unknown) => f,
+  },
+  Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
+  interpolate(value: number, input: number[], output: number[]): number {
+    // Linear between the first two stops, clamped: enough for opacity/translate mappings.
+    const [i0, i1] = input;
+    const [o0, o1] = output;
+    const t = Math.min(1, Math.max(0, (value - i0) / (i1 - i0)));
+    return o0 + (o1 - o0) * t;
+  },
   default: { View, FlatList } as Record<string, unknown>,
   useSharedValue<T>(initial: T) {
     const ref = React.useRef<ReturnType<typeof makeShared<T>> | null>(null);
