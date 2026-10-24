@@ -6,7 +6,7 @@ import Animated, {
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NoticeLayer from '@/components/ui/overlay/NoticeLayer';
-import { markSheetOpen } from '@/components/ui/overlay/layers';
+import { markSheetOpen, useOpenSheetCount } from '@/components/ui/overlay/layers';
 import { Colors } from '@/constants/theme';
 import { haptics } from '@/utils/haptics';
 
@@ -48,9 +48,15 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
-  // The Modal stays up while the sheet animates out.
-  const [mounted, setMounted] = useState(visible);
-  if (visible && !mounted) setMounted(true);
+  const openSheets = useOpenSheetCount();
+  // The Modal stays up while the sheet animates out. A sheet in a Modal opens only once no other
+  // sheet is on screen: iOS can't present two sibling Modals, and one still animating closed
+  // would hide or drop it. (Inline sheets aren't Modals.)
+  const canPresent = inline || openSheets === 0;
+  const [mounted, setMounted] = useState(visible && canPresent);
+  if (visible && !mounted && canPresent) setMounted(true);
+  const shown = visible && mounted;
+  const wasShown = useRef(false);
   const progress = useSharedValue(0);
   const scrim = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -69,18 +75,22 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     latest.current.onClosed?.();
   }, []);
 
+  // Slides in once presented, and out only if it was in: a sheet that mounts hidden, or is closed
+  // while still waiting its turn, never "closes" (no onClosed).
   useEffect(() => {
-    if (visible) {
+    if (shown) {
+      wasShown.current = true;
       dragY.value = 0;
       progress.value = withTiming(1, OPEN);
       scrim.value = withTiming(1, SCRIM);
-    } else {
+    } else if (wasShown.current) {
+      wasShown.current = false;
       progress.value = withTiming(0, CLOSE, (finished) => { if (finished) runOnJS(finishClose)(); });
       scrim.value = withTiming(0, SCRIM);
     }
-  }, [visible, progress, scrim, dragY, finishClose]);
+  }, [shown, progress, scrim, dragY, finishClose]);
 
-  // A confirm waits until no sheet is on screen (iOS can't present two sibling Modals).
+  // Confirms and other sheets wait until no sheet is on screen (see `canPresent`).
   useEffect(() => (mounted ? markSheetOpen() : undefined), [mounted]);
 
   // Inline there's no Modal to take Android back: take it while the sheet is up.
