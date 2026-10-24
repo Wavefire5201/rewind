@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
@@ -20,6 +20,12 @@ export interface BottomSheetProps {
   onClosed?: () => void;
   /** Drag only from the handle at the top, for sheets whose content scrolls vertically. */
   dragFromHandleOnly?: boolean;
+  /**
+   * Render in the screen instead of a Modal. A Modal is its own Android window and the keyboard
+   * never reports to it, so a sheet with a text field must be inline for KeyboardAvoidingView to
+   * work. Place it as the last child of the screen's root view; notices show from the app root.
+   */
+  inline?: boolean;
   children: React.ReactNode;
   testID?: string;
 }
@@ -36,7 +42,7 @@ const CLOSE_DRAG_VELOCITY = 800;
  * close it. With Reduce Motion on it fades instead of sliding. Notices raised while it's open
  * show above it.
  */
-export default function BottomSheet({ visible, onClose, dismissible = true, onClosed, dragFromHandleOnly = false, children, testID }: BottomSheetProps) {
+export default function BottomSheet({ visible, onClose, dismissible = true, onClosed, dragFromHandleOnly = false, inline = false, children, testID }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -74,6 +80,16 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
 
   // A confirm waits until no sheet is on screen (iOS can't present two sibling Modals).
   useEffect(() => (mounted ? markSheetOpen() : undefined), [mounted]);
+
+  // Inline there's no Modal to take Android back: take it while the sheet is up.
+  useEffect(() => {
+    if (!inline || !mounted) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      requestClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [inline, mounted, requestClose]);
 
   const pan = useMemo(() => Gesture.Pan()
     .activeOffsetY(10)
@@ -118,6 +134,19 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
     requestClose();
   }
 
+  const layers = (
+    <>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleScrimPress} testID="sheet-backdrop" accessible={false} />
+      </Animated.View>
+      {dragFromHandleOnly ? sheet : <GestureDetector gesture={pan}>{sheet}</GestureDetector>}
+    </>
+  );
+
+  if (inline) {
+    return mounted ? <View style={[StyleSheet.absoluteFill, styles.root, styles.inline]}>{layers}</View> : null;
+  }
+
   return (
     <Modal
       testID="bottom-sheet-modal"
@@ -129,10 +158,7 @@ export default function BottomSheet({ visible, onClose, dismissible = true, onCl
       onRequestClose={requestClose}
     >
       <GestureHandlerRootView style={styles.root}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={handleScrimPress} testID="sheet-backdrop" accessible={false} />
-        </Animated.View>
-        {dragFromHandleOnly ? sheet : <GestureDetector gesture={pan}>{sheet}</GestureDetector>}
+        {layers}
         <NoticeLayer />
       </GestureHandlerRootView>
     </Modal>
@@ -143,6 +169,11 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  // Above the rest of the screen, including anything with elevation on Android.
+  inline: {
+    zIndex: 100,
+    elevation: 100,
   },
   scrim: {
     backgroundColor: Colors.scrim,

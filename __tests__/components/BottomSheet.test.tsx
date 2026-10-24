@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { BackHandler, StyleSheet, Text } from 'react-native';
 import { render, screen, fireEvent, act, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
 import { FontProvider } from '@/context/FontContext';
@@ -145,4 +145,37 @@ it('with dragFromHandleOnly, only the handle drags, so scrolling content keeps i
   await layOut(300);
   await drag(200);
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+describe('inline (in the screen, not a Modal)', () => {
+  // A Modal is its own Android window: the keyboard never reports to it, so sheets with a text
+  // field render in the screen, where KeyboardAvoidingView works.
+  it('renders in place, not in a Modal', async () => {
+    await renderOpen({ inline: true });
+    expect(screen.queryByTestId('bottom-sheet-modal')).toBeNull();
+    expect(screen.getByText('sheet body')).toBeTruthy();
+  });
+
+  it('Android back closes it, and is consumed', async () => {
+    const addListener = jest.spyOn(BackHandler, 'addEventListener');
+    const onClose = jest.fn();
+    await renderOpen({ inline: true, onClose });
+    const [event, handler] = addListener.mock.calls.at(-1)!;
+    expect(event).toBe('hardwareBackPress');
+    let consumed: boolean | null | undefined;
+    await act(async () => { consumed = (handler as () => boolean | null | undefined)(); });
+    expect(consumed).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    addListener.mockRestore();
+  });
+
+  it('is gone once closed, and stops listening for back', async () => {
+    const remove = jest.fn();
+    const addListener = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+    const { rerender } = await renderOpen({ inline: true });
+    await act(async () => rerender(sheet({ inline: true, visible: false })));
+    expect(screen.queryByText('sheet body')).toBeNull();
+    expect(remove).toHaveBeenCalled();
+    addListener.mockRestore();
+  });
 });

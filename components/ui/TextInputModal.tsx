@@ -58,8 +58,9 @@ export default function TextInputModal({
   }
 
   return (
-    // Scrim, drag and back cancel; the sheet's scrim tap already plays the tap.
-    <BottomSheet visible={visible} onClose={onCancel}>
+    // Scrim, drag and back cancel; the sheet's scrim tap already plays the tap. Inline: the keyboard
+    // only reports to the screen's window, not a Modal's.
+    <BottomSheet visible={visible} onClose={onCancel} inline>
       {/* Pads itself by the keyboard's height, so the field and buttons stay above it. */}
       <KeyboardAvoidingView behavior="padding" style={styles.body}>
         <Text style={[styles.title, { fontFamily: fonts.medium }]}>{title}</Text>

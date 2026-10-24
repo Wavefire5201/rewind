@@ -41,3 +41,9 @@ it('confirming plays no haptic of its own: the caller plays the one for the outc
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
   expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 });
+
+it('opens in the screen, not a Modal, so the keyboard can push it up', async () => {
+  await renderModal();
+  expect(screen.queryByTestId('bottom-sheet-modal')).toBeNull();
+  expect(screen.getByTestId('bottom-sheet')).toBeTruthy();
+});
