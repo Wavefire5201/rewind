@@ -119,3 +119,11 @@ it("estimates storage from photos only, not their thumbnails", async () => {
   expect(screen.getByText('~4 MB')).toBeTruthy();
   list.mockRestore();
 });
+
+it('switches the weight units between imperial and metric', async () => {
+  await renderList();
+  // getDefaultSettings follows the (mocked US) locale.
+  expect(screen.getByText('imperial (lb)')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByLabelText('Units: imperial. Switch to metric')));
+  expect(mockUpdateSettings).toHaveBeenCalledWith({ units: 'metric' });
+});

@@ -29,7 +29,8 @@ import { useFont } from '@/context/FontContext';
 import { formatDateLabel, formatTime, getDayNumber } from '@/utils/dates';
 import { getImageSource } from '@/utils/imageSource';
 import { haptics } from '@/utils/haptics';
-import type { PhotoEntry } from '@/types';
+import type { PhotoEntry, WeightEntry, WeightUnit, WeightValue } from '@/types';
+import { formatWeight, parseWeightInput, validRangeText, weightInputText } from '@/utils/weight';
 import OverlayHost from '@/components/ui/overlay/OverlayHost';
 import { confirm } from '@/utils/confirm';
 
@@ -44,6 +45,11 @@ interface PhotoModalProps {
   onRetake?: (albumId: string) => void;
   /** One line about the photo's face measurement, or null. */
   readout?: (photo: PhotoEntry) => string | null;
+  /** The album's weight on a day; with onSetWeight, the viewer shows and edits it. */
+  weightFor?: (date: string) => WeightEntry | undefined;
+  unit?: WeightUnit;
+  /** Sets the day's weight, or deletes it (null). */
+  onSetWeight?: (date: string, weight: WeightValue | null) => void;
 }
 
 // ─── ZoomableImage ────────────────────────────────────────────────────────────
@@ -145,6 +151,9 @@ export default function PhotoModal({
   onUpdateCaption,
   onRetake,
   readout,
+  weightFor,
+  unit = 'kg',
+  onSetWeight,
 }: PhotoModalProps) {
   const { fonts, typography } = useFont();
   const insets = useSafeAreaInsets();
@@ -153,6 +162,9 @@ export default function PhotoModal({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState('');
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [weightDraft, setWeightDraft] = useState('');
+  const [weightInvalid, setWeightInvalid] = useState(false);
   // 0 to minus the keyboard's height; tracked inside this Modal's own window.
   const keyboard = useReanimatedKeyboardAnimation();
   const keyboardLift = useAnimatedStyle(() => ({ transform: [{ translateY: keyboard.height.value }] }));
@@ -169,6 +181,7 @@ export default function PhotoModal({
     const safeIdx = Math.max(0, Math.min(initialIndex, photos.length - 1));
     setCurrentIndex(safeIdx);
     setEditingCaption(false);
+    setEditingWeight(false);
     setTimeout(() => {
       flatListRef.current?.scrollToIndex({ index: safeIdx, animated: false });
     }, 0);
@@ -176,12 +189,15 @@ export default function PhotoModal({
 
   const currentPhoto = photos[currentIndex] ?? null;
   const currentReadout = currentPhoto && readout ? readout(currentPhoto) : null;
+  const showWeight = Boolean(weightFor && onSetWeight);
+  const currentWeight = currentPhoto && weightFor ? weightFor(currentPhoto.date) : undefined;
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         setCurrentIndex(viewableItems[0].index);
         setEditingCaption(false);
+        setEditingWeight(false);
       }
     },
     [],
@@ -207,6 +223,7 @@ export default function PhotoModal({
   function handleCaptionEditPress() {
     if (!currentPhoto) return;
     haptics.tap();
+    setEditingWeight(false);
     setCaptionDraft(currentPhoto.caption ?? '');
     setEditingCaption(true);
   }
@@ -216,6 +233,42 @@ export default function PhotoModal({
     haptics.success();
     onUpdateCaption(currentPhoto.id, captionDraft.trim());
     setEditingCaption(false);
+  }
+
+  function handleWeightEditPress() {
+    if (!currentPhoto) return;
+    haptics.tap();
+    setEditingCaption(false);
+    setWeightDraft(currentWeight ? weightInputText(currentWeight, unit) : '');
+    setWeightInvalid(false);
+    setEditingWeight(true);
+  }
+
+  function handleWeightSave() {
+    if (!currentPhoto || !onSetWeight) return;
+    // Emptied: the day's weight goes.
+    if (weightDraft.trim() === '') {
+      if (currentWeight) {
+        haptics.success();
+        onSetWeight(currentPhoto.date, null);
+      }
+      setEditingWeight(false);
+      return;
+    }
+    // Untouched: keep the entry as it was entered, rather than re-storing a rounded conversion.
+    if (currentWeight && weightDraft.trim() === weightInputText(currentWeight, unit)) {
+      setEditingWeight(false);
+      return;
+    }
+    const weight = parseWeightInput(weightDraft, unit);
+    if (!weight) {
+      haptics.error();
+      setWeightInvalid(true);
+      return;
+    }
+    haptics.success();
+    onSetWeight(currentPhoto.date, weight);
+    setEditingWeight(false);
   }
 
   async function handleShare() {
@@ -314,6 +367,51 @@ export default function PhotoModal({
                 </Text>
                 {currentReadout ? (
                   <Text style={[typography.small, styles.readout]}>{currentReadout}</Text>
+                ) : null}
+
+                {showWeight ? (
+                  editingWeight ? (
+                    <>
+                      <View style={[styles.captionEditRow, styles.weightEditRow]}>
+                        <TextInput
+                          style={[styles.captionInput, { fontFamily: fonts.regular }]}
+                          value={weightDraft}
+                          onChangeText={(v) => { setWeightDraft(v); if (weightInvalid) setWeightInvalid(false); }}
+                          placeholder={`weight (${unit})`}
+                          placeholderTextColor={Colors.textTertiary}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                          returnKeyType="done"
+                          onSubmitEditing={handleWeightSave}
+                          maxLength={6}
+                          accessibilityLabel={`Weight in ${unit}`}
+                        />
+                        <Pressable
+                          onPress={handleWeightSave}
+                          hitSlop={12}
+                          style={styles.captionAction}
+                          accessibilityLabel="Save weight"
+                          accessibilityRole="button"
+                        >
+                          <Check size={18} color={Colors.accent} weight="bold" />
+                        </Pressable>
+                      </View>
+                      {weightInvalid ? (
+                        <Text style={[typography.small, styles.weightError]}>enter a weight between {validRangeText(unit)}</Text>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Pressable
+                      onPress={handleWeightEditPress}
+                      style={styles.captionRow}
+                      accessibilityLabel={currentWeight ? 'Edit weight' : 'Add weight'}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[typography.small, { color: currentWeight ? Colors.textPrimary : Colors.textTertiary }]}>
+                        {currentWeight ? formatWeight(currentWeight, unit) : 'add weight'}
+                      </Text>
+                    </Pressable>
+                  )
                 ) : null}
 
                 {editingCaption ? (
@@ -453,6 +551,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     color: Colors.textPrimary,
+  },
+  weightEditRow: {
+    width: 160,
+    alignItems: 'center',
+  },
+  weightError: {
+    color: Colors.danger,
+    textAlign: 'center',
   },
   captionAction: {
     width: 44,

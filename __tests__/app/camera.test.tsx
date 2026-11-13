@@ -40,6 +40,8 @@ jest.mock('@/context/AppContext', () => ({
     albums: [{ id: 'a', name: 'daily' }],
     settings: { mirrorSelfies: true, photoQuality: 'medium' },
     updateAlbum: jest.fn(),
+    weights: [],
+    setWeight: jest.fn(),
     today: '2026-10-16',
   }),
 }));

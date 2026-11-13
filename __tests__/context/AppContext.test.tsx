@@ -6,9 +6,9 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { AppProvider, useAppContext } from '@/context/AppContext';
 import { getNotices, resetNoticesForTests } from '@/utils/notify';
-import { getDb, resetDbForTests, photoToRow, albumToRow, rowToPhoto, rowToAlbum, type PhotoRow, type AlbumRow } from '@/utils/db';
+import { getDb, resetDbForTests, photoToRow, albumToRow, rowToPhoto, rowToAlbum, rowToWeight, type PhotoRow, type AlbumRow, type WeightRow } from '@/utils/db';
 import { resetStorageForTests } from '@/utils/storage';
-import type { PhotoEntry, Album, UserProfile } from '@/types';
+import type { PhotoEntry, Album, UserProfile, WeightEntry } from '@/types';
 import { fileStore, deletedUris, resetFileSystemMock } from '../helpers/fileSystemMock';
 import { sqliteLog, failNextTransaction, resetSqliteForTests } from '../helpers/sqliteMock';
 
@@ -91,6 +91,10 @@ async function storedAlbums(): Promise<Album[]> {
 async function stored<T>(key: 'profile' | 'settings'): Promise<T | null> {
   const row = await (await getDb()).getFirstAsync<{ value: string }>('SELECT value FROM kv WHERE key = ?', key);
   return row ? JSON.parse(row.value) : null;
+}
+
+async function storedWeights(): Promise<WeightEntry[]> {
+  return (await (await getDb()).getAllAsync<WeightRow>('SELECT * FROM weights ORDER BY date, album_id')).map(rowToWeight);
 }
 
 const kvWrites = () => sqliteLog.statements.filter((s) => s.startsWith('INSERT INTO kv'));
@@ -770,6 +774,93 @@ describe('AppContext', () => {
     expect((await storedPhotos()).map((p) => p.id)).toEqual(['p2']);
     expect(sqliteLog.transactions).toBe(1);
     await unmount();
+  });
+
+  describe('weights', () => {
+    it('sets one weight per album and day, replaces it, keeps it across a restart, and deletes it', async () => {
+      const first = await renderProvider();
+      await act(async () => {
+        await ctx!.setWeight('a1', '2026-03-02', { value: 181, unit: 'lb' });
+        await ctx!.setWeight('a1', '2026-03-01', { value: 180, unit: 'lb' });
+        await ctx!.setWeight('a2', '2026-03-01', { value: 30, unit: 'kg' });
+      });
+      await act(async () => {
+        await ctx!.setWeight('a1', '2026-03-01', { value: 179.5, unit: 'lb' });
+      });
+      expect(ctx!.weights.map((w) => [w.albumId, w.date, w.value])).toEqual([
+        ['a1', '2026-03-01', 179.5], ['a2', '2026-03-01', 30], ['a1', '2026-03-02', 181],
+      ]);
+      await first.unmount();
+
+      resetStorageForTests();
+      await renderProvider();
+      expect(ctx!.weights.map((w) => w.value)).toEqual([179.5, 30, 181]);
+      await act(async () => {
+        await expect(ctx!.deleteWeight('a1', '2026-03-01')).resolves.toBe(true);
+      });
+      expect((await storedWeights()).map((w) => w.value)).toEqual([30, 181]);
+    });
+
+    it("won't save a weight that isn't one", async () => {
+      await renderProvider();
+      await act(async () => {
+        await expect(ctx!.setWeight('a1', '2026-03-01', { value: 5000, unit: 'lb' })).resolves.toBe(false);
+        await expect(ctx!.setWeight('a1', '2026-03-01', { value: Number.NaN, unit: 'kg' })).resolves.toBe(false);
+      });
+      expect(ctx!.weights).toEqual([]);
+      expect(await storedWeights()).toEqual([]);
+    });
+
+    it('addWeights keeps the weight a day already has and drops invalid ones', async () => {
+      await renderProvider();
+      await act(async () => {
+        await ctx!.setWeight('a1', '2026-03-01', { value: 180, unit: 'lb' });
+      });
+      const incoming = (date: string, value: number): WeightEntry => ({ albumId: 'a1', date, value, unit: 'lb', updatedAt: '2026-01-01T00:00:00.000Z' });
+      let counts = { added: 0, skipped: 0 };
+      await act(async () => {
+        counts = ctx!.addWeights([incoming('2026-03-01', 150), incoming('2026-03-02', 151), incoming('2026-03-03', 9000)]);
+      });
+      expect(counts).toEqual({ added: 1, skipped: 2 });
+      await waitFor(async () => expect((await storedWeights()).map((w) => [w.date, w.value])).toEqual([['2026-03-01', 180], ['2026-03-02', 151]]));
+    });
+
+    it("deleting an album deletes its weights in the album's transaction", async () => {
+      await renderProvider();
+      await act(async () => {
+        ctx!.addAlbum(album({ id: 'a1' }));
+        ctx!.addAlbum(album({ id: 'a2' }));
+        await ctx!.setWeight('a1', '2026-03-01', { value: 180, unit: 'lb' });
+        await ctx!.setWeight('a2', '2026-03-01', { value: 30, unit: 'kg' });
+      });
+      sqliteLog.transactions = 0;
+      await act(async () => {
+        ctx!.deleteAlbum('a2');
+      });
+      await waitFor(async () => expect((await storedAlbums()).map((a) => a.id)).toEqual(['a1']));
+      expect((await storedWeights()).map((w) => w.albumId)).toEqual(['a1']);
+      expect(ctx!.weights.map((w) => w.albumId)).toEqual(['a1']);
+      expect(sqliteLog.transactions).toBe(1);
+    });
+
+    it('resetAllData clears every weight, and puts them back if the clear fails', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      await renderProvider();
+      await act(async () => {
+        await ctx!.setWeight('a1', '2026-03-01', { value: 180, unit: 'lb' });
+      });
+      failNextTransaction(new Error('disk full'));
+      await act(async () => {
+        await ctx!.resetAllData();
+      });
+      expect(ctx!.weights).toHaveLength(1);
+      await act(async () => {
+        await ctx!.resetAllData();
+      });
+      expect(ctx!.weights).toEqual([]);
+      expect(await storedWeights()).toEqual([]);
+      errorSpy.mockRestore();
+    });
   });
 
   describe('album unlocks', () => {

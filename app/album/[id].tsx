@@ -21,8 +21,10 @@ import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { useThumbnailBackfill } from '@/hooks/useThumbnailBackfill';
 import { isFaceScanAvailable, needsFaceScan } from '@/utils/faceScan';
 import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
-import FaceTrendCard from '@/components/face/FaceTrendCard';
-import type { PhotoEntry } from '@/types';
+import TrendCard from '@/components/timeline/TrendCard';
+import WeightSheet from '@/components/weight/WeightSheet';
+import type { PhotoEntry, WeightValue } from '@/types';
+import { unitFor } from '@/utils/weight';
 import { haptics } from '@/utils/haptics';
 import { notify } from '@/utils/notify';
 import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
@@ -49,8 +51,12 @@ function AlbumDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { photos, getPhotosByMonth } = usePhotos(id);
-  const { profile, albums, addPhotos, updatePhoto, deletePhoto } = useAppContext();
+  const { profile, albums, weights: allWeights, settings, today: todayDate, addPhotos, updatePhoto, deletePhoto, setWeight, deleteWeight } = useAppContext();
   const album = albums.find(a => a.id === id);
+  const weights = useMemo(() => allWeights.filter(w => w.albumId === id), [allWeights, id]);
+  const weightByDate = useMemo(() => new Map(weights.map(w => [w.date, w])), [weights]);
+  const unit = unitFor(settings.units);
+  const [weightSheetDate, setWeightSheetDate] = useState<string | null>(null);
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
   const { fonts, typography } = useFont();
@@ -186,6 +192,16 @@ function AlbumDetailScreen() {
     }
   }
 
+  function handleSaveWeight(date: string, weight: WeightValue) {
+    setWeightSheetDate(null);
+    void setWeight(id, date, weight);
+  }
+
+  function handleDeleteWeight(date: string) {
+    setWeightSheetDate(null);
+    void deleteWeight(id, date);
+  }
+
   function handleRetake(albumId: string) {
     router.push({ pathname: '/(tabs)/camera', params: { albumId } });
   }
@@ -280,16 +296,15 @@ function AlbumDetailScreen() {
               tap any day to backfill a photo
             </Text>
           )}
-          {faceAvailable && photos.length > 0 ? (
-            <FaceTrendCard
-              photos={photos}
-              trend={faceTrend}
-              waiting={photos.some(needsFaceScan)}
-              progress={faceProgress}
-              onSelectDate={openPhotoOnDate}
-              onCompare={() => router.push({ pathname: '/album/compare', params: { albumId: id } })}
-            />
-          ) : null}
+          <TrendCard
+            face={faceAvailable ? { photos, trend: faceTrend, waiting: photos.some(needsFaceScan), progress: faceProgress } : null}
+            weights={weights}
+            unit={unit}
+            goal={album?.weightGoal}
+            onSelectDate={openPhotoOnDate}
+            onCompare={() => router.push({ pathname: '/album/compare', params: { albumId: id } })}
+            onLogWeight={(date) => setWeightSheetDate(date ?? todayDate)}
+          />
         </ScrollView>
       )}
 
@@ -327,6 +342,20 @@ function AlbumDetailScreen() {
         onUpdateCaption={(id, caption) => updatePhoto(id, { caption })}
         onRetake={handleRetake}
         readout={faceAvailable ? (p: PhotoEntry) => photoReadout(faceTrend, p) : undefined}
+        weightFor={(date) => weightByDate.get(date)}
+        unit={unit}
+        onSetWeight={(date, weight) => (weight ? setWeight(id, date, weight) : deleteWeight(id, date))}
+      />
+
+      <WeightSheet
+        visible={weightSheetDate !== null}
+        date={weightSheetDate ?? todayDate}
+        today={todayDate}
+        unit={unit}
+        entryFor={(date) => weightByDate.get(date)}
+        onSave={handleSaveWeight}
+        onDelete={handleDeleteWeight}
+        onClose={() => setWeightSheetDate(null)}
       />
 
       <ImportSheet

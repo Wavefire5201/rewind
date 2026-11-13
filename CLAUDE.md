@@ -28,16 +28,16 @@ performance only in a release build.
 - **MediaPipe Face Landmarker** (`modules/face-mesh`, local Expo module) — per-photo eye positions and face measurements
 - **react-native-reanimated 4** / **react-native-worklets 0.10** — UI-thread animation, timelapse clock
 - **expo-image** — photo display (local files use `cachePolicy` 'memory', see `utils/imageSource.ts`)
-- Persistence: **expo-sqlite** (photos, albums, profile/settings; schema in `utils/db.ts`) + **expo-file-system** (photo files, stored as q95 JPEGs). Only the app PIN uses AsyncStorage (`utils/pin.ts`).
-- Type-only `@/types` (`PhotoEntry`, `FaceScan`, `FaceMeasure`, `Framing`, `UserProfile`, `AppSettings`, `Album`)
+- Persistence: **expo-sqlite** (photos, albums, weights, profile/settings; schema in `utils/db.ts`) + **expo-file-system** (photo files, stored as q95 JPEGs). Only the app PIN uses AsyncStorage (`utils/pin.ts`).
+- Type-only `@/types` (`PhotoEntry`, `FaceScan`, `FaceMeasure`, `Framing`, `UserProfile`, `AppSettings`, `Album`, `WeightEntry`)
 
 ## Architecture
 
 - `app/` — expo-router screens. `(tabs)/` = home/camera/profile; `album/[id]`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding`.
-- `components/` — grouped by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `profile/`, `ui/`.
+- `components/` — grouped by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `weight/`, `profile/`, `ui/`.
 - `context/AppContext.tsx` — **single source of truth** for photos/profile/settings/albums. Loads everything once on mount; mutations update React state then save through `utils/storage`, which writes only the changed rows, one transaction per tick (errors log + notice, never throw); `updatePhotos` resolves with whether its save succeeded. Also owns album unlock state.
 - `hooks/` — feature logic (`usePhotos`, `useStreak`, `useTimelapse`, `useFaceDetection`, `useAutoCapture`, `useAlbumLock`, `useFaceScanBackfill`, `usePhotoEncodeBackfill`).
-- `utils/` — pure helpers: `faceScan` (MediaPipe scan), `faceMetrics` / `faceTrend` (measurements, trend), `faceAlign` / `ghost` (eye-anchored layouts, album framing), `cameraPreview` (detector → preview coordinates), `playback`, `photoEncode`, `storage`, `import` / `export`, `pin`, `notifications`, `haptics`.
+- `utils/` — pure helpers: `faceScan` (MediaPipe scan), `faceMetrics` / `faceTrend` (measurements, trend), `weight` (units, readout, chart), `faceAlign` / `ghost` (eye-anchored layouts, album framing), `cameraPreview` (detector → preview coordinates), `playback`, `photoEncode`, `storage`, `import` / `export`, `pin`, `notifications`, `haptics`.
 - `modules/face-mesh/` — native module (Kotlin + Swift) + bundled `face_landmarker.task`.
 - `patches/` — dependency patches applied by `bun install` (VisionCamera: no video output for frame processors).
 - `constants/theme.ts` — design tokens. `constants/mockData.ts` — `USE_MOCK_DATA` (env-gated) + fixtures.
