@@ -143,3 +143,25 @@ describe('the optional weight', () => {
     expect(screen.getByText('kg')).toBeTruthy();
   });
 });
+
+it("starts from the day's caption", async () => {
+  await render(
+    <FontProvider>
+      <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={jest.fn()} weightUnit="lb" initialCaption="first" />
+    </FontProvider>,
+  );
+  expect(screen.getByDisplayValue('first')).toBeTruthy();
+});
+
+it("retakes without asking when the caption is still the day's own", async () => {
+  mockConfirm.mockClear();
+  const onRetake = jest.fn();
+  await render(
+    <FontProvider>
+      <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={onRetake} weightUnit="lb" initialCaption="first" />
+    </FontProvider>,
+  );
+  await act(async () => fireEvent.press(screen.getByText('retake')));
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(onRetake).toHaveBeenCalledTimes(1);
+});

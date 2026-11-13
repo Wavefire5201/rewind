@@ -20,8 +20,8 @@ by editing the generated folders.
 
 | Path | Contents |
 |---|---|
-| `app/` | expo-router screens: `(tabs)/` home, camera, profile; `album/[id]`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding` |
-| `components/` | UI by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `profile/`, `ui/` |
+| `app/` | expo-router screens: `(tabs)/` home, camera, profile; `album/[id]`, `album/day`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding` |
+| `components/` | UI by domain: `camera/`, `day/`, `timelapse/`, `timeline/`, `face/`, `weight/`, `profile/`, `ui/` |
 | `context/AppContext.tsx` | The single source of truth for photos, profile, settings and albums |
 | `hooks/` | Feature logic (face-scan and q95 backfills, timelapse, auto-capture, streaks, …) |
 | `utils/` | Pure helpers: face metrics and trend, alignment, playback, storage, import/export, … |

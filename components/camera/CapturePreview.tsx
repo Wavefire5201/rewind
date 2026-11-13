@@ -30,6 +30,8 @@ interface CapturePreviewProps {
   weightUnit: WeightUnit;
   /** The field's starting text, e.g. today's weight when retaking. */
   initialWeight?: string;
+  /** The caption's starting text, e.g. today's caption when retaking, so a retake keeps it. */
+  initialCaption?: string;
 }
 
 export default function CapturePreview({
@@ -40,21 +42,23 @@ export default function CapturePreview({
   confirmSave,
   weightUnit,
   initialWeight = '',
+  initialCaption = '',
 }: CapturePreviewProps) {
   const { fonts } = useFont();
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState(initialCaption);
   const [weightText, setWeightText] = useState(initialWeight);
   const [weightInvalid, setWeightInvalid] = useState(false);
 
-  // Each opening starts from the day's weight (set while rendering, not in an effect, so the
-  // first frame already shows it).
+  // Each opening starts from the day's weight and caption (set while rendering, not in an
+  // effect, so the first frame already shows them).
   const [openedWith, setOpenedWith] = useState<string | null>(null);
-  const opening = visible ? initialWeight : null;
+  const opening = visible ? JSON.stringify([initialWeight, initialCaption]) : null;
   if (opening !== openedWith) {
     setOpenedWith(opening);
     if (opening !== null) {
-      setWeightText(opening);
+      setWeightText(initialWeight);
       setWeightInvalid(false);
+      setCaption(initialCaption);
     }
   }
   const [saving, setSaving] = useState(false);
@@ -90,7 +94,8 @@ export default function CapturePreview({
   };
 
   const handleRetake = async () => {
-    if (caption.trim().length > 0) {
+    // Only a caption typed here is at stake; the day's own one stays with its photo.
+    if (caption.trim().length > 0 && caption !== initialCaption) {
       const yes = await confirm({
         title: 'discard caption?',
         message: 'you have an unsaved caption. retaking will discard it.',
