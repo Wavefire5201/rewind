@@ -175,7 +175,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: Fonts.mono.regular,
     fontSize: 28,
-    lineHeight: 34,
+    // No lineHeight: Android applies it to typed text but not to the placeholder, which then
+    // sits higher than the digits and the unit.
     color: Colors.textPrimary,
     paddingVertical: 8,
   },
