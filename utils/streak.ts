@@ -92,17 +92,21 @@ export function computeDayStatus(
 }
 
 /**
- * First day an album's history covers: its creation day (or the profile's join date)
- * or its earliest photo, whichever is earlier — imported or backfilled photos predate
- * the album. Always a plain YYYY-MM-DD, so it compares correctly with photo dates.
+ * First day an album's history covers: its creation day (or the profile's join date), its
+ * earliest photo, or its earliest weight, whichever is earliest — imported or backfilled photos,
+ * and weights logged for past days, predate the album. Always a plain YYYY-MM-DD, so it compares correctly with photo dates.
  */
 export function trackingStartDate(
   createdAt: string | undefined,
   joinDate: string,
   photoDates: Iterable<string>,
+  weightDates: Iterable<string> = [],
 ): string {
   let start = createdAt ? localDateOf(createdAt) : joinDate.slice(0, 10);
   for (const date of photoDates) {
+    if (date < start) start = date;
+  }
+  for (const date of weightDates) {
     if (date < start) start = date;
   }
   return start;

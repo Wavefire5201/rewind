@@ -23,7 +23,8 @@ import { placeGhost, framingFromFace, DEFAULT_FRAMING } from '@/utils/ghost';
 import type { Size } from '@/utils/faceAlign';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
-import type { PhotoEntry, FaceLandmarks } from '@/types';
+import type { PhotoEntry, FaceLandmarks, WeightValue } from '@/types';
+import { unitFor, weightInputText, weightKey } from '@/utils/weight';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 /** Room the top row and shutter row need under the viewfinder. */
@@ -47,12 +48,16 @@ function CameraScreen() {
     windowWidth,
     ((windowHeight - insets.top - insets.bottom - CONTROLS_MIN_HEIGHT) * 3) / 4,
   );
-  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  // from=day: opened from the day view, which a saved photo goes back to.
+  const { albumId, from } = useLocalSearchParams<{ albumId: string; from?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
   const focused = useIsFocused();
-  const { albums, settings, updateAlbum, today } = useAppContext();
+  const { albums, settings, updateAlbum, today, weights, setWeight, deleteWeight } = useAppContext();
+  const weightUnit = unitFor(settings.units);
+  // Today's weight, if it's already logged (a retake): the preview's field starts from it.
+  const todayWeight = useMemo(() => weights.find(w => weightKey(w) === weightKey({ albumId, date: today })), [weights, albumId, today]);
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
@@ -268,7 +273,7 @@ function CameraScreen() {
     });
   }, [todayPhoto]);
 
-  const handleSave = (caption: string, savedUri: string) => {
+  const handleSave = (caption: string, savedUri: string, weight: WeightValue | null) => {
     const newPhoto: PhotoEntry = {
       id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       albumId: albumId,
@@ -280,9 +285,14 @@ function CameraScreen() {
       ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
     };
     addPhoto(newPhoto);
+    // The field started from today's weight, so a blank one was cleared: no weight.
+    if (weight) void setWeight(albumId, today, weight);
+    else if (todayWeight) void deleteWeight(albumId, today);
     setShowPreview(false);
     setCapturedUri('');
-    router.replace({ pathname: '/album/[id]', params: { id: albumId } });
+    // Back to the day it was taken for; from anywhere else, on to the album.
+    if (from === 'day') router.back();
+    else router.replace({ pathname: '/album/[id]', params: { id: albumId } });
   };
 
   const handleRetake = () => {
@@ -416,6 +426,9 @@ function CameraScreen() {
         onSave={handleSave}
         onRetake={handleRetake}
         confirmSave={confirmSave}
+        weightUnit={weightUnit}
+        initialWeight={todayWeight ? weightInputText(todayWeight, weightUnit) : ''}
+        initialCaption={todayPhoto?.caption ?? ''}
       />
     </SafeAreaView>
   );

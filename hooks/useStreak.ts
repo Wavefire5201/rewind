@@ -5,7 +5,7 @@ import { computeCurrentStreak, computeBestStreak, computeConsistency, computeDay
 import type { DayStatus, WeekDay } from '@/types';
 
 export function useStreak(albumId?: string, albumCreatedAt?: string) {
-  const { photos, profile, today } = useAppContext();
+  const { photos, weights, profile, today } = useAppContext();
 
   const filteredPhotos = useMemo(
     () => albumId ? photos.filter(p => p.albumId === albumId) : photos,
@@ -17,9 +17,15 @@ export function useStreak(albumId?: string, albumCreatedAt?: string) {
     [filteredPhotos]
   );
 
+  // Weights count toward the start too (a weight logged for a day before the first photo).
+  const weightDates = useMemo(
+    () => weights.filter(w => !albumId || w.albumId === albumId).map(w => w.date),
+    [weights, albumId],
+  );
+
   const referenceDate = useMemo(
-    () => trackingStartDate(albumCreatedAt, profile.joinDate, photoDates),
-    [albumCreatedAt, profile.joinDate, photoDates],
+    () => trackingStartDate(albumCreatedAt, profile.joinDate, photoDates, weightDates),
+    [albumCreatedAt, profile.joinDate, photoDates, weightDates],
   );
 
   const currentStreak = useMemo(() => {

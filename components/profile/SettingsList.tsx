@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Directory, Paths } from 'expo-file-system';
-import { HardDrive, Image, Trash, Database, Clock, LockSimple } from 'phosphor-react-native';
+import { HardDrive, Image, Trash, Database, Clock, LockSimple, Scales } from 'phosphor-react-native';
 import PinModal from '@/components/ui/PinModal';
 import { hasPin, clearPin } from '@/utils/pin';
 import { Colors } from '@/constants/theme';
@@ -146,6 +146,16 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
           value={settings.use24hClock ? 'on' : 'off'}
           highlight={settings.use24hClock}
           onPress={() => { haptics.tap(); updateSettings({ use24hClock: !settings.use24hClock }); }}
+        />
+
+        <View style={styles.divider} />
+
+        <SettingsRow
+          icon={<Scales size={20} color={Colors.textSecondary} weight="light" />}
+          label="units"
+          value={settings.units === 'imperial' ? 'imperial (lb)' : 'metric (kg)'}
+          onPress={() => { haptics.tap(); updateSettings({ units: settings.units === 'imperial' ? 'metric' : 'imperial' }); }}
+          accessibilityLabel={`Units: ${settings.units}. Switch to ${settings.units === 'imperial' ? 'metric' : 'imperial'}`}
         />
 
         <View style={styles.divider} />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Modal, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, Modal, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { File, Paths } from 'expo-file-system';
@@ -12,6 +12,8 @@ import OverlayHost from '@/components/ui/overlay/OverlayHost';
 import { confirm } from '@/utils/confirm';
 import { notify } from '@/utils/notify';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { parseWeightInput, validRangeText } from '@/utils/weight';
+import type { WeightUnit, WeightValue } from '@/types';
 
 /** Room kept under the focused caption: the save/retake row (24 margin, ~40 tall) and a gap. */
 const BUTTON_ROW_CLEARANCE = 80;
@@ -19,10 +21,17 @@ const BUTTON_ROW_CLEARANCE = 80;
 interface CapturePreviewProps {
   visible: boolean;
   imageUri: string;
-  onSave: (caption: string, savedUri: string) => void;
+  /** `weight` is null when the field was left blank. */
+  onSave: (caption: string, savedUri: string, weight: WeightValue | null) => void;
   onRetake: () => void;
   /** Asked before anything is written (e.g. "replace today's photo?"); false keeps the preview open. */
   confirmSave?: () => Promise<boolean>;
+  /** The unit the optional weight field takes. */
+  weightUnit: WeightUnit;
+  /** The field's starting text, e.g. today's weight when retaking. */
+  initialWeight?: string;
+  /** The caption's starting text, e.g. today's caption when retaking, so a retake keeps it. */
+  initialCaption?: string;
 }
 
 export default function CapturePreview({
@@ -31,15 +40,40 @@ export default function CapturePreview({
   onSave,
   onRetake,
   confirmSave,
+  weightUnit,
+  initialWeight = '',
+  initialCaption = '',
 }: CapturePreviewProps) {
   const { fonts } = useFont();
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState(initialCaption);
+  const [weightText, setWeightText] = useState(initialWeight);
+  const [weightInvalid, setWeightInvalid] = useState(false);
+
+  // Each opening starts from the day's weight and caption (set while rendering, not in an
+  // effect, so the first frame already shows them).
+  const [openedWith, setOpenedWith] = useState<string | null>(null);
+  const opening = visible ? JSON.stringify([initialWeight, initialCaption]) : null;
+  if (opening !== openedWith) {
+    setOpenedWith(opening);
+    if (opening !== null) {
+      setWeightText(initialWeight);
+      setWeightInvalid(false);
+      setCaption(initialCaption);
+    }
+  }
   const [saving, setSaving] = useState(false);
   const { width } = useWindowDimensions();
   const photoHeight = (width - 48) * (4 / 3);
 
   const handleSave = async () => {
     if (saving) return;
+    // Blank skips the weight; anything else has to be one before the photo is written.
+    const weight = weightText.trim() === '' ? null : parseWeightInput(weightText, weightUnit);
+    if (weightText.trim() !== '' && !weight) {
+      setWeightInvalid(true);
+      haptics.error();
+      return;
+    }
     setSaving(true);
     try {
       // Confirm before copying, so a declined save leaves no stray copy behind.
@@ -49,8 +83,9 @@ export default function CapturePreview({
       const dest = new File(Paths.document, filename);
       await src.copy(dest);
       haptics.success();
-      onSave(caption, dest.uri);
+      onSave(caption, dest.uri, weight);
       setCaption('');
+      setWeightText('');
     } catch {
       notify({ title: 'save failed', message: "couldn't save photo, please try again.", tone: 'error' });
     } finally {
@@ -59,7 +94,8 @@ export default function CapturePreview({
   };
 
   const handleRetake = async () => {
-    if (caption.trim().length > 0) {
+    // Only a caption typed here is at stake; the day's own one stays with its photo.
+    if (caption.trim().length > 0 && caption !== initialCaption) {
       const yes = await confirm({
         title: 'discard caption?',
         message: 'you have an unsaved caption. retaking will discard it.',
@@ -99,6 +135,24 @@ export default function CapturePreview({
             style={[styles.captionInput, { fontFamily: fonts.regular }]}
             multiline
           />
+          <View style={styles.weightRow}>
+            <TextInput
+              value={weightText}
+              onChangeText={(text) => { setWeightText(text); if (weightInvalid) setWeightInvalid(false); }}
+              placeholder="weight (optional)"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="decimal-pad"
+              maxLength={6}
+              style={[styles.weightInput, { fontFamily: fonts.regular }]}
+              accessibilityLabel={`Weight in ${weightUnit}, optional`}
+            />
+            <Text style={[styles.weightUnit, { fontFamily: fonts.regular }]}>{weightUnit}</Text>
+          </View>
+          {weightInvalid ? (
+            <Text style={[styles.weightError, { fontFamily: fonts.regular }]}>
+              enter a weight between {validRangeText(weightUnit)}, or leave it blank
+            </Text>
+          ) : null}
           <View style={styles.buttonRow}>
             <PillButton
               label={saving ? 'saving…' : 'save'}
@@ -138,6 +192,33 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.mono.regular,
     fontSize: 14,
     padding: 16,
+  },
+  weightRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderColor: Colors.borderPrimary,
+    paddingRight: 16,
+  },
+  weightInput: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontFamily: Fonts.mono.regular,
+    fontSize: 14,
+    padding: 16,
+  },
+  weightUnit: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  weightError: {
+    alignSelf: 'flex-start',
+    fontFamily: Fonts.mono.regular,
+    fontSize: 12,
+    color: Colors.danger,
+    marginTop: 8,
   },
   buttonRow: {
     flexDirection: 'row',

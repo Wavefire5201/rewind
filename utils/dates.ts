@@ -43,6 +43,11 @@ export function byDate(a: { date: string }, b: { date: string }): number {
   return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
 }
 
+/** Days since 1970-01-01 for a YYYY-MM-DD date: the gap between two dates is a plain subtraction. */
+export function dayIndex(date: string): number {
+  return Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000);
+}
+
 const SHORT_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 /** "mar 1, 2026", the timelapse date badge. Plain string building: it runs for every photo. */

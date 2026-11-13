@@ -1,11 +1,11 @@
 import * as notifyModule from '@/utils/notify';
 import {
-  loadAll, savePhotos, saveAlbums, saveProfile, saveSettings, clearAllData, getDefaultSettings, resetStorageForTests,
+  loadAll, savePhotos, saveAlbums, saveWeights, saveProfile, saveSettings, clearAllData, getDefaultSettings, resetStorageForTests,
 } from '@/utils/storage';
 import { getDb, resetDbForTests, photoToRow } from '@/utils/db';
 import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import { sqliteLog, failNextTransaction, resetSqliteForTests } from '../helpers/sqliteMock';
-import type { Album, PhotoEntry, UserProfile } from '@/types';
+import type { Album, PhotoEntry, UserProfile, WeightEntry } from '@/types';
 
 const photo = (id: string, date: string, extra: Partial<PhotoEntry> = {}): PhotoEntry => ({
   id, albumId: 'a1', date, imageUri: `file:///document/${id}.jpg`, caption: '', capturedAt: `${date}T12:00:00.000Z`,
@@ -13,6 +13,9 @@ const photo = (id: string, date: string, extra: Partial<PhotoEntry> = {}): Photo
 });
 const album = (id: string, name = id): Album => ({
   id, name, createdAt: '2026-01-01T12:00:00.000Z', reminderEnabled: false, reminderTime: '08:00', isLocked: false,
+});
+const weight = (date: string, value: number, albumId = 'a1'): WeightEntry => ({
+  albumId, date, value, unit: 'lb', updatedAt: `${date}T08:00:00.000Z`,
 });
 const profile: UserProfile = { name: 'Ada', avatarUri: null, joinDate: '2026-01-01' };
 
@@ -49,7 +52,7 @@ it('saves and loads every slice', async () => {
 });
 
 it('loadAll gives defaults on an empty database', async () => {
-  await expect(loadAll()).resolves.toEqual({ photos: [], albums: [], profile: null, settings: getDefaultSettings() });
+  await expect(loadAll()).resolves.toEqual({ photos: [], albums: [], weights: [], profile: null, settings: getDefaultSettings() });
 });
 
 it('settings stored before a new setting existed pick up its default', async () => {
@@ -247,12 +250,62 @@ it('saves during a commit coalesce into one later flush, in order', async () => 
 });
 
 it('clearAllData empties every table', async () => {
-  await Promise.all([savePhotos([photo('p1', '2026-03-01')]), saveAlbums([album('a1')]), saveProfile(profile), saveSettings(getDefaultSettings())]);
+  await Promise.all([
+    savePhotos([photo('p1', '2026-03-01')]), saveAlbums([album('a1')]), saveWeights([weight('2026-03-01', 180)]),
+    saveProfile(profile), saveSettings(getDefaultSettings()),
+  ]);
   await expect(clearAllData()).resolves.toBe(true);
   expect(await rows('photos')).toEqual([]);
   expect(await rows('albums')).toEqual([]);
+  expect(await rows('weights')).toEqual([]);
   expect(await rows('kv')).toEqual([]);
   // And saving afterwards starts from empty: nothing deleted that isn't there.
   await expect(savePhotos([photo('p2', '2026-03-02')])).resolves.toBe(true);
   expect((await rows('photos')).map((r) => r.id)).toEqual(['p2']);
+});
+
+describe('weights', () => {
+  it('save and load by date, one per album and day, with a goal on its album', async () => {
+    const weights = [weight('2026-03-02', 181), weight('2026-03-01', 180), weight('2026-03-01', 30, 'a2')];
+    const albums = [{ ...album('a1'), weightGoal: { value: 170, unit: 'lb' as const } }, album('a2')];
+    await expect(Promise.all([saveWeights(weights), saveAlbums(albums)])).resolves.toEqual([true, true]);
+
+    resetStorageForTests();
+    const loaded = await loadAll();
+    expect(loaded.weights).toEqual([weights[1], weights[2], weights[0]]);
+    expect(loaded.albums[0].weightGoal).toEqual({ value: 170, unit: 'lb' });
+    expect(loaded.albums[1]).not.toHaveProperty('weightGoal');
+  });
+
+  it('an edit writes its one row, and a removed day is deleted without touching the rest', async () => {
+    const a = weight('2026-03-01', 180);
+    const b = weight('2026-03-02', 181);
+    const c = weight('2026-03-01', 30, 'a2');
+    await saveWeights([a, b, c]);
+    sqliteLog.statements.length = 0;
+    const edited = { ...b, value: 179 };
+    await saveWeights([a, edited, c]);
+    expect(writes(/INSERT INTO weights/)).toHaveLength(1);
+    expect(writes(/DELETE FROM weights/)).toHaveLength(0);
+
+    await saveWeights([edited, c]);
+    expect((await rows('weights')).map((r) => [r.album_id, r.date, r.value])).toEqual([['a1', '2026-03-02', 179], ['a2', '2026-03-01', 30]]);
+  });
+
+  it('a stored row that is not a weight is left out of the load', async () => {
+    const db = await getDb();
+    await db.runAsync("INSERT INTO weights (album_id, date, value, unit, updated_at) VALUES ('a1', '2026-03-01', 80, 'stone', 'x')");
+    await db.runAsync("INSERT INTO weights (album_id, date, value, unit, updated_at) VALUES ('a1', '2026-03-02', 80, 'kg', 'x')");
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await loadAll()).weights.map((w) => w.date)).toEqual(['2026-03-02']);
+    warn.mockRestore();
+  });
+
+  it('an album and its weights saved in the same tick go in one transaction', async () => {
+    await Promise.all([saveAlbums([album('a1'), album('a2')]), saveWeights([weight('2026-03-01', 180, 'a2')])]);
+    failNextTransaction();
+    await expect(Promise.all([saveAlbums([album('a1')]), saveWeights([])])).resolves.toEqual([false, false]);
+    expect(await rows('albums')).toHaveLength(2);
+    expect(await rows('weights')).toHaveLength(1);
+  });
 });

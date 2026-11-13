@@ -21,13 +21,16 @@ your phone.
 - **Face change over time.** Measures face width relative to eye spacing in each photo
   (MediaPipe Face Landmarker), corrects for how close you held the camera, and shows the trend:
   "lower face 4% thinner than 6 months ago". Compare any two days side by side.
+- **Weight alongside it.** Log a weight for any day (right after a capture, or later), in lb or
+  kg, with an optional goal. It's charted under the face trend on the same dates, so you can see
+  whether the two move together.
 - **Albums**, each optionally locked with a PIN or biometrics.
 - **Import and export.** Import from your camera roll or a Rewind backup; export to a backup
   file or to your photo library.
 
 ## Privacy
 
-Photos, face measurements and settings live only on the device (app storage and a
+Photos, face measurements, weights and settings live only on the device (app storage and a
 local SQLite database). Face detection and measurement run on-device. There is no account and no
 server.
 

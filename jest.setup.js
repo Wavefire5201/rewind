@@ -3,9 +3,11 @@
 // Enable React's act() environment so state updates flush deterministically.
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-// expo-localization — default to Sunday week start (matches app fallback)
+// expo-localization — default to Sunday week start (matches app fallback) and a US locale
+// (imperial units).
 jest.mock('expo-localization', () => ({
   getCalendars: () => [{ firstWeekday: 1 }],
+  getLocales: () => [{ languageTag: 'en-US', measurementSystem: 'us' }],
 }));
 
 // react-native-reanimated — the real module can't load under Jest (worklets need a native

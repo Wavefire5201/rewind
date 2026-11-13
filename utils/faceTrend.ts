@@ -8,7 +8,7 @@
  */
 import type { FaceScan } from '@/types';
 import { isComparable, notComparableReason, widthIndex } from '@/utils/faceMetrics';
-import { byDate } from '@/utils/dates';
+import { byDate, dayIndex } from '@/utils/dates';
 
 export const MIN_COMPARABLE = 30;
 const HALF_WINDOW = 15;
@@ -34,7 +34,7 @@ export interface FaceTrend {
   corrected: boolean;
 }
 
-const dayOf = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000);
+const dayOf = dayIndex;
 const monthDay = (date: string) => `${MONTHS[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8, 10))}`;
 
 function median(xs: number[]): number {
@@ -192,15 +192,29 @@ export function compareDays(t: FaceTrend, a: TrendPhoto, b: TrendPhoto): { trend
   };
 }
 
-/** Chart geometry in a w×h box: dots for photos, an SVG path for the trend broken at gaps. */
-export function trendGeometry(t: FaceTrend, w: number, h: number) {
+/** A span of days (dayIndex), for charts that share a date axis. */
+export interface DayDomain {
+  from: number;
+  to: number;
+}
+
+/** The days a face trend covers. */
+export function trendDomain(t: FaceTrend): DayDomain {
+  return { from: t.points[0].day, to: t.points[t.points.length - 1].day };
+}
+
+/**
+ * Chart geometry in a w×h box: dots for photos, an SVG path for the trend broken at gaps. `domain`
+ * sets the date axis (e.g. one shared with the weight chart); it defaults to the trend's own days.
+ */
+export function trendGeometry(t: FaceTrend, w: number, h: number, domain: DayDomain = trendDomain(t)) {
   const pct = (v: number) => (v / t.median - 1) * 100;
   const vals = t.points.map((p) => pct(p.value)).sort((a, b) => a - b);
   const trends = t.points.filter((p) => p.trend !== null).map((p) => pct(p.trend!));
   const lo = Math.min(vals[Math.floor(vals.length * 0.02)], ...trends, -2);
   const hi = Math.max(vals[Math.ceil(vals.length * 0.98) - 1], ...trends, 2);
-  const d0 = t.points[0].day;
-  const span = Math.max(1, t.points[t.points.length - 1].day - d0);
+  const d0 = domain.from;
+  const span = Math.max(1, domain.to - d0);
   const x = (day: number) => ((day - d0) / span) * w;
   const y = (p: number) => h - ((Math.min(hi, Math.max(lo, p)) - lo) / (hi - lo)) * h;
   let line = '';

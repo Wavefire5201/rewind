@@ -20,8 +20,8 @@ by editing the generated folders.
 
 | Path | Contents |
 |---|---|
-| `app/` | expo-router screens: `(tabs)/` home, camera, profile; `album/[id]`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding` |
-| `components/` | UI by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `profile/`, `ui/` |
+| `app/` | expo-router screens: `(tabs)/` home, camera, profile; `album/[id]`, `album/day`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding` |
+| `components/` | UI by domain: `camera/`, `day/`, `timelapse/`, `timeline/`, `face/`, `weight/`, `profile/`, `ui/` |
 | `context/AppContext.tsx` | The single source of truth for photos, profile, settings and albums |
 | `hooks/` | Feature logic (face-scan and q95 backfills, timelapse, auto-capture, streaks, …) |
 | `utils/` | Pure helpers: face metrics and trend, alignment, playback, storage, import/export, … |
@@ -47,6 +47,9 @@ by editing the generated folders.
 - **Face trend.** `utils/faceMetrics.ts` turns a 478-point mesh into measurements;
   `utils/faceTrend.ts` corrects them for camera distance and pitch and smooths them into a
   trend. Both are pure and fully unit-tested.
+- **Weights** are per album and per day (a `weights` table), stored in the unit they were
+  entered in and converted only for display (`utils/weight.ts`). The album's `TrendCard` draws
+  them under the face trend on a shared date axis, each strip on its own scale.
 - **Camera.** VisionCamera with an MLKit frame processor drives the live face guide.
   `utils/cameraPreview.ts` maps detector coordinates onto the (mirrored, cropped) preview.
   Results arrive from the frame processor as read-only arrays: map them into new arrays.

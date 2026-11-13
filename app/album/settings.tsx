@@ -10,12 +10,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { CaretLeft, PencilSimple, LockSimple, BellSimple, Export, DownloadSimple, Trash } from 'phosphor-react-native';
+import { CaretLeft, PencilSimple, LockSimple, BellSimple, Export, DownloadSimple, Trash, Target } from 'phosphor-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { useAppContext } from '@/context/AppContext';
 import { haptics } from '@/utils/haptics';
 import type { Album } from '@/types';
+import { formatWeight, parseWeightInput, unitFor, validRangeText, weightInputText } from '@/utils/weight';
 import { ALBUM_NAME_MAX_LENGTH } from '@/utils/albums';
 import { confirmDeleteAlbum } from '@/utils/albumDialogs';
 import { getToday } from '@/utils/dates';
@@ -50,7 +51,8 @@ function AlbumSettingsScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const router = useRouter();
   const { fonts } = useFont();
-  const { albums, photos, settings, addPhotos, updateAlbum, deleteAlbum } = useAppContext();
+  const { albums, photos, weights, settings, addPhotos, addWeights, updateAlbum, deleteAlbum } = useAppContext();
+  const weightUnit = unitFor(settings.units);
   const album = albums.find(a => a.id === albumId);
   const albumPhotos = photos.filter(p => p.albumId === albumId);
   // Days this album already has: dotted in the import date picker.
@@ -60,6 +62,7 @@ function AlbumSettingsScreen() {
   );
 
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinIntent, setPinIntent] = useState<PinIntent>('unlock');
@@ -110,6 +113,15 @@ function AlbumSettingsScreen() {
     const trimmed = name.trim();
     if (!trimmed) return;
     updateAlbum(albumId, { name: trimmed });
+    haptics.success();
+  }
+
+  // --- Weight goal ---
+  function handleConfirmGoal(text: string) {
+    setShowGoalModal(false);
+    // Emptied: no goal.
+    const goal = text.trim() === '' ? undefined : parseWeightInput(text, weightUnit) ?? undefined;
+    updateAlbum(albumId, { weightGoal: goal });
     haptics.success();
   }
 
@@ -225,7 +237,8 @@ function AlbumSettingsScreen() {
           albumPhotos,
           albumName,
           (current, total) => { setExportCurrent(current); setExportTotal(total); },
-          cancelRef.current
+          cancelRef.current,
+          { weights: weights.filter(w => w.albumId === albumId), weightGoal: album?.weightGoal },
         );
         setExporting(false);
         // One success haptic: from the notice when some photos were left out, else here.
@@ -274,8 +287,15 @@ function AlbumSettingsScreen() {
           setImportTotal(total);
         }, importCancelRef.current, existingDates);
         setImporting(false);
+        // Weights come in like photos: a day the album already has keeps its own. So does a goal.
+        const weightsAdded = addWeights(result.weights).added;
+        const current = albums.find(a => a.id === albumId);
+        if (result.weightGoal && current && !current.weightGoal) updateAlbum(albumId, { weightGoal: result.weightGoal });
         if (result.photos.length === 0 && result.skipped === 0 && result.unreadable === 0) {
-          notify({ title: 'import complete', message: 'no photos found in the backup file.', tone: 'info' });
+          const message = weightsAdded > 0
+            ? `no photos found in the backup file. ${weightsAdded} weight${weightsAdded !== 1 ? 's' : ''} restored.`
+            : 'no photos found in the backup file.';
+          notify({ title: 'import complete', message, tone: 'info' });
           return;
         }
         // I3/I4: single batch merge+dedup+sort, honest counts
@@ -283,6 +303,7 @@ function AlbumSettingsScreen() {
         const added = batch.added;
         const skipped = batch.skipped + result.skipped;
         const parts = [`${added} photo${added !== 1 ? 's' : ''} restored`];
+        if (weightsAdded > 0) parts.push(`${weightsAdded} weight${weightsAdded !== 1 ? 's' : ''} restored`);
         if (skipped > 0) parts.push(`${skipped} skipped (already exist)`);
         if (result.unreadable > 0) parts.push(`${result.unreadable} couldn't be read`);
         const msg = parts.length > 1 ? `${parts.join('. ')}.` : `${parts[0]} from backup.`;
@@ -452,6 +473,19 @@ function AlbumSettingsScreen() {
           )}
         </View>
 
+        {/* WEIGHT section */}
+        <SectionLabel style={{ marginTop: 24 }}>weight</SectionLabel>
+        <View style={styles.card}>
+          <SettingsRow
+            icon={<Target size={20} color={Colors.textSecondary} weight="light" />}
+            label="weight goal"
+            value={album.weightGoal ? formatWeight(album.weightGoal, weightUnit) : 'none'}
+            chevron
+            onPress={() => { haptics.tap(); setShowGoalModal(true); }}
+            accessibilityLabel="Set weight goal"
+          />
+        </View>
+
         {/* DATA section */}
         <SectionLabel style={{ marginTop: 24 }}>data</SectionLabel>
         <View style={styles.card}>
@@ -502,6 +536,21 @@ function AlbumSettingsScreen() {
         maxLength={ALBUM_NAME_MAX_LENGTH}
         onConfirm={handleConfirmRename}
         onCancel={() => setShowRenameModal(false)}
+      />
+
+      <TextInputModal
+        visible={showGoalModal}
+        title="weight goal"
+        message={`in ${weightUnit}. leave it empty for no goal.`}
+        placeholder={`goal (${weightUnit})`}
+        defaultValue={album.weightGoal ? weightInputText(album.weightGoal, weightUnit) : ''}
+        confirmLabel="save"
+        maxLength={6}
+        keyboardType="decimal-pad"
+        allowEmpty
+        validate={(text) => (parseWeightInput(text, weightUnit) ? null : `enter a weight between ${validRangeText(weightUnit)}`)}
+        onConfirm={handleConfirmGoal}
+        onCancel={() => setShowGoalModal(false)}
       />
 
       <ExportSheet
