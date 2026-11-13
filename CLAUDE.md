@@ -33,8 +33,8 @@ performance only in a release build.
 
 ## Architecture
 
-- `app/` — expo-router screens. `(tabs)/` = home/camera/profile; `album/[id]`, `album/timelapse`, `album/compare`, `album/settings`, `onboarding`.
-- `components/` — grouped by domain: `camera/`, `timelapse/`, `timeline/`, `face/`, `weight/`, `profile/`, `ui/`.
+- `app/` — expo-router screens. `(tabs)/` = home/camera/profile; `album/[id]`, `album/day` (one full-screen page per day: photo, weight, caption), `album/timelapse`, `album/compare`, `album/settings`, `onboarding`.
+- `components/` — grouped by domain: `camera/`, `day/`, `timelapse/`, `timeline/`, `face/`, `weight/`, `profile/`, `ui/`.
 - `context/AppContext.tsx` — **single source of truth** for photos/profile/settings/albums. Loads everything once on mount; mutations update React state then save through `utils/storage`, which writes only the changed rows, one transaction per tick (errors log + notice, never throw); `updatePhotos` resolves with whether its save succeeded. Also owns album unlock state.
 - `hooks/` — feature logic (`usePhotos`, `useStreak`, `useTimelapse`, `useFaceDetection`, `useAutoCapture`, `useAlbumLock`, `useFaceScanBackfill`, `usePhotoEncodeBackfill`).
 - `utils/` — pure helpers: `faceScan` (MediaPipe scan), `faceMetrics` / `faceTrend` (measurements, trend), `weight` (units, readout, chart), `faceAlign` / `ghost` (eye-anchored layouts, album framing), `cameraPreview` (detector → preview coordinates), `playback`, `photoEncode`, `storage`, `import` / `export`, `pin`, `notifications`, `haptics`.

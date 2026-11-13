@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, fireEvent, act } from '@testing-library/react-native';
+import * as dates from '@/utils/dates';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
 import { FontProvider } from '@/context/FontContext';
 import type { PhotoEntry } from '@/types';
@@ -59,11 +60,47 @@ describe('CalendarGrid', () => {
     // a missed day came out 2dp wider (and, square, taller) than its neighbours.
     await render(
       <FontProvider>
-        <CalendarGrid year={2026} month={3} photos={[photo('2026-03-05')]} joinDate="2026-03-01" onDayPress={jest.fn()} onEmptyDayPress={jest.fn()} />
+        <CalendarGrid year={2026} month={3} photos={[photo('2026-03-05')]} joinDate="2026-03-01" onDayPress={jest.fn()} />
       </FontProvider>,
     );
     const cell = StyleSheet.flatten(screen.getByTestId('missed-2026-03-04').props.style);
     expect(cell.borderWidth ?? 0).toBe(0);
     expect(StyleSheet.flatten(screen.getByTestId('missed-border-2026-03-04').props.style).borderWidth).toBe(1);
+  });
+});
+
+describe('opening days', () => {
+  beforeEach(() => jest.spyOn(dates, 'getToday').mockReturnValue('2026-03-06'));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('every day from the start through today can be opened, and no other', async () => {
+    const onDayPress = jest.fn();
+    await render(
+      <FontProvider>
+        <CalendarGrid year={2026} month={3} photos={[photo('2026-03-05')]} joinDate="2026-03-02" onDayPress={onDayPress} />
+      </FontProvider>,
+    );
+    await act(async () => fireEvent.press(screen.getByTestId('missed-2026-03-03')));
+    await act(async () => fireEvent.press(screen.getByTestId('today-2026-03-06')));
+    expect(onDayPress.mock.calls).toEqual([['2026-03-03'], ['2026-03-06']]);
+    // Before the album's start, and after today: nothing to open.
+    expect(screen.queryByTestId('missed-2026-03-01')).toBeNull();
+    expect(screen.queryByTestId('missed-2026-03-07')).toBeNull();
+    expect(screen.queryByTestId('today-2026-03-07')).toBeNull();
+  });
+
+  it('a day with a weight but no photo shows a dot', async () => {
+    await render(
+      <FontProvider>
+        <CalendarGrid
+          year={2026} month={3} photos={[photo('2026-03-05')]} joinDate="2026-03-01"
+          weightDates={new Set(['2026-03-03', '2026-03-05', '2026-03-06'])} onDayPress={jest.fn()}
+        />
+      </FontProvider>,
+    );
+    expect(screen.getByTestId('weight-dot:2026-03-03')).toBeTruthy();
+    expect(screen.getByTestId('weight-dot:2026-03-06')).toBeTruthy();
+    // The photo shows that day already.
+    expect(screen.queryByTestId('weight-dot:2026-03-05')).toBeNull();
   });
 });

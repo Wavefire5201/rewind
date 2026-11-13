@@ -15,10 +15,14 @@ interface CalendarGridProps {
   year: number;
   month: number;
   photos: PhotoEntry[];
+  /** The album's first day: days from it through today open the day view. */
   joinDate: string;
+  /** Days with a weight: the ones without a photo get a dot. */
+  weightDates?: ReadonlySet<string>;
   onDayPress: (date: string) => void;
-  onEmptyDayPress?: (date: string) => void;
 }
+
+const NO_WEIGHTS: ReadonlySet<string> = new Set();
 
 // Sun-origin; rotated at module load to start from the device locale's first weekday.
 const _DAY_HEADERS_SUN_ORIGIN = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -29,7 +33,7 @@ const DAY_HEADERS = [
 ];
 // Cell size is dynamic — use flex instead of fixed width
 
-export default function CalendarGrid({ year, month, photos, joinDate, onDayPress, onEmptyDayPress }: CalendarGridProps) {
+export default function CalendarGrid({ year, month, photos, joinDate, weightDates = NO_WEIGHTS, onDayPress }: CalendarGridProps) {
   const { fonts } = useFont();
   const weeks = getCalendarMonth(year, month);
   const today = getToday();
@@ -94,14 +98,26 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
               );
             }
 
+            const weightDot = weightDates.has(date) ? (
+              <View testID={`weight-dot:${date}`} style={styles.weightDot} pointerEvents="none" />
+            ) : null;
+
             // Today without photo
             if (isToday && !photo) {
               return (
-                <View key={date} style={[styles.cell, styles.todayCell]}>
+                <Pressable
+                  key={date}
+                  testID={`today-${date}`}
+                  style={({ pressed }) => [styles.cell, styles.todayCell, pressed && { opacity: 0.5 }]}
+                  onPress={() => onDayPress(date)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${date}: today`}
+                >
                   <Text style={[styles.dayNumber, styles.todayNumber, { fontFamily: fonts.regular }]}>
                     {parseInt(date.split('-')[2], 10)}
                   </Text>
-                </View>
+                  {weightDot}
+                </Pressable>
               );
             }
 
@@ -123,28 +139,22 @@ export default function CalendarGrid({ year, month, photos, joinDate, onDayPress
               );
             }
 
-            // Past day, no photo (missed) — show dashed border so backfill affordance is discoverable
-            if (onEmptyDayPress) {
-              return (
-                <Pressable
-                  key={date}
-                  testID={`missed-${date}`}
-                  style={({ pressed }) => [styles.cell, pressed && { opacity: 0.5 }]}
-                  onPress={() => onEmptyDayPress(date)}
-                >
-                  <View testID={`missed-border-${date}`} style={styles.emptyTappableBorder} pointerEvents="none" />
-                  <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
-                    {parseInt(date.split('-')[2], 10)}
-                  </Text>
-                </Pressable>
-              );
-            }
+            // Past day, no photo (missed): a dashed border says it can still be filled in.
             return (
-              <View key={date} style={styles.cell}>
+              <Pressable
+                key={date}
+                testID={`missed-${date}`}
+                style={({ pressed }) => [styles.cell, pressed && { opacity: 0.5 }]}
+                onPress={() => onDayPress(date)}
+                accessibilityRole="button"
+                accessibilityLabel={`${date}: missed`}
+              >
+                <View testID={`missed-border-${date}`} style={styles.emptyTappableBorder} pointerEvents="none" />
                 <Text style={[styles.dayNumber, { fontFamily: fonts.regular }]}>
                   {parseInt(date.split('-')[2], 10)}
                 </Text>
-              </View>
+                {weightDot}
+              </Pressable>
             );
           })}
         </View>
@@ -185,6 +195,14 @@ const styles = StyleSheet.create({
   photoCell: {
     borderRadius: 0,
     overflow: 'hidden',
+  },
+  weightDot: {
+    position: 'absolute',
+    bottom: '18%',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.streak,
   },
   todayCell: {
     borderBottomWidth: 1,
