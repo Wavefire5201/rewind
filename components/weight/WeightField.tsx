@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
@@ -16,8 +16,9 @@ interface WeightFieldProps {
 }
 
 /**
- * A day's weight, always editable: it saves when submitted or when it loses focus (so swiping to
- * another day saves it). Empty means no weight; an unchanged value writes nothing.
+ * A day's weight, always editable: it saves when submitted, when it loses focus (swiping to another
+ * day), and when it goes away still holding a typed value (closing the day view, which unmounts it
+ * before any blur arrives). Empty means no weight; an unchanged value writes nothing.
  */
 export default function WeightField({ entry, unit, onCommit, autoFocus }: WeightFieldProps) {
   const { fonts } = useFont();
@@ -28,17 +29,23 @@ export default function WeightField({ entry, unit, onCommit, autoFocus }: Weight
   // Another day, a saved change, or a unit switch: start from what's stored (set while rendering,
   // not in an effect, so the first frame shows it).
   const [shownFor, setShownFor] = useState(shown);
+  // What the last commit sent, so a blur followed by an unmount doesn't send it twice.
+  const committed = useRef<string | null>(null);
   if (shown !== shownFor) {
     setShownFor(shown);
     setText(shown);
     setInvalid(false);
+    committed.current = null;
   }
 
   function commit() {
     const typed = text.trim();
-    if (typed === shown) return;
+    if (typed === shown || typed === committed.current) return;
     if (typed === '') {
-      if (entry) onCommit(null);
+      if (entry) {
+        committed.current = typed;
+        onCommit(null);
+      }
       return;
     }
     const weight = parseWeightInput(typed, unit);
@@ -47,8 +54,15 @@ export default function WeightField({ entry, unit, onCommit, autoFocus }: Weight
       haptics.error();
       return;
     }
+    committed.current = typed;
     onCommit(weight);
   }
+
+  // On the way out, commit whatever is still typed. The ref holds this render's commit, so the
+  // cleanup sees the latest text rather than the first render's.
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => () => commitRef.current(), []);
 
   return (
     <View>

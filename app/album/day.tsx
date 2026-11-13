@@ -66,6 +66,9 @@ function DayScreen() {
   const photoHeight = Math.min(width * (4 / 3), height * 0.55);
 
   const currentIndex = useRef(initialIndex);
+  // "+ log" focuses the opening day's weight once; after a swipe, remounting that page (only a few
+  // stay mounted) mustn't raise the keyboard for a field that's off screen.
+  const [focusPending, setFocusPending] = useState(focus === 'weight');
   useEffect(() => {
     setLastViewedDay(albumId, days[initialIndex]);
   }, [albumId, days, initialIndex]);
@@ -74,6 +77,7 @@ function DayScreen() {
     const index = Math.min(lastIndex, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / width)));
     if (index === currentIndex.current) return;
     currentIndex.current = index;
+    setFocusPending(false);
     setLastViewedDay(albumId, days[index]);
   }, [albumId, days, lastIndex, width]);
 
@@ -130,8 +134,8 @@ function DayScreen() {
         use24h={settings.use24hClock}
         width={width}
         photoHeight={photoHeight}
-        focusWeight={focus === 'weight' && index === initialIndex}
-        onTakePhoto={() => router.push({ pathname: '/(tabs)/camera', params: { albumId } })}
+        focusWeight={focusPending && index === initialIndex}
+        onTakePhoto={() => router.push({ pathname: '/(tabs)/camera', params: { albumId, from: 'day' } })}
         onAddFromLibrary={() => { void addFromLibrary(date); }}
         onShare={() => { if (photo) void share(photo); }}
         onDelete={() => { if (photo) void removePhoto(photo); }}

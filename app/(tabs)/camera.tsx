@@ -48,7 +48,8 @@ function CameraScreen() {
     windowWidth,
     ((windowHeight - insets.top - insets.bottom - CONTROLS_MIN_HEIGHT) * 3) / 4,
   );
-  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  // from=day: opened from the day view, which a saved photo goes back to.
+  const { albumId, from } = useLocalSearchParams<{ albumId: string; from?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
@@ -289,7 +290,9 @@ function CameraScreen() {
     else if (todayWeight) void deleteWeight(albumId, today);
     setShowPreview(false);
     setCapturedUri('');
-    router.replace({ pathname: '/album/[id]', params: { id: albumId } });
+    // Back to the day it was taken for; from anywhere else, on to the album.
+    if (from === 'day') router.back();
+    else router.replace({ pathname: '/album/[id]', params: { id: albumId } });
   };
 
   const handleRetake = () => {

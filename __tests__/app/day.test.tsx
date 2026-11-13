@@ -135,7 +135,7 @@ it('a cancelled pick adds nothing', async () => {
 it("taking today's photo opens the camera for the album", async () => {
   await open();
   await act(async () => page('2026-03-06').onTakePhoto());
-  expect(mockPush).toHaveBeenCalledWith({ pathname: '/(tabs)/camera', params: { albumId: 'a' } });
+  expect(mockPush).toHaveBeenCalledWith({ pathname: '/(tabs)/camera', params: { albumId: 'a', from: 'day' } });
 });
 
 it('deleting asks first and stays on the day: the range is frozen', async () => {
@@ -171,6 +171,19 @@ it('the weight field is ready on the opening page only, with focus=weight', asyn
   await open({ date: '2026-03-06', focus: 'weight' });
   expect(page('2026-03-06').focusWeight).toBe(true);
   expect(page('2026-03-05').focusWeight).toBeFalsy();
+});
+
+it("the + log focus is used once: swiping away doesn't bring the keyboard back for that day", async () => {
+  await open({ date: '2026-03-06', focus: 'weight' });
+  // Swipe to the day before; with only a few pages mounted, coming back remounts today's.
+  await act(async () => pager().props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 6 * 750 } } }));
+  expect(page('2026-03-06').focusWeight).toBeFalsy();
+});
+
+it('swiping records the day it lands on as the last one viewed', async () => {
+  await open({ date: '2026-03-06' });
+  await act(async () => pager().props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 6 * 750 } } }));
+  expect(takeLastViewedDay('a')).toBe('2026-03-05');
 });
 
 it('swiping dismisses the keyboard, so a typed weight saves on blur', async () => {

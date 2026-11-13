@@ -71,3 +71,20 @@ it('shows the new day when the entry changes', async () => {
   await act(async () => view.rerender(ui({ onCommit, unit: 'kg', entry: entry(81.5, 'kg', '2026-03-06') })));
   expect(screen.getByDisplayValue('81.5')).toBeTruthy();
 });
+
+it('commits a typed weight when the field goes away without a blur (closing the day view)', async () => {
+  const onCommit = jest.fn();
+  await render(ui({ onCommit }));
+  await act(async () => fireEvent.changeText(field(), '165,2'));
+  await act(async () => screen.unmount());
+  expect(onCommit).toHaveBeenCalledWith({ value: 165.2, unit: 'lb' });
+});
+
+it("doesn't commit on the way out when nothing changed, or after a blur already did", async () => {
+  const onCommit = jest.fn();
+  await render(ui({ onCommit }));
+  await act(async () => fireEvent.changeText(field(), '170'));
+  await act(async () => fireEvent(field(), 'blur'));
+  await act(async () => screen.unmount());
+  expect(onCommit).toHaveBeenCalledTimes(1);
+});

@@ -49,9 +49,12 @@ jest.mock('@/context/AppContext', () => ({
     today: '2026-10-16',
   }),
 }));
+let mockParams: { albumId: string; from?: string } = { albumId: 'a' };
+const mockReplace = jest.fn();
+const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ albumId: 'a' }),
-  useRouter: () => ({ replace: jest.fn(), back: jest.fn() }),
+  useLocalSearchParams: () => mockParams,
+  useRouter: () => ({ replace: mockReplace, back: mockBack }),
   useNavigation: () => ({ canGoBack: () => true }),
   useIsFocused: () => mockFocused,
 }));
@@ -167,5 +170,24 @@ describe("today's existing entries", () => {
     await act(async () => last(mockPreview).onSave('', 'file:///document/new.jpg', null));
     expect(mockDeleteWeight).toHaveBeenCalledWith('a', '2026-10-16');
     expect(mockSetWeight).not.toHaveBeenCalled();
+  });
+});
+
+describe('where a saved photo lands', () => {
+  afterEach(() => { mockParams = { albumId: 'a' }; });
+
+  it('opened from the day view: back to that day, not a second album screen', async () => {
+    mockParams = { albumId: 'a', from: 'day' };
+    await render(<FontProvider><CameraRoute /></FontProvider>);
+    await act(async () => last(mockPreview).onSave('', 'file:///document/new.jpg', null));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('opened anywhere else: the album', async () => {
+    await render(<FontProvider><CameraRoute /></FontProvider>);
+    await act(async () => last(mockPreview).onSave('', 'file:///document/new.jpg', null));
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/album/[id]', params: { id: 'a' } });
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });

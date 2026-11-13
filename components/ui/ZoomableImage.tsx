@@ -52,7 +52,14 @@ export default function ZoomableImage({ uri, width, height }: ZoomableImageProps
       }
     });
 
+  // Only a zoomed photo takes a drag; at 1× it fails at once and the drag pages the day view
+  // (it used to claim every horizontal swipe that started on the photo).
   const panGesture = Gesture.Pan()
+    .manualActivation(true)
+    .onTouchesMove((_e, state) => {
+      if (savedScale.value > 1) state.activate();
+      else state.fail();
+    })
     .onUpdate((e) => {
       if (savedScale.value > 1) {
         translateX.value = savedTranslateX.value + e.translationX;
