@@ -10,7 +10,7 @@ import TimerSelector from '@/components/camera/TimerSelector';
 import TextInputModal from '@/components/ui/TextInputModal';
 import CapturePreview from '@/components/camera/CapturePreview';
 import ExportProgress from '@/components/timelapse/ExportProgress';
-import FaceTrendCard from '@/components/face/FaceTrendCard';
+import TrendCard from '@/components/timeline/TrendCard';
 
 // The app's own UI copy is lowercase (native system dialogs use sentence case). This
 // renders the sheets and modals that had drifted and reads every string they show.
@@ -39,7 +39,7 @@ it.each([
   ['ImportPhotoModal', <ImportPhotoModal key="m" visible photos={[{ uri: 'file:///a.jpg', suggestedDate: '2026-03-01' }, { uri: 'file:///b.jpg', suggestedDate: '2026-03-02' }]} photoDates={new Set()} onSave={jest.fn()} onCancel={jest.fn()} />],
   ['TimerSelector', <TimerSelector key="t" visible selectedDuration={0} onSelect={jest.fn()} />],
   ['TextInputModal', <TextInputModal key="x" visible title="rename album" onConfirm={jest.fn()} onCancel={jest.fn()} />],
-  ['CapturePreview', <CapturePreview key="c" visible imageUri="file:///a.jpg" onSave={jest.fn()} onRetake={jest.fn()} />],
+  ['CapturePreview', <CapturePreview key="c" visible imageUri="file:///a.jpg" onSave={jest.fn()} onRetake={jest.fn()} weightUnit="lb" />],
   ['ExportProgress', <ExportProgress key="p" visible label="exporting" current={1} total={2} onCancel={jest.fn()} />],
 ])('%s shows only lowercase copy', async (_name, ui) => {
   await render(<FontProvider>{ui}</FontProvider>);
@@ -48,11 +48,11 @@ it.each([
   expect(texts.filter((t) => t !== t.toLowerCase())).toEqual([]);
 });
 
-it("FaceTrendCard doesn't shout its label in uppercase", async () => {
+it("TrendCard doesn't shout its label in uppercase", async () => {
   await render(
     <FontProvider>
-      <FaceTrendCard photos={[]} trend={null} waiting={false} progress={{ scanning: false, done: 0, total: 0 }} onSelectDate={jest.fn()} onCompare={jest.fn()} />
+      <TrendCard face={{ photos: [], trend: null, waiting: false, progress: { scanning: false, done: 0, total: 0 } }} weights={[]} unit="lb" onSelectDate={jest.fn()} onCompare={jest.fn()} onLogWeight={jest.fn()} />
     </FontProvider>,
   );
-  expect(StyleSheet.flatten(screen.getByText('face width').props.style).textTransform).toBeUndefined();
+  expect(StyleSheet.flatten(screen.getByText('face width · weight').props.style).textTransform).toBeUndefined();
 });

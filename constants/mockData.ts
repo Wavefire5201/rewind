@@ -1,4 +1,4 @@
-import type { PhotoEntry, UserProfile, AppSettings } from '@/types';
+import type { PhotoEntry, UserProfile, AppSettings, WeightEntry } from '@/types';
 
 export const USE_MOCK_DATA = process.env.EXPO_PUBLIC_MOCK_DATA === '1';
 
@@ -82,4 +82,25 @@ export const MOCK_SETTINGS: AppSettings = {
   mirrorSelfies: true,
   use24hClock: false,
   alignFaces: true,
+  units: 'imperial',
 };
+
+// Most mornings over the mock photos' span, drifting from ~182 to ~172 lb with day-to-day noise,
+// and a gap of a couple of weeks in the middle so the chart's broken line shows.
+function generateMockWeights(): WeightEntry[] {
+  return MOCK_PHOTOS
+    .filter((_, i) => i % 5 !== 3 && (i < 55 || i > 70))
+    .map((p, n) => {
+      const i = MOCK_PHOTOS.indexOf(p);
+      const noise = Math.sin(i * 2.3) * 0.9 + Math.sin(i * 0.7) * 0.5;
+      return {
+        albumId: p.albumId,
+        date: p.date,
+        value: Math.round((182 - (i / 126) * 10 + noise) * 10) / 10,
+        unit: 'lb',
+        updatedAt: new Date(2025, 10, 3 + n).toISOString(),
+      };
+    });
+}
+
+export const MOCK_WEIGHTS: WeightEntry[] = generateMockWeights();

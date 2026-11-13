@@ -2,8 +2,8 @@ import { File, Directory, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { Zip, ZipPassThrough, strToU8 } from 'fflate';
-import type { PhotoEntry } from '@/types';
-import { BACKUP_VERSION, backupPhoto, type BackupPhoto } from '@/utils/backupManifest';
+import type { PhotoEntry, WeightEntry, WeightValue } from '@/types';
+import { BACKUP_VERSION, backupPhoto, backupWeight, type BackupPhoto } from '@/utils/backupManifest';
 
 type ProgressCallback = (current: number, total: number) => void;
 type CancelToken = { cancelled: boolean };
@@ -80,8 +80,17 @@ export async function exportToBackup(
   albumName: string,
   onProgress: ProgressCallback,
   cancel: CancelToken,
-  /** The archive's size limit (tests lower it). */
-  maxBytes: number = MAX_BACKUP_BYTES,
+  {
+    weights = [],
+    weightGoal,
+    maxBytes = MAX_BACKUP_BYTES,
+  }: {
+    /** The album's weights. */
+    weights?: readonly WeightEntry[];
+    weightGoal?: WeightValue;
+    /** The archive's size limit (tests lower it). */
+    maxBytes?: number;
+  } = {},
 ): Promise<{ filePath: string; exported: number; skipped: number }> {
   const localPhotos = photos.filter(p => isLocalFile(p.imageUri));
   const skipped = photos.length - localPhotos.length;
@@ -102,6 +111,9 @@ export async function exportToBackup(
     exportDate: new Date().toISOString(),
     album: albumName,
     photos: [] as BackupPhoto[],
+    weights: weights.map(backupWeight),
+    // Left out of the JSON when undefined.
+    weightGoal,
   };
 
   // Streams the archive to disk one photo at a time. Building it in memory (base64 +

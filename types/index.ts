@@ -26,6 +26,8 @@ export interface AppSettings {
   mirrorSelfies: boolean;
   use24hClock: boolean;
   alignFaces: boolean;
+  /** How weights are shown: lb (imperial) or kg (metric). Stored entries keep their own unit. */
+  units: 'imperial' | 'metric';
 }
 
 /** Where the eyes go in a shot: midpoint and pupil distance as fractions of the 3:4 frame. */
@@ -45,6 +47,23 @@ export interface Album {
   isLocked: boolean;
   /** The user's framing for this album (hold the shutter to save one). */
   framing?: Framing;
+  /** A goal weight for this album's weight log. */
+  weightGoal?: WeightValue;
+}
+
+export type WeightUnit = 'lb' | 'kg';
+
+/** A weight as the user entered it; converted only for display. */
+export interface WeightValue {
+  value: number;
+  unit: WeightUnit;
+}
+
+/** One day's weight in an album: at most one per album and local date. */
+export interface WeightEntry extends WeightValue {
+  albumId: string;
+  date: string; // YYYY-MM-DD, local
+  updatedAt: string; // ISO timestamp
 }
 
 export interface AppState {

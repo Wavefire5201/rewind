@@ -23,7 +23,8 @@ import { placeGhost, framingFromFace, DEFAULT_FRAMING } from '@/utils/ghost';
 import type { Size } from '@/utils/faceAlign';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { UserFocus, CaretLeft } from 'phosphor-react-native';
-import type { PhotoEntry, FaceLandmarks } from '@/types';
+import type { PhotoEntry, FaceLandmarks, WeightValue } from '@/types';
+import { unitFor, weightInputText, weightKey } from '@/utils/weight';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 /** Room the top row and shutter row need under the viewfinder. */
@@ -52,7 +53,10 @@ function CameraScreen() {
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
   const focused = useIsFocused();
-  const { albums, settings, updateAlbum, today } = useAppContext();
+  const { albums, settings, updateAlbum, today, weights, setWeight } = useAppContext();
+  const weightUnit = unitFor(settings.units);
+  // Today's weight, if it's already logged (a retake): the preview's field starts from it.
+  const todayWeight = useMemo(() => weights.find(w => weightKey(w) === weightKey({ albumId, date: today })), [weights, albumId, today]);
   const { mostRecentPhoto, todayPhoto, addPhoto } = usePhotos(albumId);
   const { dayNumber } = useGreeting();
   const albumName = albums.find(a => a.id === albumId)?.name ?? albumId;
@@ -268,7 +272,7 @@ function CameraScreen() {
     });
   }, [todayPhoto]);
 
-  const handleSave = (caption: string, savedUri: string) => {
+  const handleSave = (caption: string, savedUri: string, weight: WeightValue | null) => {
     const newPhoto: PhotoEntry = {
       id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       albumId: albumId,
@@ -280,6 +284,7 @@ function CameraScreen() {
       ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
     };
     addPhoto(newPhoto);
+    if (weight) void setWeight(albumId, today, weight);
     setShowPreview(false);
     setCapturedUri('');
     router.replace({ pathname: '/album/[id]', params: { id: albumId } });
@@ -416,6 +421,8 @@ function CameraScreen() {
         onSave={handleSave}
         onRetake={handleRetake}
         confirmSave={confirmSave}
+        weightUnit={weightUnit}
+        initialWeight={todayWeight ? weightInputText(todayWeight, weightUnit) : ''}
       />
     </SafeAreaView>
   );

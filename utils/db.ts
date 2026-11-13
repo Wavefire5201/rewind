@@ -1,8 +1,8 @@
 import * as SQLite from 'expo-sqlite';
-import type { Album, PhotoEntry } from '@/types';
+import type { Album, PhotoEntry, WeightEntry } from '@/types';
 
 /**
- * Rewind's database: photos, albums, and a key/value table for the profile and settings. One
+ * Rewind's database: photos, albums, weights, and a key/value table for the profile and settings. One
  * connection for the app's life. utils/storage.ts is the only reader and writer; everything else
  * goes through AppContext.
  */
@@ -41,7 +41,16 @@ CREATE TABLE IF NOT EXISTS albums (
   reminder_time TEXT NOT NULL,
   is_locked INTEGER NOT NULL,
   framing TEXT,
+  weight_goal TEXT,
   position INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS weights (
+  album_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  value REAL NOT NULL,
+  unit TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (album_id, date)
 );
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY NOT NULL,
@@ -94,7 +103,16 @@ export interface AlbumRow {
   reminder_time: string;
   is_locked: number;
   framing: string | null;
+  weight_goal: string | null;
   position: number;
+}
+
+export interface WeightRow {
+  album_id: string;
+  date: string;
+  value: number;
+  unit: string;
+  updated_at: string;
 }
 
 // Each field's column. `satisfies` makes a PhotoEntry or Album field with no column a type error:
@@ -106,12 +124,16 @@ const PHOTO_FIELDS = {
 } as const satisfies Record<keyof PhotoEntry, keyof PhotoRow>;
 const ALBUM_FIELDS = {
   id: 'id', name: 'name', createdAt: 'created_at', reminderEnabled: 'reminder_enabled', reminderTime: 'reminder_time',
-  isLocked: 'is_locked', framing: 'framing',
+  isLocked: 'is_locked', framing: 'framing', weightGoal: 'weight_goal',
 } as const satisfies Record<keyof Album, keyof AlbumRow>;
+const WEIGHT_FIELDS = {
+  albumId: 'album_id', date: 'date', value: 'value', unit: 'unit', updatedAt: 'updated_at',
+} as const satisfies Record<keyof WeightEntry, keyof WeightRow>;
 
 export const PHOTO_COLUMNS: (keyof PhotoRow)[] = Object.values(PHOTO_FIELDS);
 /** The album columns, plus `position`: its place in the user's list. */
 export const ALBUM_COLUMNS: (keyof AlbumRow)[] = [...Object.values(ALBUM_FIELDS), 'position'];
+export const WEIGHT_COLUMNS: (keyof WeightRow)[] = Object.values(WEIGHT_FIELDS);
 
 const json = (value: unknown): string | null => (value === undefined ? null : JSON.stringify(value));
 
@@ -173,6 +195,7 @@ export function albumToRow(a: Album, position: number): AlbumRow {
     reminder_time: a.reminderTime,
     is_locked: a.isLocked ? 1 : 0,
     framing: json(a.framing),
+    weight_goal: json(a.weightGoal),
     position,
   };
 }
@@ -188,5 +211,15 @@ export function rowToAlbum(r: AlbumRow): Album {
   };
   const framing = parseColumn<Album['framing']>(r.framing, `framing of ${r.id}`);
   if (framing !== undefined) album.framing = framing;
+  const weightGoal = parseColumn<Album['weightGoal']>(r.weight_goal, `weight goal of ${r.id}`);
+  if (weightGoal !== undefined) album.weightGoal = weightGoal;
   return album;
+}
+
+export function weightToRow(w: WeightEntry): WeightRow {
+  return { album_id: w.albumId, date: w.date, value: w.value, unit: w.unit, updated_at: w.updatedAt };
+}
+
+export function rowToWeight(r: WeightRow): WeightEntry {
+  return { albumId: r.album_id, date: r.date, value: r.value, unit: r.unit as WeightEntry['unit'], updatedAt: r.updated_at };
 }

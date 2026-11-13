@@ -1,16 +1,18 @@
 /**
- * The photo entries of a backup's manifest.json.
+ * The entries of a backup's manifest.json.
  *
  * Version 1 has each photo's id, date, caption and image file. Version 2 adds what saves work
  * after a restore: the q95 flag (the image is restored byte for byte, so it is still q95), the
  * face scan, the capture time and camera, and the capture's face landmarks (the camera's ghost
- * reads them). Thumbnails stay out; the backfill rebuilds them.
+ * reads them). Thumbnails stay out; the backfill rebuilds them. Version 3 adds the album's
+ * weights and weight goal.
  */
 import { FACE_SCAN_VERSION } from '@/utils/faceScan';
 import { PHOTO_ENCODING } from '@/utils/photoEncode';
-import type { FaceLandmarks, FaceMeasure, FaceScan, PhotoEntry } from '@/types';
+import type { FaceLandmarks, FaceMeasure, FaceScan, PhotoEntry, WeightEntry, WeightValue } from '@/types';
+import { isValidWeight } from '@/utils/weight';
 
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export type BackupPhoto = Pick<PhotoEntry, 'id' | 'date' | 'caption' | 'capturedAt' | 'cameraDirection'>
   & Partial<Pick<PhotoEntry, 'encoding' | 'faceScan' | 'faceLandmarks'>>
@@ -29,6 +31,39 @@ export function backupPhoto(photo: PhotoEntry, imageFile: string): BackupPhoto {
     faceScan: photo.faceScan,
     faceLandmarks: photo.faceLandmarks,
   };
+}
+
+/** A weight in the manifest: the album is the one restored into. */
+export type BackupWeight = Omit<WeightEntry, 'albumId'>;
+
+export function backupWeight(w: WeightEntry): BackupWeight {
+  return { date: w.date, value: w.value, unit: w.unit, updatedAt: w.updatedAt };
+}
+
+/**
+ * The manifest's weights, for `albumId`. Untrusted input: an entry that isn't a weight on a real
+ * day is dropped and the rest kept; a second entry for a day is dropped too. No list (an older
+ * backup) is no weights.
+ */
+export function readWeights(v: unknown, albumId: string, isDay: (s: unknown) => s is string): WeightEntry[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const weights: WeightEntry[] = [];
+  for (const e of v) {
+    if (!isObject(e) || !isDay(e.date) || seen.has(e.date)) continue;
+    const weight = readWeightValue(e);
+    if (!weight) continue;
+    seen.add(e.date);
+    weights.push({ albumId, date: e.date, ...weight, updatedAt: readTimestamp(e.updatedAt) ?? new Date().toISOString() });
+  }
+  return weights;
+}
+
+/** A weight value and unit, or undefined when it isn't a plausible weight. */
+export function readWeightValue(v: unknown): WeightValue | undefined {
+  if (!isObject(v) || !isNumber(v.value) || (v.unit !== 'lb' && v.unit !== 'kg')) return undefined;
+  const w: WeightValue = { value: v.value, unit: v.unit };
+  return isValidWeight(w) ? w : undefined;
 }
 
 export type PhotoDetails = Partial<Pick<PhotoEntry, 'capturedAt' | 'cameraDirection' | 'encoding' | 'faceScan' | 'faceLandmarks'>>;

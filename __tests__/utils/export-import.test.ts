@@ -8,7 +8,7 @@ import { importFromBackup, createPhotoEntry, pickPhotosFromLibrary } from '@/uti
 import { getToday } from '@/utils/dates';
 import { FACE_SCAN_VERSION, needsFaceScan } from '@/utils/faceScan';
 import { needsEncoding } from '@/utils/photoEncode';
-import type { FaceLandmarks, FaceScan, PhotoEntry } from '@/types';
+import type { FaceLandmarks, FaceScan, PhotoEntry, WeightEntry } from '@/types';
 import { fileStore, deletedUris, openedHandles, base64Reads, writeLog, resetFileSystemMock, MockFile } from '../helpers/fileSystemMock';
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
@@ -141,9 +141,9 @@ describe('exportToBackup', () => {
       fileStore.delete(filePath);
 
       // Exactly at the limit is fine; one byte over fails before the manifest is written.
-      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, size)).resolves.toMatchObject({ exported: 3 });
+      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, { maxBytes: size })).resolves.toMatchObject({ exported: 3 });
       writeLog.length = 0;
-      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, size - 1)).rejects.toThrow(
+      await expect(exportToBackup(photos(), 'Daily', () => {}, { cancelled: false }, { maxBytes: size - 1 })).rejects.toThrow(
         'too large for one backup',
       );
       expect(backups()).toEqual([]);
@@ -155,7 +155,7 @@ describe('exportToBackup', () => {
     it('stops before the photo that would cross the limit and removes the partial backup', async () => {
       const progress: number[] = [];
       await expect(
-        exportToBackup(photos(), 'Daily', (c) => progress.push(c), { cancelled: false }, 2500),
+        exportToBackup(photos(), 'Daily', (c) => progress.push(c), { cancelled: false }, { maxBytes: 2500 }),
       ).rejects.toThrow('This album is too large for one backup file');
       // Two photos fit, the third would not.
       expect(progress).toEqual([1, 2]);
@@ -258,7 +258,7 @@ describe('importFromBackup', () => {
       { 'images/a.jpg': 'QUJD', 'images/b.jpg': 'REVG', 'images/c.jpg': 'R0hJ', 'images/d.jpg': 'SktM', 'images/e.jpg': 'Tk9Q' },
     );
     const result = await importFromBackup('album-1');
-    expect(result).toEqual({ photos: [], skipped: 0, unreadable: 5 });
+    expect(result).toEqual({ photos: [], skipped: 0, unreadable: 5, weights: [] });
     expect(writtenPhotos()).toHaveLength(0);
   });
 
@@ -347,7 +347,7 @@ describe('importFromBackup', () => {
   });
 
   it('returns nothing when the picker is cancelled', async () => {
-    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0, unreadable: 0 });
+    await expect(importFromBackup()).resolves.toEqual({ photos: [], skipped: 0, unreadable: 0, weights: [] });
   });
 
   it('rejects invalid backups', async () => {
@@ -483,7 +483,7 @@ describe('photo details in a backup (manifest version 2)', () => {
 
     const zip = await JSZip.loadAsync(fileStore.get(filePath)!, { base64: true });
     const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-    expect(manifest.version).toBe(2);
+    expect(manifest.version).toBe(3);
     // Thumbnails stay out: the backfill rebuilds them from the restored file.
     expect(manifest.photos[0]).not.toHaveProperty('thumbUri');
     expect(Object.keys(manifest.photos[1]).sort()).toEqual(
@@ -635,5 +635,65 @@ describe('pickPhotosFromLibrary', () => {
     expect(ImagePicker.launchImageLibraryAsync).toHaveBeenLastCalledWith(
       expect.objectContaining({ allowsMultipleSelection: false }),
     );
+  });
+});
+
+describe('weights in a backup (manifest version 3)', () => {
+  function pickBackup(uri: string) {
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({ canceled: false, assets: [{ uri }] });
+  }
+
+  async function restoreManifest(manifest: Record<string, unknown>) {
+    const zip = new JSZip();
+    zip.file('manifest.json', JSON.stringify({ photos: [], ...manifest }));
+    fileStore.set('file:///cache/backup.rewind', await zip.generateAsync({ type: 'base64' }));
+    pickBackup('file:///cache/backup.rewind');
+    return importFromBackup('album-2');
+  }
+
+  it("round-trips an album's weights and goal into the album restored into", async () => {
+    fileStore.set('file:///a.jpg', 'QUJD');
+    const weights: WeightEntry[] = [
+      { albumId: 'album-1', date: '2026-03-01', value: 180.4, unit: 'lb', updatedAt: '2026-03-01T08:00:00.000Z' },
+      { albumId: 'album-1', date: '2026-03-02', value: 81.5, unit: 'kg', updatedAt: '2026-03-02T08:00:00.000Z' },
+    ];
+    const { filePath } = await exportToBackup([makePhoto()], 'Daily', () => {}, { cancelled: false }, {
+      weights, weightGoal: { value: 170, unit: 'lb' },
+    });
+    const zip = await JSZip.loadAsync(fileStore.get(filePath)!, { base64: true });
+    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+    expect(manifest.weights[0]).toEqual({ date: '2026-03-01', value: 180.4, unit: 'lb', updatedAt: '2026-03-01T08:00:00.000Z' });
+
+    pickBackup(filePath);
+    const result = await importFromBackup('album-2');
+    expect(result.weights).toEqual(weights.map((w) => ({ ...w, albumId: 'album-2' })));
+    expect(result.weightGoal).toEqual({ value: 170, unit: 'lb' });
+  });
+
+  it('drops malformed weights and keeps the rest', async () => {
+    const result = await restoreManifest({
+      version: 3,
+      weights: [
+        { date: '2026-03-01', value: 180, unit: 'lb', updatedAt: '2026-03-01T08:00:00.000Z' },
+        { date: '2026-03-01', value: 150, unit: 'lb' }, // a second entry for the day
+        { date: '2026-02-30', value: 180, unit: 'lb' }, // not a real day
+        { date: '2026-03-03', value: '180', unit: 'lb' },
+        { date: '2026-03-04', value: 180, unit: 'stone' },
+        { date: '2026-03-05', value: 9000, unit: 'lb' },
+        null,
+        'junk',
+        { date: '2026-03-06', value: 80, unit: 'kg', updatedAt: 'whenever' }, // a bad time is replaced, not fatal
+      ],
+      weightGoal: { value: -5, unit: 'kg' },
+    });
+    expect(result.weights.map((w) => [w.date, w.value])).toEqual([['2026-03-01', 180], ['2026-03-06', 80]]);
+    expect(Number.isFinite(Date.parse(result.weights[1].updatedAt))).toBe(true);
+    expect(result).not.toHaveProperty('weightGoal');
+  });
+
+  it('restores a version 1 or 2 backup with no weights, and a weights field that is not a list as none', async () => {
+    await expect(restoreManifest({ version: 2 })).resolves.toMatchObject({ weights: [] });
+    await expect(restoreManifest({ version: 1 })).resolves.toMatchObject({ weights: [] });
+    await expect(restoreManifest({ version: 3, weights: { '2026-03-01': 180 } })).resolves.toMatchObject({ weights: [] });
   });
 });

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState } from 'react-native';
 import { File } from 'expo-file-system';
-import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
-import { loadAll, savePhotos, saveProfile, saveSettings, saveAlbums, clearAllData, getDefaultSettings, type StoredData } from '@/utils/storage';
-import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS } from '@/constants/mockData';
+import type { PhotoEntry, UserProfile, AppSettings, Album, WeightEntry, WeightValue } from '@/types';
+import { loadAll, savePhotos, saveProfile, saveSettings, saveAlbums, saveWeights, clearAllData, getDefaultSettings, type StoredData } from '@/utils/storage';
+import { USE_MOCK_DATA, MOCK_PHOTOS, MOCK_PROFILE, MOCK_SETTINGS, MOCK_WEIGHTS } from '@/constants/mockData';
+import { isValidWeight, weightKey } from '@/utils/weight';
 import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { notify } from '@/utils/notify';
 import { useToday } from '@/hooks/useToday';
@@ -16,6 +17,9 @@ import { getToday, byDate } from '@/utils/dates';
 const DEFAULT_ALBUMS: Album[] = [];
 
 const photoKey = (p: PhotoEntry) => `${p.albumId}:${p.date}`;
+
+// Weights in the order they load in: by date, then album.
+const byDateThenAlbum = (a: WeightEntry, b: WeightEntry) => byDate(a, b) || (a.albumId < b.albumId ? -1 : a.albumId > b.albumId ? 1 : 0);
 
 // A photo's files on disk: the photo itself and its thumbnail.
 const filesOf = (p: PhotoEntry) => [p.imageUri, p.thumbUri];
@@ -41,6 +45,8 @@ interface AppContextValue {
   profile: UserProfile;
   settings: AppSettings;
   albums: Album[];
+  /** Every album's weights, by date. */
+  weights: WeightEntry[];
   /** Today's local date, updated at midnight and on returning to the foreground. */
   today: string;
   isLoading: boolean;
@@ -55,6 +61,11 @@ interface AppContextValue {
   addAlbum: (album: Album) => void;
   updateAlbum: (id: string, updates: Partial<Album>) => void;
   deleteAlbum: (id: string) => void;
+  /** Sets an album's weight for a day, replacing any already there. Resolves with whether it saved; false for an invalid weight. */
+  setWeight: (albumId: string, date: string, weight: WeightValue) => Promise<boolean>;
+  deleteWeight: (albumId: string, date: string) => Promise<boolean>;
+  /** Adds weights (a backup restore), skipping days their album already has and invalid ones. */
+  addWeights: (entries: WeightEntry[]) => { added: number; skipped: number };
   resetAllData: () => Promise<void>;
   seedMockPhotos: (albumId?: string) => void;
   unlockedAlbumIds: Set<string>;
@@ -71,6 +82,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(newProfile);
   const [settings, setSettings] = useState<AppSettings>(getDefaultSettings());
   const [albums, setAlbums] = useState<Album[]>(DEFAULT_ALBUMS);
+  const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [unlockedAlbumIds, setUnlockedAlbumIds] = useState<Set<string>>(new Set());
   const today = useToday();
@@ -94,6 +106,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setAlbumsNow = useCallback((next: Album[]) => {
     albumsRef.current = next;
     setAlbums(next);
+  }, []);
+
+  // Weights change only on user actions too, and the same way, so an album delete can save its
+  // weights in the album's transaction.
+  const weightsRef = useRef<WeightEntry[]>([]);
+  const setWeightsNow = useCallback((next: WeightEntry[]) => {
+    weightsRef.current = next;
+    setWeights(next);
   }, []);
 
   // Unlocks are memory-only: a restart, or a while in the background, locks albums again.
@@ -185,10 +205,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAlbumsNow([mockAlbum]);
         void saveAlbums([mockAlbum]);
       }
+
+      if (stored.weights.length > 0) {
+        setWeightsNow(stored.weights);
+      } else if (USE_MOCK_DATA && stored.photos.length === 0) {
+        setWeightsNow(MOCK_WEIGHTS);
+        void saveWeights(MOCK_WEIGHTS);
+      }
       setIsLoading(false);
     }
     init();
-  }, [setAlbumsNow]);
+  }, [setAlbumsNow, setWeightsNow]);
 
   // Applies one change to the photos and saves it. Resolves with whether the save reached
   // storage; files an update removes are deleted only after that (see deleteUnreferencedFiles).
@@ -325,19 +352,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updates.isLocked === true) forgetUnlock(id);
   }, [setAlbumsNow, forgetUnlock]);
 
+  const commitWeights = useCallback((next: WeightEntry[]): Promise<boolean> => {
+    setWeightsNow(next);
+    return saveWeights(next);
+  }, [setWeightsNow]);
+
+  const setWeight = useCallback((albumId: string, date: string, weight: WeightValue): Promise<boolean> => {
+    if (!isValidWeight(weight)) return Promise.resolve(false);
+    const entry: WeightEntry = { albumId, date, value: weight.value, unit: weight.unit, updatedAt: new Date().toISOString() };
+    const key = weightKey(entry);
+    const next = [...weightsRef.current.filter(w => weightKey(w) !== key), entry].sort(byDateThenAlbum);
+    return commitWeights(next);
+  }, [commitWeights]);
+
+  const deleteWeight = useCallback((albumId: string, date: string): Promise<boolean> => {
+    const key = weightKey({ albumId, date });
+    const next = weightsRef.current.filter(w => weightKey(w) !== key);
+    if (next.length === weightsRef.current.length) return Promise.resolve(true);
+    return commitWeights(next);
+  }, [commitWeights]);
+
+  const addWeights = useCallback((entries: WeightEntry[]): { added: number; skipped: number } => {
+    const seen = new Set(weightsRef.current.map(weightKey));
+    const fresh: WeightEntry[] = [];
+    for (const e of entries) {
+      if (!isValidWeight(e) || seen.has(weightKey(e))) continue;
+      seen.add(weightKey(e));
+      fresh.push(e);
+    }
+    if (fresh.length > 0) void commitWeights([...weightsRef.current, ...fresh].sort(byDateThenAlbum));
+    return { added: fresh.length, skipped: entries.length - fresh.length };
+  }, [commitWeights]);
+
   const deleteAlbum = useCallback((id: string) => {
     if (albumsRef.current.length <= 1) return;
     const nextAlbums = albumsRef.current.filter(a => a.id !== id);
+    const nextWeights = weightsRef.current.filter(w => w.albumId !== id);
+    const weightsChanged = nextWeights.length !== weightsRef.current.length;
     setAlbumsNow(nextAlbums);
+    if (weightsChanged) setWeightsNow(nextWeights);
     cancelAlbumReminder(id);
     forgetUnlock(id);
-    // The album and its photos save in the same tick, so they share one transaction: both go or
-    // neither. Both saves are requested from the photo updater, which React may run now or at
-    // the next render; saving the album from its own updater could land a flush apart.
+    // The album, its weights and its photos save in the same tick, so they share one transaction:
+    // all go or none. The saves are requested from the photo updater, which React may run now or
+    // at the next render; saving the album from its own updater could land a flush apart.
     let removed: PhotoEntry[] = [];
     new Promise<boolean>((resolve) => {
       setPhotos(prev => {
         void saveAlbums(nextAlbums);
+        if (weightsChanged) void saveWeights(nextWeights);
         removed = prev.filter(p => p.albumId === id);
         if (removed.length === 0) {
           resolve(true);
@@ -350,21 +413,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).then(saved => {
       if (saved) deleteUnreferencedFiles(removed, photosRef.current);
     });
-  }, [setAlbumsNow, forgetUnlock]);
+  }, [setAlbumsNow, setWeightsNow, forgetUnlock]);
 
   const resetAllData = useCallback(async () => {
-    const before = { photos: photosRef.current, albums: albumsRef.current, profile: profileRef.current, settings: settingsRef.current };
+    const before = { photos: photosRef.current, albums: albumsRef.current, weights: weightsRef.current, profile: profileRef.current, settings: settingsRef.current };
     // Emptied in the same tick as the clear, so a change made meanwhile (a backfill's batch, say)
     // builds on the empty app and can't write the old rows back.
     const cleared = clearAllData();
     setPhotos([]);
     setAlbumsNow([]);
+    setWeightsNow([]);
     setProfile(newProfile());
     setSettings(getDefaultSettings());
     if (!(await cleared)) {
       // Every row is still stored (storage has said so): show them again, and keep their files.
       setPhotos(before.photos);
       setAlbumsNow(before.albums);
+      setWeightsNow(before.weights);
       setProfile(before.profile);
       setSettings(before.settings);
       return;
@@ -376,7 +441,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     // The albums are gone, so are their reminders.
     await cancelAllReminders();
-  }, [setAlbumsNow]);
+  }, [setAlbumsNow, setWeightsNow]);
 
   const seedMockPhotos = useCallback((albumId?: string) => {
     // Generate 7 mock photos: today back through last 6 days
@@ -450,6 +515,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     profile,
     settings,
     albums,
+    weights,
     today,
     isLoading,
     addPhoto,
@@ -462,11 +528,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addAlbum,
     updateAlbum,
     deleteAlbum,
+    setWeight,
+    deleteWeight,
+    addWeights,
     resetAllData,
     seedMockPhotos,
     unlockedAlbumIds,
     unlockAlbum,
-  }), [photos, profile, settings, albums, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
+  }), [photos, profile, settings, albums, weights, today, isLoading, addPhoto, addPhotos, updatePhoto, updatePhotos, deletePhoto, handleUpdateProfile, handleUpdateSettings, addAlbum, updateAlbum, deleteAlbum, setWeight, deleteWeight, addWeights, resetAllData, seedMockPhotos, unlockedAlbumIds, unlockAlbum]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -83,3 +83,60 @@ describe('deleting a photo', () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
   });
 });
+
+describe("the day's weight", () => {
+  const logged = { albumId: 'a', date: '2026-03-05', value: 80, unit: 'kg' as const, updatedAt: '2026-03-05T08:00:00.000Z' };
+  const renderModal = (weight: typeof logged | undefined, onSetWeight = jest.fn()) => render(
+    <FontProvider>
+      <PhotoModal visible photos={[photo]} initialIndex={0} joinDate="2026-01-01" onClose={jest.fn()} onDelete={jest.fn()} onUpdateCaption={jest.fn()}
+        weightFor={(d) => (d === logged.date ? weight : undefined)} unit="lb" onSetWeight={onSetWeight} />
+    </FontProvider>,
+  );
+
+  it('shows in the chosen unit, and an edit saves in it', async () => {
+    const onSetWeight = jest.fn();
+    await renderModal(logged, onSetWeight);
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Edit weight' })));
+    expect(screen.getByDisplayValue('176.4')).toBeTruthy();
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Weight in lb'), '175'));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Save weight' })));
+    expect(onSetWeight).toHaveBeenCalledWith('2026-03-05', { value: 175, unit: 'lb' });
+  });
+
+  it('offers to add one on a day without, and keeps the field open on a bad value', async () => {
+    const onSetWeight = jest.fn();
+    await renderModal(undefined, onSetWeight);
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Add weight' })));
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Weight in lb'), '2'));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Save weight' })));
+    expect(onSetWeight).not.toHaveBeenCalled();
+    expect(screen.getByText('enter a weight between 20–500 lb')).toBeTruthy();
+  });
+
+  it("saves nothing when the weight wasn't changed", async () => {
+    const onSetWeight = jest.fn();
+    await renderModal(logged, onSetWeight);
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Edit weight' })));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Save weight' })));
+    expect(onSetWeight).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Edit weight' })).toBeTruthy();
+  });
+
+  it('emptying the field deletes the weight', async () => {
+    const onSetWeight = jest.fn();
+    await renderModal(logged, onSetWeight);
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Edit weight' })));
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Weight in lb'), ''));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Save weight' })));
+    expect(onSetWeight).toHaveBeenCalledWith('2026-03-05', null);
+  });
+
+  it("isn't shown without a way to save it", async () => {
+    await render(
+      <FontProvider>
+        <PhotoModal visible photos={[photo]} initialIndex={0} joinDate="2026-01-01" onClose={jest.fn()} onDelete={jest.fn()} onUpdateCaption={jest.fn()} />
+      </FontProvider>,
+    );
+    expect(screen.queryByRole('button', { name: 'Add weight' })).toBeNull();
+  });
+});

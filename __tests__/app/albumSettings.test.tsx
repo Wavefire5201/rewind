@@ -5,13 +5,16 @@ import { render, screen, fireEvent, act } from '@testing-library/react-native';
 import AlbumSettingsRoute from '@/app/album/settings';
 import { getNotices, resetNoticesForTests } from '@/utils/notify';
 import { FontProvider } from '@/context/FontContext';
-import type { Album, PhotoEntry } from '@/types';
+import type { Album, PhotoEntry, WeightEntry } from '@/types';
 
 const mockUpdateAlbum = jest.fn();
 const mockDeleteAlbum = jest.fn();
 const mockAddPhotos = jest.fn((entries: PhotoEntry[]) => ({ added: entries.length, skipped: 0 }));
 const mockUpdateProfile = jest.fn();
 const mockImportFromBackup = jest.fn();
+const mockAddWeights = jest.fn((entries: unknown[] = []) => ({ added: entries.length, skipped: 0 }));
+let mockWeights: WeightEntry[] = [];
+const mockTextInputModal = jest.fn();
 type ImportSaveEntry = { uri: string; date: string; caption: string };
 let mockImportModal: { onSave: (entries: ImportSaveEntry[]) => Promise<void> } | null = null;
 const mockDismissAll = jest.fn();
@@ -35,8 +38,8 @@ const album = (id: string, overrides: Partial<Album> = {}): Album => ({
 
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
-    profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: mockPhotos, settings: { use24hClock: false },
-    addPhotos: mockAddPhotos, updateProfile: mockUpdateProfile, updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
+    profile: { joinDate: '2026-01-01' }, albums: mockAlbums, photos: mockPhotos, settings: { use24hClock: false, units: 'imperial' },
+    weights: mockWeights, addWeights: mockAddWeights, addPhotos: mockAddPhotos, updateProfile: mockUpdateProfile, updateAlbum: mockUpdateAlbum, deleteAlbum: mockDeleteAlbum,
   }),
 }));
 jest.mock('@/hooks/useAlbumLock', () => ({ useAlbumLock: () => ({ isAlbumLocked: () => false, unlockAlbum: jest.fn() }) }));
@@ -82,7 +85,7 @@ jest.mock('@/components/ui/PinModal', () => (props: unknown) => { mockPinModal(p
 const pinProps = () => mockPinModal.mock.calls.at(-1)?.[0] as { visible: boolean; onSuccess: () => void };
 const Haptics = jest.requireMock('expo-haptics') as { impactAsync: jest.Mock; notificationAsync: jest.Mock };
 jest.mock('@/components/ui/TimePicker', () => () => null);
-jest.mock('@/components/ui/TextInputModal', () => () => null);
+jest.mock('@/components/ui/TextInputModal', () => (props: unknown) => { mockTextInputModal(props); return null; });
 jest.mock('@/components/timelapse/ExportSheet', () => ({ __esModule: true, default: (props: unknown) => { mockExportSheet(props); return null; } }));
 const mockProgress = jest.fn();
 jest.mock('@/components/timelapse/ExportProgress', () => (props: unknown) => { mockProgress(props); return null; });
@@ -96,6 +99,7 @@ beforeEach(() => {
   mockHasPin = true;
   mockAlbums = [album('a'), album('b', { name: 'second' })];
   mockPhotos = [];
+  mockWeights = [];
   mockConfirm.mockResolvedValue(false);
   mockPermissionGranted = true;
   resetNoticesForTests();
@@ -346,4 +350,53 @@ it('cancelling an export or import plays no haptic of its own (the cancel button
   Haptics.impactAsync.mockClear();
   cancels.forEach((cancel) => cancel());
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
+});
+
+describe('weight', () => {
+  type ModalProps = { visible: boolean; title: string; defaultValue: string; validate: (t: string) => string | null; onConfirm: (t: string) => void };
+  const goalModal = () => mockTextInputModal.mock.calls.map((c) => c[0] as ModalProps).filter((p) => p.title === 'weight goal').at(-1)!;
+
+  it('sets a goal in the app unit, checks it, and clears it when emptied', async () => {
+    mockAlbums = [album('a', { weightGoal: { value: 80, unit: 'kg' } }), album('b')];
+    await renderSettings();
+    expect(screen.getByText('176.4 lb')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByLabelText('Set weight goal')));
+    expect(goalModal()).toEqual(expect.objectContaining({ visible: true, defaultValue: '176.4' }));
+    expect(goalModal().validate('9000')).toBe('enter a weight between 20–500 lb');
+    expect(goalModal().validate('165')).toBeNull();
+    await act(async () => goalModal().onConfirm('165'));
+    expect(mockUpdateAlbum).toHaveBeenCalledWith('a', { weightGoal: { value: 165, unit: 'lb' } });
+    await act(async () => goalModal().onConfirm(''));
+    expect(mockUpdateAlbum).toHaveBeenLastCalledWith('a', { weightGoal: undefined });
+  });
+
+  it("puts this album's weights and goal in its backup", async () => {
+    const w = (albumId: string): WeightEntry => ({ albumId, date: '2026-03-01', value: 180, unit: 'lb', updatedAt: '2026-03-01T08:00:00.000Z' });
+    mockWeights = [w('a'), w('b')];
+    mockAlbums = [album('a', { weightGoal: { value: 170, unit: 'lb' } }), album('b')];
+    mockPhotos = [{ id: 'p1', albumId: 'a', date: '2026-03-01', imageUri: 'file:///a.jpg' } as PhotoEntry];
+    mockExportToBackup.mockResolvedValue({ filePath: 'file:///cache/daily.rewind', exported: 1, skipped: 0 });
+    await renderSettings();
+    const sheet = mockExportSheet.mock.calls.at(-1)?.[0] as { onSelect: (f: string) => Promise<void> };
+    await act(async () => sheet.onSelect('backup'));
+    expect(mockExportToBackup.mock.calls[0][4]).toEqual({ weights: [mockWeights[0]], weightGoal: { value: 170, unit: 'lb' } });
+  });
+
+  it("restores a backup's weights, and its goal only into an album without one", async () => {
+    const weights = [{ albumId: 'a', date: '2026-03-01', value: 180, unit: 'lb', updatedAt: 'x' }];
+    mockImportFromBackup.mockResolvedValueOnce({ photos: [], skipped: 0, unreadable: 0, weights, weightGoal: { value: 170, unit: 'lb' } });
+    await renderSettings();
+    await act(async () => sheetProps().onSelect('backup'));
+    expect(mockAddWeights).toHaveBeenCalledWith(weights);
+    expect(mockUpdateAlbum).toHaveBeenCalledWith('a', { weightGoal: { value: 170, unit: 'lb' } });
+    expect(lastNotice()).toEqual(['import complete', 'no photos found in the backup file. 1 weight restored.']);
+
+    mockUpdateAlbum.mockClear();
+    mockAlbums = [album('a', { weightGoal: { value: 160, unit: 'lb' } }), album('b')];
+    mockImportFromBackup.mockResolvedValueOnce({ photos: [{ id: 'r1', albumId: 'a', date: '2025-03-10' }], skipped: 0, unreadable: 0, weights, weightGoal: { value: 170, unit: 'lb' } });
+    await renderSettings();
+    await act(async () => sheetProps().onSelect('backup'));
+    expect(mockUpdateAlbum).not.toHaveBeenCalled();
+    expect(lastNotice()).toEqual(['import complete', '1 photo restored. 1 weight restored.']);
+  });
 });

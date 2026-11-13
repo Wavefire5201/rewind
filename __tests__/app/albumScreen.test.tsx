@@ -6,6 +6,13 @@ import type { PhotoEntry } from '@/types';
 
 let mockAvailable = true;
 const mockCard = jest.fn();
+const mockWeightSheet = jest.fn();
+const mockSetWeight = jest.fn(async () => true);
+const mockDeleteWeight = jest.fn(async () => true);
+const mockWeights = [
+  { albumId: 'a', date: '2026-10-01', value: 80, unit: 'kg', updatedAt: '2026-10-01T08:00:00.000Z' },
+  { albumId: 'b', date: '2026-10-01', value: 30, unit: 'kg', updatedAt: '2026-10-01T08:00:00.000Z' },
+];
 const mockModal = jest.fn();
 const mockGrid = jest.fn();
 const mockSheet = jest.fn();
@@ -18,7 +25,8 @@ const mockCreateEntry = jest.fn(async (uri: string, date: string, caption: strin
 const photos: PhotoEntry[] = [{ id: 'p1', albumId: 'a', date: '2026-10-01', imageUri: 'file:///1.jpg', caption: '', capturedAt: '', cameraDirection: 'front' }];
 
 jest.mock('@/utils/faceScan', () => ({ isFaceScanAvailable: () => mockAvailable, needsFaceScan: () => false }));
-jest.mock('@/components/face/FaceTrendCard', () => (props: unknown) => { mockCard(props); return null; });
+jest.mock('@/components/timeline/TrendCard', () => (props: unknown) => { mockCard(props); return null; });
+jest.mock('@/components/weight/WeightSheet', () => (props: unknown) => { mockWeightSheet(props); return null; });
 jest.mock('@/components/timeline/PhotoModal', () => (props: unknown) => { mockModal(props); return null; });
 jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ photos, getPhotosByMonth: () => photos }) }));
 jest.mock('@/hooks/useStreak', () => ({ useStreak: () => ({ currentStreak: 1, consistency: 100 }) }));
@@ -30,7 +38,7 @@ jest.mock('@/hooks/useThumbnailBackfill', () => ({ useThumbnailBackfill: (...arg
 jest.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
     profile: { joinDate: '2026-01-01' }, albums: [{ id: 'a', name: 'daily', createdAt: '2026-01-01' }],
-    addPhoto: mockAddPhoto, addPhotos: mockAddPhotos, updatePhoto: jest.fn(), deletePhoto: jest.fn(), updateProfile: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
+    weights: mockWeights, settings: { units: 'imperial' }, today: '2026-10-16', setWeight: mockSetWeight, deleteWeight: mockDeleteWeight, addPhoto: mockAddPhoto, addPhotos: mockAddPhotos, updatePhoto: jest.fn(), deletePhoto: jest.fn(), updateProfile: jest.fn(), updateAlbum: jest.fn(), deleteAlbum: jest.fn(),
   }),
 }));
 jest.mock('expo-router', () => ({
@@ -68,11 +76,51 @@ it('shows the face card and the photo readout when the face scanner is available
   expect(typeof (mockModal.mock.calls.at(-1)?.[0] as { readout?: unknown }).readout).toBe('function');
 });
 
-it('hides the face card and the readout without the face scanner (Expo Go, unbuilt iOS)', async () => {
+it('keeps only the weight half of the card, and drops the readout, without the face scanner (Expo Go, unbuilt iOS)', async () => {
   mockAvailable = false;
   await renderScreen();
-  expect(mockCard).not.toHaveBeenCalled();
+  expect(mockCard.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ face: null }));
   expect((mockModal.mock.calls.at(-1)?.[0] as { readout?: unknown }).readout).toBeUndefined();
+});
+
+describe('weights', () => {
+  type CardProps = { weights: unknown[]; unit: string; onLogWeight: (date?: string) => void };
+  type SheetProps = { visible: boolean; date: string; onSave: (d: string, w: unknown) => void; onDelete: (d: string) => void };
+  const card = () => mockCard.mock.calls.at(-1)?.[0] as CardProps;
+  const sheet = () => mockWeightSheet.mock.calls.at(-1)?.[0] as SheetProps;
+
+  it("gives the card this album's weights only, in the app's unit", async () => {
+    await renderScreen();
+    expect(card().weights).toEqual([mockWeights[0]]);
+    expect(card().unit).toBe('lb');
+  });
+
+  it('+ log opens the sheet on today, and a tapped chart day on that day', async () => {
+    await renderScreen();
+    expect(sheet().visible).toBe(false);
+    await act(async () => card().onLogWeight());
+    expect(sheet()).toEqual(expect.objectContaining({ visible: true, date: '2026-10-16' }));
+    await act(async () => sheet().onSave('2026-10-16', { value: 170, unit: 'lb' }));
+    expect(mockSetWeight).toHaveBeenCalledWith('a', '2026-10-16', { value: 170, unit: 'lb' });
+    expect(sheet().visible).toBe(false);
+
+    await act(async () => card().onLogWeight('2026-10-01'));
+    expect(sheet()).toEqual(expect.objectContaining({ visible: true, date: '2026-10-01' }));
+    await act(async () => sheet().onDelete('2026-10-01'));
+    expect(mockDeleteWeight).toHaveBeenCalledWith('a', '2026-10-01');
+  });
+
+  it("lets the photo viewer show and change the day's weight", async () => {
+    await renderScreen();
+    const modal = mockModal.mock.calls.at(-1)?.[0] as {
+      weightFor: (d: string) => unknown; onSetWeight: (d: string, w: unknown) => void;
+    };
+    expect(modal.weightFor('2026-10-01')).toBe(mockWeights[0]);
+    await act(async () => modal.onSetWeight('2026-10-01', { value: 79, unit: 'kg' }));
+    expect(mockSetWeight).toHaveBeenCalledWith('a', '2026-10-01', { value: 79, unit: 'kg' });
+    await act(async () => modal.onSetWeight('2026-10-01', null));
+    expect(mockDeleteWeight).toHaveBeenCalledWith('a', '2026-10-01');
+  });
 });
 
 it('labels a one-photo album "photo", not "photos"', async () => {

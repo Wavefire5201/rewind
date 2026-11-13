@@ -1,13 +1,18 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { PhotoEntry, UserProfile, AppSettings, Album } from '@/types';
-import { getDb, photoToRow, rowToPhoto, albumToRow, rowToAlbum, PHOTO_COLUMNS, ALBUM_COLUMNS, type PhotoRow, type AlbumRow } from '@/utils/db';
+import { getLocales } from 'expo-localization';
+import type { PhotoEntry, UserProfile, AppSettings, Album, WeightEntry } from '@/types';
+import {
+  getDb, photoToRow, rowToPhoto, albumToRow, rowToAlbum, weightToRow, rowToWeight, PHOTO_COLUMNS, ALBUM_COLUMNS, WEIGHT_COLUMNS,
+  type PhotoRow, type AlbumRow, type WeightRow,
+} from '@/utils/db';
 import { notify } from '@/utils/notify';
+import { isValidWeight, weightKey } from '@/utils/weight';
 
 /**
  * The persistence layer behind AppContext (read and write app data through AppContext, not here).
  *
  * Everything loads once at launch. Saves take the whole new state of a slice (photos, albums,
- * profile, settings), but write only what changed: each flush diffs the slice against the last
+ * weights, profile, settings), but write only what changed: each flush diffs the slice against the last
  * state that reached the database, by object identity (state updates are immutable, so a changed
  * photo is a new object), and upserts or deletes just those rows. Saves made in the same tick share
  * one flush and one transaction, so e.g. an album and its photos are deleted together or not at
@@ -26,12 +31,24 @@ export function getDefaultSettings(): AppSettings {
     mirrorSelfies: true,
     use24hClock: false,
     alignFaces: true,
+    units: defaultUnits(),
   };
+}
+
+/** Imperial where the device's locale measures in US units, metric everywhere else. */
+function defaultUnits(): AppSettings['units'] {
+  try {
+    return getLocales()[0]?.measurementSystem === 'us' ? 'imperial' : 'metric';
+  } catch {
+    return 'metric';
+  }
 }
 
 export interface StoredData {
   photos: PhotoEntry[];
   albums: Album[];
+  /** By date, then album. */
+  weights: WeightEntry[];
   profile: UserProfile | null;
   settings: AppSettings;
 }
@@ -40,6 +57,7 @@ interface Pending {
   clear?: boolean;
   photos?: readonly PhotoEntry[];
   albums?: readonly Album[];
+  weights?: readonly WeightEntry[];
   profile?: UserProfile;
   settings?: AppSettings;
 }
@@ -47,6 +65,7 @@ interface Pending {
 // What the database holds, as the objects that were written (or loaded).
 let committedPhotos = new Map<string, PhotoEntry>();
 let committedAlbums = new Map<string, { album: Album; position: number }>();
+let committedWeights = new Map<string, WeightEntry>();
 let committedProfile: UserProfile | null = null;
 let committedSettings: AppSettings | null = null;
 
@@ -63,6 +82,8 @@ const upsertSql = (table: string, columns: string[]) =>
   + `ON CONFLICT(id) DO UPDATE SET ${columns.filter((c) => c !== 'id').map((c) => `${c} = excluded.${c}`).join(', ')}`;
 const UPSERT_PHOTO = upsertSql('photos', PHOTO_COLUMNS);
 const UPSERT_ALBUM = upsertSql('albums', ALBUM_COLUMNS);
+const UPSERT_WEIGHT = `INSERT INTO weights (${WEIGHT_COLUMNS.join(', ')}) VALUES (${WEIGHT_COLUMNS.map(() => '?').join(', ')}) `
+  + `ON CONFLICT(album_id, date) DO UPDATE SET ${WEIGHT_COLUMNS.filter((c) => c !== 'album_id' && c !== 'date').map((c) => `${c} = excluded.${c}`).join(', ')}`;
 const UPSERT_KV = 'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 const FILL_KV = 'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING';
 
@@ -76,27 +97,34 @@ function parseJson<T>(text: string | undefined, what: string): T | null {
   }
 }
 
-/** Reads everything once: photos by date, albums in the user's order, profile, settings over their defaults. */
+/** Reads everything once: photos and weights by date, albums in the user's order, profile, settings over their defaults. */
 export async function loadAll(): Promise<StoredData> {
   const db = await getDb();
-  const [photoRows, albumRows, kvRows] = await Promise.all([
+  const [photoRows, albumRows, weightRows, kvRows] = await Promise.all([
     db.getAllAsync<PhotoRow>('SELECT * FROM photos ORDER BY date, album_id'),
     db.getAllAsync<AlbumRow>('SELECT * FROM albums ORDER BY position'),
+    db.getAllAsync<WeightRow>('SELECT * FROM weights ORDER BY date, album_id'),
     db.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM kv'),
   ]);
   const kv = new Map(kvRows.map((r) => [r.key, r.value]));
   const photos = photoRows.map(rowToPhoto);
   const albums = albumRows.map(rowToAlbum);
+  // A row that isn't a weight (a bad unit, say) is left out rather than shown wrong. It stays
+  // stored until that day is saved again.
+  const allWeights = weightRows.map(rowToWeight);
+  const weights = allWeights.filter(isValidWeight);
+  if (weights.length < allWeights.length) console.warn(`loadAll: ${allWeights.length - weights.length} unreadable weights, left out`);
   const profile = parseJson<UserProfile>(kv.get('profile'), 'profile');
   const storedSettings = parseJson<Partial<AppSettings>>(kv.get('settings'), 'settings');
   const settings = { ...getDefaultSettings(), ...storedSettings };
 
   committedPhotos = new Map(photos.map((p) => [p.id, p]));
   committedAlbums = new Map(albums.map((a, position) => [a.id, { album: a, position }]));
+  committedWeights = new Map(weights.map((w) => [weightKey(w), w]));
   committedProfile = profile;
   committedSettings = settings;
   loaded = true;
-  return { photos, albums, profile, settings };
+  return { photos, albums, weights, profile, settings };
 }
 
 /** Saves the photos' new state, writing only changed rows. Resolves with whether it reached storage. */
@@ -108,6 +136,11 @@ export function saveAlbums(albums: readonly Album[]): Promise<boolean> {
   return request({ albums });
 }
 
+/** Saves every album's weights, writing only changed entries. */
+export function saveWeights(weights: readonly WeightEntry[]): Promise<boolean> {
+  return request({ weights });
+}
+
 export function saveProfile(profile: UserProfile): Promise<boolean> {
   return request({ profile });
 }
@@ -116,7 +149,7 @@ export function saveSettings(settings: AppSettings): Promise<boolean> {
   return request({ settings });
 }
 
-/** Deletes every photo, album, profile and setting; saves after it start from empty. */
+/** Deletes every photo, album, weight, profile and setting; saves after it start from empty. */
 export function clearAllData(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     // Anything not yet written is about to be wiped anyway.
@@ -178,14 +211,16 @@ async function runFlushes(): Promise<void> {
 async function flush(batch: Pending): Promise<boolean> {
   let photos = batch.clear ? new Map<string, PhotoEntry>() : committedPhotos;
   let albums = batch.clear ? new Map<string, { album: Album; position: number }>() : committedAlbums;
+  let weights = batch.clear ? new Map<string, WeightEntry>() : committedWeights;
   let profile = batch.clear ? null : committedProfile;
   let settings = batch.clear ? null : committedSettings;
   try {
     const db = await getDb();
     await db.withTransactionAsync(async () => {
-      if (batch.clear) await db.execAsync('DELETE FROM photos; DELETE FROM albums; DELETE FROM kv;');
+      if (batch.clear) await db.execAsync('DELETE FROM photos; DELETE FROM albums; DELETE FROM weights; DELETE FROM kv;');
       if (batch.photos) photos = await writePhotos(db, photos, batch.photos);
       if (batch.albums) albums = await writeAlbums(db, albums, batch.albums);
+      if (batch.weights) weights = await writeWeights(db, weights, batch.weights);
       const kvSql = loaded || batch.clear ? UPSERT_KV : FILL_KV;
       if (batch.profile && batch.profile !== profile) {
         await db.runAsync(kvSql, 'profile', JSON.stringify(batch.profile));
@@ -204,6 +239,7 @@ async function flush(batch: Pending): Promise<boolean> {
   }
   committedPhotos = photos;
   committedAlbums = albums;
+  committedWeights = weights;
   committedProfile = profile;
   committedSettings = settings;
   if (batch.clear) loaded = true;
@@ -255,6 +291,35 @@ async function writeAlbums(db: SQLiteDatabase, committed: Map<string, { album: A
   return next;
 }
 
+async function writeWeights(db: SQLiteDatabase, committed: Map<string, WeightEntry>, weights: readonly WeightEntry[]) {
+  const next = new Map<string, WeightEntry>();
+  const changed: WeightEntry[] = [];
+  for (const w of weights) {
+    const key = weightKey(w);
+    next.set(key, w);
+    if (committed.get(key) !== w) changed.push(w);
+  }
+  if (changed.length > 0) {
+    const upsert = await db.prepareAsync(UPSERT_WEIGHT);
+    try {
+      for (const w of changed) {
+        const row = weightToRow(w);
+        await upsert.executeAsync(WEIGHT_COLUMNS.map((c) => row[c]));
+      }
+    } finally {
+      await upsert.finalizeAsync();
+    }
+  }
+  const removed = [...committed.values()].filter((w) => !next.has(weightKey(w)));
+  if (removed.length > 0) {
+    await db.runAsync(
+      "DELETE FROM weights WHERE album_id || ':' || date IN (SELECT value FROM json_each(?))",
+      JSON.stringify(removed.map(weightKey)),
+    );
+  }
+  return next;
+}
+
 // One statement however many rows: deleting a 2,000-photo album is one call, not 2,000.
 async function deleteRows(db: SQLiteDatabase, table: 'photos' | 'albums', ids: string[]) {
   if (ids.length > 0) await db.runAsync(`DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`, JSON.stringify(ids));
@@ -263,6 +328,7 @@ async function deleteRows(db: SQLiteDatabase, table: 'photos' | 'albums', ids: s
 export function resetStorageForTests(): void {
   committedPhotos = new Map();
   committedAlbums = new Map();
+  committedWeights = new Map();
   committedProfile = null;
   committedSettings = null;
   pending = {};
