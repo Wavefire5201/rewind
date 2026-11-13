@@ -6,6 +6,7 @@ import { Colors, Fonts, Pressed, Spacing } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
 import { haptics } from '@/utils/haptics';
 import { formatDateLabel } from '@/utils/dates';
+import { shiftDay } from '@/utils/days';
 import { parseWeightInput, validRangeText, weightInputText } from '@/utils/weight';
 import type { WeightEntry, WeightUnit, WeightValue } from '@/types';
 
@@ -21,13 +22,6 @@ interface WeightSheetProps {
   onSave: (date: string, weight: WeightValue) => void;
   onDelete: (date: string) => void;
   onClose: () => void;
-}
-
-/** A local YYYY-MM-DD `days` away (noon, so a DST change can't skip or repeat a day). */
-function shiftDate(date: string, days: number): string {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Logs, edits or deletes one day's weight, stepping between days without leaving the sheet. */
@@ -52,7 +46,7 @@ export default function WeightSheet({ visible, date: initialDate, today, unit, e
   }
 
   function step(days: number) {
-    const next = shiftDate(date, days);
+    const next = shiftDay(date, days);
     if (next > today) return;
     haptics.tick();
     setDate(next);
