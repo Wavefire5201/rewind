@@ -25,7 +25,8 @@ const savedCopies = () => [...fileStore.keys()].filter((k) => k.startsWith('file
 function renderPreview(confirmSave: () => Promise<boolean>, onSave = jest.fn()) {
   return render(
     <FontProvider>
-      <CapturePreview visible imageUri={SHOT} onSave={onSave} onRetake={jest.fn()} confirmSave={confirmSave} />
+      <CapturePreview visible imageUri={SHOT} onSave={onSave} onRetake={jest.fn()} weightUnit="lb"
+        confirmSave={confirmSave} />
     </FontProvider>,
   );
 }
@@ -48,7 +49,7 @@ it('copies the photo into the documents directory and saves it once confirmed', 
   await renderPreview(async () => true, onSave);
   await act(async () => fireEvent.press(screen.getByText('save')));
   expect(savedCopies()).toHaveLength(1);
-  expect(onSave).toHaveBeenCalledWith('', savedCopies()[0]);
+  expect(onSave).toHaveBeenCalledWith('', savedCopies()[0], null);
 });
 
 it('keeps the caption and its buttons above the keyboard (keyboard-aware scrolling, which works in a Modal)', async () => {
@@ -71,7 +72,8 @@ describe('retaking with a caption typed', () => {
     const onRetake = jest.fn();
     await render(
       <FontProvider>
-        <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={onRetake} confirmSave={async () => true} />
+        <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={onRetake} weightUnit="lb"
+        confirmSave={async () => true} />
       </FontProvider>,
     );
     await act(async () => fireEvent.changeText(screen.getByPlaceholderText('add a caption...'), 'first day'));
@@ -110,4 +112,56 @@ it('a confirmed save plays one success haptic, not a tap as well', async () => {
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
   expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
   expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
+});
+
+describe('the optional weight', () => {
+  it('saves with the photo when filled in, in the given unit', async () => {
+    const onSave = jest.fn();
+    await renderPreview(async () => true, onSave);
+    await act(async () => fireEvent.changeText(screen.getByPlaceholderText('weight (optional)'), '172,4'));
+    await act(async () => fireEvent.press(screen.getByText('save')));
+    expect(onSave).toHaveBeenCalledWith('', savedCopies()[0], { value: 172.4, unit: 'lb' });
+  });
+
+  it("doesn't save anything while it isn't a weight, and says what it takes", async () => {
+    const onSave = jest.fn();
+    await renderPreview(async () => true, onSave);
+    await act(async () => fireEvent.changeText(screen.getByPlaceholderText('weight (optional)'), '5000'));
+    await act(async () => fireEvent.press(screen.getByText('save')));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(savedCopies()).toHaveLength(0);
+    expect(screen.getByText('enter a weight between 20–500 lb, or leave it blank')).toBeTruthy();
+  });
+
+  it("starts from the day's weight when there is one", async () => {
+    await render(
+      <FontProvider>
+        <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={jest.fn()} weightUnit="kg" initialWeight="80.5" />
+      </FontProvider>,
+    );
+    expect(screen.getByDisplayValue('80.5')).toBeTruthy();
+    expect(screen.getByText('kg')).toBeTruthy();
+  });
+});
+
+it("starts from the day's caption", async () => {
+  await render(
+    <FontProvider>
+      <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={jest.fn()} weightUnit="lb" initialCaption="first" />
+    </FontProvider>,
+  );
+  expect(screen.getByDisplayValue('first')).toBeTruthy();
+});
+
+it("retakes without asking when the caption is still the day's own", async () => {
+  mockConfirm.mockClear();
+  const onRetake = jest.fn();
+  await render(
+    <FontProvider>
+      <CapturePreview visible imageUri={SHOT} onSave={jest.fn()} onRetake={onRetake} weightUnit="lb" initialCaption="first" />
+    </FontProvider>,
+  );
+  await act(async () => fireEvent.press(screen.getByText('retake')));
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(onRetake).toHaveBeenCalledTimes(1);
 });

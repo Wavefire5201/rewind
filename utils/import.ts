@@ -2,9 +2,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
-import type { PhotoEntry } from '@/types';
+import type { PhotoEntry, WeightEntry, WeightValue } from '@/types';
 import { readZipEntries, readZipEntry, type ByteSource, type ZipEntry } from '@/utils/zipReader';
-import { readPhotoDetails } from '@/utils/backupManifest';
+import { readPhotoDetails, readWeights, readWeightValue } from '@/utils/backupManifest';
 
 export async function pickPhotosFromLibrary(
   { multiple = true }: { multiple?: boolean } = {},
@@ -50,7 +50,7 @@ export async function importFromBackup(
     type: '*/*',
     copyToCacheDirectory: true,
   });
-  if (result.canceled || !result.assets?.length) return { photos: [], skipped: 0, unreadable: 0 };
+  if (result.canceled || !result.assets?.length) return { photos: [], skipped: 0, unreadable: 0, weights: [] };
   const srcFile = new File(result.assets[0].uri);
   // Random access through a file handle: read the zip's directory, then one photo at a
   // time. Loading the whole backup (base64 + JSZip) needs several times its size in JS
@@ -79,6 +79,9 @@ export interface BackupImport {
   skipped: number;
   /** Entries that couldn't be restored: malformed, without a valid date, missing their image, or failing to write. */
   unreadable: number;
+  /** The backup's weights (version 3), for the album restored into; malformed ones are left out. */
+  weights: WeightEntry[];
+  weightGoal?: WeightValue;
 }
 
 // Lets queued work run: a Cancel tap, the progress count re-rendering.
@@ -135,7 +138,9 @@ async function readBackupEntries(
     }
     throw e;
   }
-  return { photos, skipped, unreadable };
+  const weights = readWeights(manifest.weights, albumId, isValidDate);
+  const weightGoal = readWeightValue(manifest.weightGoal);
+  return { photos, skipped, unreadable, weights, ...(weightGoal ? { weightGoal } : {}) };
 }
 
 /** One manifest entry: its photo, or why it wasn't restored. */

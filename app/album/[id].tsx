@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useIsFocused, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, useIsFocused, useFocusEffect, Stack } from 'expo-router';
 import { CaretLeft, Camera, Play, GearSix } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
@@ -20,19 +20,15 @@ import { usePhotoEncodeBackfill } from '@/hooks/usePhotoEncodeBackfill';
 import { useFaceScanBackfill } from '@/hooks/useFaceScanBackfill';
 import { useThumbnailBackfill } from '@/hooks/useThumbnailBackfill';
 import { isFaceScanAvailable, needsFaceScan } from '@/utils/faceScan';
-import { buildFaceTrend, photoReadout } from '@/utils/faceTrend';
-import FaceTrendCard from '@/components/face/FaceTrendCard';
-import type { PhotoEntry } from '@/types';
+import { buildFaceTrend } from '@/utils/faceTrend';
+import TrendCard from '@/components/timeline/TrendCard';
+import { unitFor } from '@/utils/weight';
 import { haptics } from '@/utils/haptics';
-import { notify } from '@/utils/notify';
-import { pickPhotosFromLibrary, createPhotoEntry } from '@/utils/import';
+import { takeLastViewedDay } from '@/utils/lastViewedDay';
 import { nounFor } from '@/utils/text';
-import ImportSheet, { ImportSource } from '@/components/ui/ImportSheet';
 import MonthHeader from '@/components/timeline/MonthHeader';
 import CalendarStats from '@/components/timeline/CalendarStats';
 import CalendarGrid from '@/components/timeline/CalendarGrid';
-import PhotoModal from '@/components/timeline/PhotoModal';
-import EmptyState from '@/components/ui/EmptyState';
 import AlbumLockGate from '@/components/ui/AlbumLockGate';
 
 export default function AlbumDetailRoute() {
@@ -49,8 +45,11 @@ function AlbumDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { photos, getPhotosByMonth } = usePhotos(id);
-  const { profile, albums, addPhotos, updatePhoto, deletePhoto } = useAppContext();
+  const { profile, albums, weights: allWeights, settings, today: todayDate } = useAppContext();
   const album = albums.find(a => a.id === id);
+  const weights = useMemo(() => allWeights.filter(w => w.albumId === id), [allWeights, id]);
+  const weightDates = useMemo(() => new Set(weights.map(w => w.date)), [weights]);
+  const unit = unitFor(settings.units);
   const { currentStreak, consistency } = useStreak(id, album?.createdAt);
 
   const { fonts, typography } = useFont();
@@ -71,11 +70,15 @@ function AlbumDetailScreen() {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [showImportSheet, setShowImportSheet] = useState(false);
-  const [importTargetDate, setImportTargetDate] = useState<string | null>(null);
+
+  // Back from the day view: show the month of the last day it showed.
+  useFocusEffect(useCallback(() => {
+    const date = takeLastViewedDay(id);
+    if (!date) return;
+    const [year, month] = date.split('-').map(Number);
+    setCurrentMonth({ year, month });
+  }, [id]));
 
   // Animated month picker expand/collapse
   const MONTH_PICKER_HEIGHT = 224;
@@ -104,8 +107,8 @@ function AlbumDetailScreen() {
   // The album's history starts at its earliest photo when imports predate its creation.
   // Split the string (not new Date(...)) so a UTC parse can't shift the day.
   const startDate = useMemo(
-    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date)),
-    [album?.createdAt, profile.joinDate, photos],
+    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date), weights.map(w => w.date)),
+    [album?.createdAt, profile.joinDate, photos, weights],
   );
   const [startYear, startMonth, startDayOfMonth] = startDate.split('-').map(Number);
   const isCurrentMonth = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1;
@@ -139,55 +142,9 @@ function AlbumDetailScreen() {
     });
   }
 
-  function handleDayPress(date: string) {
-    const index = monthPhotos.findIndex(p => p.date === date);
-    if (index >= 0) {
-      setSelectedPhotoIndex(index);
-      setModalVisible(true);
-    }
-  }
-
-  /** Opens the photo on `date` from anywhere (the face chart), switching to its month. */
-  function openPhotoOnDate(date: string) {
-    const [year, month] = date.split('-').map(Number);
-    setCurrentMonth({ year, month });
-    const index = getPhotosByMonth(year, month).findIndex(p => p.date === date);
-    if (index >= 0) {
-      setSelectedPhotoIndex(index);
-      setModalVisible(true);
-    }
-  }
-
-  function handleEmptyDayPress(date: string) {
-    haptics.tap();
-    setImportTargetDate(date);
-    setShowImportSheet(true);
-  }
-
-  async function handleImportSource(source: ImportSource) {
-    setShowImportSheet(false);
-    const date = importTargetDate;
-    setImportTargetDate(null);
-    if (source === 'camera-roll') {
-      // Fills the tapped empty day: one photo, on that day whatever its EXIF date says,
-      // and never replacing a photo that's already there.
-      try {
-        const [picked] = await pickPhotosFromLibrary({ multiple: false });
-        if (!picked || !date) return;
-        const { added } = addPhotos([await createPhotoEntry(picked.uri, date, '', id)]);
-        if (added > 0) haptics.success();
-        else notify({ title: 'that day already has a photo', tone: 'error' });
-      } catch {
-        notify({ title: "couldn't add the photo", tone: 'error' });
-      }
-    } else if (source === 'backup') {
-      // Redirect to album settings for full backup import
-      router.push({ pathname: '/album/settings', params: { albumId: id } });
-    }
-  }
-
-  function handleRetake(albumId: string) {
-    router.push({ pathname: '/(tabs)/camera', params: { albumId } });
+  /** Every day's things live in the day view: the calendar, the charts and "+ log" all open it. */
+  function openDay(date: string, focus?: 'weight') {
+    router.push({ pathname: '/album/day', params: { albumId: id, date, ...(focus ? { focus } : {}) } });
   }
 
   const albumName = album?.name ?? id ?? 'album';
@@ -217,81 +174,71 @@ function AlbumDetailScreen() {
         </Pressable>
       </View>
 
-      {photos.length === 0 ? (
-        <View style={{ flex: 1 }}>
-          <EmptyState
-            icon={<Camera size={40} color={Colors.textTertiary} weight="light" />}
-            message="no photos yet"
-            subtitle="capture your first photo to start your streak"
-          />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Album stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
-              <Text style={typography.small}>{nounFor(photos.length, 'photo')}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>
-              <Text style={typography.small}>day streak</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{consistency}%</Text>
-              <Text style={typography.small}>consistency</Text>
-            </View>
+      {/* Shown even without photos: a day can get a photo or a weight from here. */}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Album stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{photos.length}</Text>
+            <Text style={typography.small}>{nounFor(photos.length, 'photo')}</Text>
           </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light, color: Colors.streak }]}>{currentStreak}</Text>
+            <Text style={typography.small}>day streak</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { fontFamily: fonts.light }]}>{consistency}%</Text>
+            <Text style={typography.small}>consistency</Text>
+          </View>
+        </View>
 
-          <MonthHeader
+        <MonthHeader
+          year={currentMonth.year}
+          month={currentMonth.month}
+          onPrev={handlePrevMonth}
+          onNext={handleNextMonth}
+          onTitlePress={toggleMonthPicker}
+          disableNext={currentMonth.year * 12 + currentMonth.month >= now.getFullYear() * 12 + (now.getMonth() + 1)}
+          disablePrev={currentMonth.year * 12 + currentMonth.month <= startYear * 12 + startMonth}
+        />
+        <Animated.View style={monthPickerAnimatedStyle}>
+          <MonthPicker
             year={currentMonth.year}
             month={currentMonth.month}
-            onPrev={handlePrevMonth}
-            onNext={handleNextMonth}
-            onTitlePress={toggleMonthPicker}
-            disableNext={currentMonth.year * 12 + currentMonth.month >= now.getFullYear() * 12 + (now.getMonth() + 1)}
-            disablePrev={currentMonth.year * 12 + currentMonth.month <= startYear * 12 + startMonth}
+            onChange={(year, month) => setCurrentMonth({ year, month })}
+            minYear={startYear}
+            minMonth={startMonth}
+            maxYear={now.getFullYear()}
+            maxMonth={now.getMonth() + 1}
           />
-          <Animated.View style={monthPickerAnimatedStyle}>
-            <MonthPicker
-              year={currentMonth.year}
-              month={currentMonth.month}
-              onChange={(year, month) => setCurrentMonth({ year, month })}
-              minYear={startYear}
-              minMonth={startMonth}
-              maxYear={now.getFullYear()}
-              maxMonth={now.getMonth() + 1}
-            />
-          </Animated.View>
-          <CalendarStats captured={captured} missed={missed} />
-          <CalendarGrid
-            year={currentMonth.year}
-            month={currentMonth.month}
-            photos={photos}
-            joinDate={startDate}
-            onDayPress={handleDayPress}
-            onEmptyDayPress={handleEmptyDayPress}
-          />
-          {captured === 0 && (isPastMonth || isCurrentMonth) && (
-            <Text style={[styles.emptyMonthHint, { fontFamily: fonts.regular }]}>
-              tap any day to backfill a photo
-            </Text>
-          )}
-          {faceAvailable && photos.length > 0 ? (
-            <FaceTrendCard
-              photos={photos}
-              trend={faceTrend}
-              waiting={photos.some(needsFaceScan)}
-              progress={faceProgress}
-              onSelectDate={openPhotoOnDate}
-              onCompare={() => router.push({ pathname: '/album/compare', params: { albumId: id } })}
-            />
-          ) : null}
-        </ScrollView>
-      )}
+        </Animated.View>
+        <CalendarStats captured={captured} missed={missed} />
+        <CalendarGrid
+          year={currentMonth.year}
+          month={currentMonth.month}
+          photos={photos}
+          joinDate={startDate}
+          weightDates={weightDates}
+          onDayPress={(date) => { haptics.tap(); openDay(date); }}
+        />
+        {captured === 0 && (isPastMonth || isCurrentMonth) && (
+          <Text style={[styles.emptyMonthHint, { fontFamily: fonts.regular }]}>
+            tap a day to add a photo or weight
+          </Text>
+        )}
+        <TrendCard
+          face={faceAvailable ? { photos, trend: faceTrend, waiting: photos.some(needsFaceScan), progress: faceProgress } : null}
+          weights={weights}
+          unit={unit}
+          goal={album?.weightGoal}
+          onSelectDate={(date) => openDay(date)}
+          onCompare={() => router.push({ pathname: '/album/compare', params: { albumId: id } })}
+          onLogWeight={(date) => (date ? openDay(date) : openDay(todayDate, 'weight'))}
+        />
+      </ScrollView>
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
@@ -317,23 +264,6 @@ function AlbumDetailScreen() {
         </Pressable>
       </View>
 
-      <PhotoModal
-        visible={modalVisible}
-        photos={monthPhotos}
-        initialIndex={selectedPhotoIndex}
-        joinDate={startDate}
-        onClose={() => setModalVisible(false)}
-        onDelete={(id) => { deletePhoto(id); if (monthPhotos.length <= 1) setModalVisible(false); }}
-        onUpdateCaption={(id, caption) => updatePhoto(id, { caption })}
-        onRetake={handleRetake}
-        readout={faceAvailable ? (p: PhotoEntry) => photoReadout(faceTrend, p) : undefined}
-      />
-
-      <ImportSheet
-        visible={showImportSheet}
-        onSelect={handleImportSource}
-        onClose={() => { setShowImportSheet(false); setImportTargetDate(null); }}
-      />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, type KeyboardTypeOptions } from 'react-native';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { Colors, Fonts, Pressed } from '@/constants/theme';
 import { useFont } from '@/context/FontContext';
@@ -13,6 +13,11 @@ interface TextInputModalProps {
   defaultValue?: string;
   confirmLabel?: string;
   maxLength?: number;
+  keyboardType?: KeyboardTypeOptions;
+  /** Confirms an empty field too (e.g. to clear a value), instead of asking for one. */
+  allowEmpty?: boolean;
+  /** Checks a non-empty value: an error message keeps the sheet open and shows it. */
+  validate?: (value: string) => string | null;
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }
@@ -26,17 +31,20 @@ export default function TextInputModal({
   defaultValue = '',
   confirmLabel = 'confirm',
   maxLength = 100,
+  keyboardType,
+  allowEmpty = false,
+  validate,
   onConfirm,
   onCancel,
 }: TextInputModalProps) {
   const { fonts } = useFont();
   const [value, setValue] = useState(defaultValue);
-  const [showEmptyError, setShowEmptyError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
       setValue(defaultValue);
-      setShowEmptyError(false);
+      setError(null);
     }
   }, [visible, defaultValue]);
 
@@ -47,12 +55,13 @@ export default function TextInputModal({
 
   function handleConfirm() {
     const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      setShowEmptyError(true);
+    const problem = trimmed.length === 0 ? (allowEmpty ? null : "name can't be empty") : (validate?.(trimmed) ?? null);
+    if (problem) {
+      setError(problem);
       haptics.error();
       return;
     }
-    setShowEmptyError(false);
+    setError(null);
     // No haptic here: every caller plays the one for the outcome (success).
     onConfirm(trimmed);
   }
@@ -67,17 +76,18 @@ export default function TextInputModal({
         <TextInput
           style={[styles.input, { fontFamily: fonts.regular }]}
           value={value}
-          onChangeText={(v) => { setValue(v); if (showEmptyError) setShowEmptyError(false); }}
+          onChangeText={(v) => { setValue(v); if (error) setError(null); }}
           placeholder={placeholder}
           placeholderTextColor={Colors.textTertiary}
           autoFocus
           returnKeyType="done"
           onSubmitEditing={handleConfirm}
           maxLength={maxLength}
+          keyboardType={keyboardType}
           accessibilityLabel={placeholder || title}
         />
-        {showEmptyError ? (
-          <Text style={[styles.errorHint, { fontFamily: fonts.regular }]}>{"name can't be empty"}</Text>
+        {error ? (
+          <Text style={[styles.errorHint, { fontFamily: fonts.regular }]}>{error}</Text>
         ) : null}
         <View style={styles.actions}>
           <Pressable
