@@ -53,7 +53,7 @@ function CameraScreen() {
   const navigation = useNavigation();
   const canGoBack = navigation.canGoBack();
   const focused = useIsFocused();
-  const { albums, settings, updateAlbum, today, weights, setWeight } = useAppContext();
+  const { albums, settings, updateAlbum, today, weights, setWeight, deleteWeight } = useAppContext();
   const weightUnit = unitFor(settings.units);
   // Today's weight, if it's already logged (a retake): the preview's field starts from it.
   const todayWeight = useMemo(() => weights.find(w => weightKey(w) === weightKey({ albumId, date: today })), [weights, albumId, today]);
@@ -284,7 +284,9 @@ function CameraScreen() {
       ...(capturedLandmarks ? { faceLandmarks: capturedLandmarks } : {}),
     };
     addPhoto(newPhoto);
+    // The field started from today's weight, so a blank one was cleared: no weight.
     if (weight) void setWeight(albumId, today, weight);
+    else if (todayWeight) void deleteWeight(albumId, today);
     setShowPreview(false);
     setCapturedUri('');
     router.replace({ pathname: '/album/[id]', params: { id: albumId } });
@@ -423,6 +425,7 @@ function CameraScreen() {
         confirmSave={confirmSave}
         weightUnit={weightUnit}
         initialWeight={todayWeight ? weightInputText(todayWeight, weightUnit) : ''}
+        initialCaption={todayPhoto?.caption ?? ''}
       />
     </SafeAreaView>
   );

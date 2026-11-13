@@ -29,7 +29,10 @@ jest.mock('@/hooks/useAutoCapture', () => ({
   useAutoCapture: (args: unknown) => { mockAutoCapture(args); return { progress: 0, isInCooldown: false }; },
 }));
 jest.mock('@/hooks/useFaceScanBackfill', () => ({ useFaceScanBackfill: () => ({ scanning: false, done: 0, total: 0 }) }));
-let mockTodayPhoto: { id: string } | null = null;
+let mockTodayPhoto: { id: string; caption?: string } | null = null;
+let mockWeights: { albumId: string; date: string; value: number; unit: string; updatedAt: string }[] = [];
+const mockSetWeight = jest.fn();
+const mockDeleteWeight = jest.fn();
 jest.mock('@/hooks/usePhotos', () => ({ usePhotos: () => ({ mostRecentPhoto: null, todayPhoto: mockTodayPhoto, addPhoto: jest.fn() }) }));
 const mockConfirm = jest.fn(async (_options: ConfirmOptions) => false);
 jest.mock('@/utils/confirm', () => ({ ...jest.requireActual('@/utils/confirm'), confirm: (options: ConfirmOptions) => mockConfirm(options) }));
@@ -40,8 +43,9 @@ jest.mock('@/context/AppContext', () => ({
     albums: [{ id: 'a', name: 'daily' }],
     settings: { mirrorSelfies: true, photoQuality: 'medium' },
     updateAlbum: jest.fn(),
-    weights: [],
-    setWeight: jest.fn(),
+    weights: mockWeights,
+    setWeight: mockSetWeight,
+    deleteWeight: mockDeleteWeight,
     today: '2026-10-16',
   }),
 }));
@@ -142,4 +146,26 @@ it('stops the camera when the tab is not in front', async () => {
   mockFocused = false;
   await render(<FontProvider><CameraRoute /></FontProvider>);
   expect(last(mockViewfinder).active).toBe(false);
+});
+
+describe("today's existing entries", () => {
+  afterEach(() => {
+    mockTodayPhoto = null;
+    mockWeights = [];
+  });
+
+  it("a retake starts from today's caption", async () => {
+    mockTodayPhoto = { id: 'p1', caption: 'first' };
+    await render(<FontProvider><CameraRoute /></FontProvider>);
+    expect(last(mockPreview).initialCaption).toBe('first');
+  });
+
+  it('clearing a prefilled weight deletes it', async () => {
+    mockWeights = [{ albumId: 'a', date: '2026-10-16', value: 80, unit: 'kg', updatedAt: '2026-10-16T08:00:00.000Z' }];
+    await render(<FontProvider><CameraRoute /></FontProvider>);
+    expect(last(mockPreview).initialWeight).toBe('80');
+    await act(async () => last(mockPreview).onSave('', 'file:///document/new.jpg', null));
+    expect(mockDeleteWeight).toHaveBeenCalledWith('a', '2026-10-16');
+    expect(mockSetWeight).not.toHaveBeenCalled();
+  });
 });
