@@ -108,6 +108,11 @@ describe('trackingStartDate', () => {
     expect(trackingStartDate('2026-10-15T18:00:00.000Z', '2026-01-01', ['2026-10-15'])).toBe('2026-10-15');
   });
 
+  it('an album starts at its earliest weight when that predates its photos', () => {
+    expect(trackingStartDate('2026-03-10T12:00:00.000Z', '2026-01-01', ['2026-03-12'], ['2026-03-04', '2026-03-20'])).toBe('2026-03-04');
+    expect(trackingStartDate('2026-03-10T12:00:00.000Z', '2026-01-01', ['2026-03-12'])).toBe('2026-03-10');
+  });
+
   it("uses the creation timestamp's local day", () => {
     // Created at 20:00 on the 9th in Chicago (the test zone), already the 10th in UTC.
     expect(trackingStartDate('2026-03-10T01:00:00.000Z', '2026-01-01', [])).toBe('2026-03-09');

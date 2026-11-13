@@ -168,10 +168,24 @@ describe('useAlbumLock', () => {
 });
 
 describe('useStreak', () => {
+  it('the album starts at an earlier weight in it (a day before creation counts as missed)', async () => {
+    const { useStreak } = require('@/hooks/useStreak') as typeof import('@/hooks/useStreak');
+    const weight = (albumId: string, date: string) => ({ albumId, date, value: 80, unit: 'kg', updatedAt: `${date}T08:00:00.000Z` });
+    mockUseAppContext.mockImplementation(() => ({
+      photos: [photo('p1', '2026-03-12')],
+      weights: [weight('a1', '2026-03-01'), weight('a2', '2026-02-01')],
+      profile: { joinDate: '2026-01-01' },
+      today: '2026-03-12',
+    }));
+    const { result } = await renderHook(() => useStreak('a1', '2026-03-10T12:00:00.000Z'));
+    // 03-09 is before the album was created, but after its earliest weight.
+    expect(result.current.weekStatus.find((d) => d.date === '2026-03-09')?.status).toBe('missed');
+  });
+
   it("recomputes the streak and week when the context's day changes", async () => {
     const { useStreak } = require('@/hooks/useStreak') as typeof import('@/hooks/useStreak');
     const photos = [photo('p1', '2026-03-08'), photo('p2', '2026-03-09')];
-    const ctx = { photos, profile: { joinDate: '2026-03-01' }, today: '2026-03-09' };
+    const ctx = { photos, weights: [], profile: { joinDate: '2026-03-01' }, today: '2026-03-09' };
     mockUseAppContext.mockImplementation(() => ctx);
     const { result, rerender } = await renderHook(() => useStreak('a1', '2026-03-01T12:00:00.000Z'));
     expect(result.current.currentStreak).toBe(2);

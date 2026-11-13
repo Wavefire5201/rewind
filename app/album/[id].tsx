@@ -110,8 +110,8 @@ function AlbumDetailScreen() {
   // The album's history starts at its earliest photo when imports predate its creation.
   // Split the string (not new Date(...)) so a UTC parse can't shift the day.
   const startDate = useMemo(
-    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date)),
-    [album?.createdAt, profile.joinDate, photos],
+    () => trackingStartDate(album?.createdAt, profile.joinDate, photos.map(p => p.date), weights.map(w => w.date)),
+    [album?.createdAt, profile.joinDate, photos, weights],
   );
   const [startYear, startMonth, startDayOfMonth] = startDate.split('-').map(Number);
   const isCurrentMonth = currentMonth.year === today.getFullYear() && currentMonth.month === today.getMonth() + 1;
