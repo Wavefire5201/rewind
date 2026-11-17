@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Constants from 'expo-constants';
 import { Directory, Paths } from 'expo-file-system';
 import { HardDrive, Image, Trash, Database, Clock, LockSimple, Scales } from 'phosphor-react-native';
 import PinModal from '@/components/ui/PinModal';
 import { hasPin, clearPin } from '@/utils/pin';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts, Spacing } from '@/constants/theme';
 import SectionLabel from '@/components/ui/SectionLabel';
 import SettingsRow from '@/components/ui/SettingsRow';
 import { haptics } from '@/utils/haptics';
@@ -215,6 +216,7 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
           </View>
         </>
       )}
+      <Text style={styles.version}>{versionLine()}</Text>
       <PinModal
         visible={showPinModal}
         intent={pinIntent}
@@ -225,7 +227,21 @@ export default function SettingsList({ settings, updateSettings, onClearData, on
   );
 }
 
+/** "rewind 1.1.0 (4)": the version and Android build number of what's installed. */
+function versionLine(): string {
+  const config = Constants.expoConfig;
+  const build = config?.android?.versionCode;
+  return `rewind ${config?.version ?? '?'}${build !== undefined ? ` (${build})` : ''}`;
+}
+
 const styles = StyleSheet.create({
+  version: {
+    fontFamily: Fonts.mono.regular,
+    fontSize: 11,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+    marginTop: Spacing.xxl,
+  },
   container: {
     marginTop: 12,
     backgroundColor: Colors.bgCard,
