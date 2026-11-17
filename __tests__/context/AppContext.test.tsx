@@ -134,6 +134,28 @@ describe('AppContext', () => {
     await unmount();
   });
 
+  it('data from a newer app version says to update, not to restart, and nothing is written', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const db = await getDb();
+    await db.execAsync('PRAGMA user_version = 99');
+    resetDbForTests();
+    await renderProvider();
+    expect(getNotices()).toEqual([expect.objectContaining({
+      title: 'update rewind',
+      message: 'this data was saved by a newer version of rewind. nothing has been changed.',
+      sticky: true,
+      key: 'newer-database',
+    })]);
+    // A change made meanwhile can't write into the newer layout.
+    await act(async () => {
+      ctx!.updateSettings({ use24hClock: true });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(await db.getFirstAsync('PRAGMA user_version')).toEqual({ user_version: 99 });
+    expect(await db.getAllAsync('SELECT key FROM kv')).toEqual([]);
+    errorSpy.mockRestore();
+  });
+
   it("a failed load starts no new profile over the stored one", async () => {
     await seed({ photos: [photo({ id: 'p1', date: '2026-03-01' })], profile: { name: 'Ada', avatarUri: null, joinDate: '2026-02-01' } });
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
