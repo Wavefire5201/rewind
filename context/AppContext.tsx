@@ -9,6 +9,7 @@ import { cancelAlbumReminder, cancelAllReminders } from '@/utils/notifications';
 import { notify } from '@/utils/notify';
 import { useToday } from '@/hooks/useToday';
 import { getToday, byDate } from '@/utils/dates';
+import { NewerDatabaseError } from '@/utils/migrations';
 
 // Saves go through utils/storage, which writes only the rows a change touched, in one
 // transaction per tick, and reports a failure itself (log + notice). Each save resolves with
@@ -154,6 +155,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Nothing loaded, but nothing is lost: a save writes only the rows it changes, so the
         // stored photos stay put until a launch that can read them.
         console.error('Failed to load app data:', e);
+        if (e instanceof NewerDatabaseError) {
+          // An older app installed over newer data: it doesn't know the layout, so it writes nothing
+          // (every save fails the same way) until the app is updated.
+          notify({
+            title: 'update rewind',
+            message: 'this data was saved by a newer version of rewind. nothing has been changed.',
+            tone: 'error',
+            sticky: true,
+            key: 'newer-database',
+          });
+          setIsLoading(false);
+          return;
+        }
         notify({
           title: "couldn't load your photos",
           message: "nothing has been deleted, but rewind couldn't read your saved photos. try restarting the app.",

@@ -60,8 +60,11 @@ export interface MockStatement {
   finalizeAsync(): Promise<void>;
 }
 
+// The node database behind each wrapper, for backupDatabaseAsync.
+const nodeOf = new WeakMap<MockDb, NodeDb>();
+
 function wrap(name: string, db: NodeDb): MockDb {
-  return {
+  const wrapped: MockDb = {
     async execAsync(sql) {
       sqliteLog.statements.push(sql.trim());
       db.exec(sql);
@@ -105,11 +108,12 @@ function wrap(name: string, db: NodeDb): MockDb {
         async finalizeAsync() {},
       };
     },
-    async closeAsync() {
-      db.close();
-      databases.delete(name);
-    },
+    // Like a file on disk, the data outlives the connection: reopening the name finds it again.
+    // deleteDatabaseAsync (or resetSqliteForTests) is what removes it.
+    async closeAsync() {},
   };
+  nodeOf.set(wrapped, db);
+  return wrapped;
 }
 
 export const sqliteMock = {
@@ -121,5 +125,27 @@ export const sqliteMock = {
       databases.set(name, db);
     }
     return wrap(name, db);
+  },
+  async deleteDatabaseAsync(name: string): Promise<void> {
+    databases.get(name)?.close();
+    databases.delete(name);
+  },
+  /** Copies the source's tables, indexes, rows and user_version into the destination, like SQLite's
+   *  online backup does. */
+  async backupDatabaseAsync({ sourceDatabase, destDatabase }: { sourceDatabase: MockDb; destDatabase: MockDb }): Promise<void> {
+    const src = nodeOf.get(sourceDatabase)!;
+    const dest = nodeOf.get(destDatabase)!;
+    const objects = src.prepare("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type DESC").all();
+    for (const o of objects) dest.exec(String(o.sql));
+    for (const o of objects.filter((x) => x.type === 'table')) {
+      const rows = src.prepare(`SELECT * FROM "${String(o.name)}"`).all();
+      for (const row of rows) {
+        const cols = Object.keys(row);
+        dest.prepare(`INSERT INTO "${String(o.name)}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+          .run(...cols.map((c) => row[c]));
+      }
+    }
+    const version = src.prepare('PRAGMA user_version').get()?.user_version ?? 0;
+    dest.exec(`PRAGMA user_version = ${Number(version)}`);
   },
 };

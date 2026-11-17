@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type { Album, PhotoEntry, WeightEntry } from '@/types';
+import { MIGRATIONS, migrate } from '@/utils/migrations';
 
 /**
  * Rewind's database: photos, albums, weights, and a key/value table for the profile and settings. One
@@ -8,55 +9,16 @@ import type { Album, PhotoEntry, WeightEntry } from '@/types';
  */
 
 export const DB_NAME = 'rewind.db';
-export const SCHEMA_VERSION = 1;
+/** The layout this app writes: the baseline plus every migration (utils/migrations.ts). */
+export const SCHEMA_VERSION = 1 + MIGRATIONS.length;
 
-// WAL because a commit then appends to one log file with one sync, rather than writing a rollback
-// journal and the database file (there's one connection, so WAL's concurrent reads don't matter);
-// synchronous FULL because callers delete files once a save resolves, so a committed transaction
-// must survive a power loss (NORMAL can roll one back).
-// No foreign keys: integrity stays in app logic, and an album row written after its photos must
-// not fail the save.
-const SCHEMA = `
+// Set on every open, not versioned: WAL because a commit then appends to one log file with one
+// sync, rather than writing a rollback journal and the database file (there's one connection, so
+// WAL's concurrent reads don't matter); synchronous FULL because callers delete files once a save
+// resolves, so a committed transaction must survive a power loss (NORMAL can roll one back).
+const CONNECTION_PRAGMAS = `
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = FULL;
-CREATE TABLE IF NOT EXISTS photos (
-  id TEXT PRIMARY KEY NOT NULL,
-  album_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  image_uri TEXT NOT NULL,
-  thumb_uri TEXT,
-  caption TEXT NOT NULL,
-  captured_at TEXT NOT NULL,
-  camera_direction TEXT NOT NULL,
-  encoding TEXT,
-  face_scan TEXT,
-  face_landmarks TEXT
-);
-CREATE INDEX IF NOT EXISTS photos_album_date ON photos (album_id, date);
-CREATE TABLE IF NOT EXISTS albums (
-  id TEXT PRIMARY KEY NOT NULL,
-  name TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  reminder_enabled INTEGER NOT NULL,
-  reminder_time TEXT NOT NULL,
-  is_locked INTEGER NOT NULL,
-  framing TEXT,
-  weight_goal TEXT,
-  position INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS weights (
-  album_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  value REAL NOT NULL,
-  unit TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (album_id, date)
-);
-CREATE TABLE IF NOT EXISTS kv (
-  key TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-);
-PRAGMA user_version = ${SCHEMA_VERSION};
 `;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -66,7 +28,9 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
       const db = await SQLite.openDatabaseAsync(DB_NAME);
-      await db.execAsync(SCHEMA);
+      await db.execAsync(CONNECTION_PRAGMAS);
+      // Upgrades an older layout (after a safety copy), or rejects data from a newer app.
+      await migrate(db);
       return db;
     })().catch((e) => {
       // Let the next call try again rather than caching the failure.

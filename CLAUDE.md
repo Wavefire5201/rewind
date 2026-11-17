@@ -15,6 +15,7 @@ Always use `bun` — never npm or npx. Use `bun install`, `bun run`, `bunx` for 
 - `bun run typecheck` — `tsc --noEmit`
 - `bun run lint` — ESLint (Expo config; React Compiler rules are off on purpose, see `eslint.config.js`)
 - `bun run test` — Jest (`bun run test:coverage` for coverage). Not bare `bun test`, which runs Bun's own runner. Needs Node 22.13+: the expo-sqlite stand-in (`__tests__/helpers/sqliteMock.ts`) runs real SQL on `node:sqlite`.
+- `bun run version x.y.z` — bump `app.json`/`package.json` and `android.versionCode`; tagging `vx.y.z` makes the release workflow build and attach a signed APK (see `CONTRIBUTING.md`)
 - `bunx expo-doctor` — dependency check CI runs; fix drift with `bunx expo install --fix`
 - `eas build --profile development|preview|production`, `eas update --branch preview` — EAS (CI does both, see `CONTRIBUTING.md`)
 
@@ -59,7 +60,7 @@ performance only in a release build.
 - **Photos are re-encoded once** (`encoding: 'q95'`); never re-encode a flagged photo. Bump `FACE_SCAN_VERSION` in `utils/faceScan.ts` to rescan after changing what a scan stores.
 - **Layout**: a bordered `flex: 1` item comes out bigger than its siblings (Yoga floors its base size at the border) — draw borders as an inner overlay. `StyleSheet.absoluteFillObject` no longer exists in RN 0.86.
 - **Keyboard**: use `react-native-keyboard-controller` (`KeyboardAvoidingView`, `KeyboardAwareScrollView`, `KeyboardStickyView`, `useReanimatedKeyboardAnimation`; its `height` runs 0 → minus the keyboard height). On edge-to-edge Android the window no longer resizes for the keyboard, and inside an RN `Modal` (its own window) RN's `Keyboard`/`KeyboardAvoidingView` and Reanimated's deprecated `useAnimatedKeyboard` never see it. keyboard-controller tracks Modal windows too.
-- **SQLite**: `utils/storage.ts` is the only database user. `withTransactionAsync` isn't exclusive, so any other query on the connection would run inside its transactions. Saves diff each slice by object identity against what was committed, so update state immutably (a photo mutated in place is never saved). No migrations before release: after changing the schema in `utils/db.ts`, reinstall or clear app data (`CREATE TABLE IF NOT EXISTS` won't alter an existing table).
+- **SQLite**: `utils/storage.ts` is the only database user. `withTransactionAsync` isn't exclusive, so any other query on the connection would run inside its transactions. Saves diff each slice by object identity against what was committed, so update state immutably (a photo mutated in place is never saved). Schema changes are **migrations**: append to `MIGRATIONS` in `utils/migrations.ts` (never edit `BASELINE_SQL`, which installed apps already have; a test pins its hash), then update the row types and mappings in `utils/db.ts`. An older database is copied to `rewind.pre-v<n>.db` and migrated step by step; one from a newer version is refused untouched (`NewerDatabaseError`).
 - `REFINEMENT_BACKLOG.md` (untracked, local) tracks audit findings and remaining taste calls.
 
 ## Skill routing

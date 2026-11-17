@@ -26,7 +26,7 @@ export default function ProfileScreen() {
         >
           <CaretLeft size={20} color={Colors.textPrimary} weight="regular" />
         </Pressable>
-        <Text style={[styles.title, { fontFamily: fonts.regular }]}>profile</Text>
+        <Text style={[styles.title, { fontFamily: fonts.regular }]}>settings</Text>
         <View style={styles.backBtn} />
       </View>
       <ScrollView

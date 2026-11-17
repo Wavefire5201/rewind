@@ -114,7 +114,7 @@ Dependabot only updates GitHub Actions.
 | `android` | changes to dependencies, `app.json`, `modules/` or `patches/` (or run by hand) | full native debug build |
 | `eas-update` | after `ci` passes on `main` | publishes an over-the-air update to the `preview` branch |
 | `eas-build` | version tags `v*` (production), or by hand | EAS cloud builds |
-| `release` | version tags `v*` | GitHub Release with generated notes |
+| `release` | version tags `v*` | GitHub Release with generated notes and a signed release APK |
 
 Third-party actions are pinned to a commit SHA with the version in a trailing comment;
 GitHub's own `actions/*` use major tags. Dependabot updates both. `gradle/actions` stays on v5
@@ -127,7 +127,35 @@ The EAS workflows need a one-time setup and skip themselves until it's done:
 2. Create an access token at expo.dev → Account settings → Access tokens, and add it as the
    repository secret `EXPO_TOKEN`.
 
-To release: bump `version` in `app.json`, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+To release:
+
+```sh
+bun run version 1.1.0                      # app.json + package.json, and android.versionCode + 1
+git commit -am "chore(release): 1.1.0"
+git tag v1.1.0 && git push origin main v1.1.0
+```
+
+The `release` workflow checks that the tag matches `app.json`, then builds `rewind-v1.1.0.apk` (and
+its `.sha256`) for arm64, signed with the release key. Before publishing it,
+`scripts/check-apk-signature.sh` checks that the APK verifies and is signed with the certificate
+pinned in the workflow (`RELEASE_CERT_SHA256`). The release is created as a draft and published only
+once the APK is attached. Every
+release is signed with the same key, so each APK installs over the last and keeps the app's data.
+
+The key comes from four repository secrets: `ANDROID_KEYSTORE_BASE64` (the PKCS12 keystore,
+base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. The
+`withReleaseSigning` config plugin reads them as `REWIND_UPLOAD_*` (environment variables or Gradle
+properties); a local release build without them is signed with the debug key. Keep a copy of the
+keystore and its password outside GitHub: secrets can't be read back, and a lost key means users
+can only update by uninstalling.
+
+### Database migrations
+
+The SQLite layout is versioned (`PRAGMA user_version`). Version 1 is `BASELINE_SQL` in
+`utils/migrations.ts` and never changes (a test pins its hash). To change the schema, append a
+migration to `MIGRATIONS`, then update the row types and mappings in `utils/db.ts`. On launch, an
+older database is copied to `rewind.pre-v<n>.db`, then migrated one transaction per step. A
+database from a newer version is left alone, and the app asks the user to update.
 
 ## Pull requests
 

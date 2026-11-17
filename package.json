@@ -18,6 +18,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "version": "bun scripts/version.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest --silent",

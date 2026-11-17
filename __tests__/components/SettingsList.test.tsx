@@ -11,6 +11,8 @@ import type { Album } from '@/types';
 const mockUpdateSettings = jest.fn();
 
 jest.mock('expo-file-system', () => require('../helpers/fileSystemMock').expoFileSystemMock);
+// The installed app's config, as expo-constants reports it on a device: app.json's own values.
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: require('../../app.json').expo } }));
 let mockHasPin = true;
 jest.mock('@/utils/pin', () => ({ hasPin: async () => mockHasPin, clearPin: jest.fn() }));
 const mockPinModal = jest.fn();
@@ -126,4 +128,9 @@ it('switches the weight units between imperial and metric', async () => {
   expect(screen.getByText('imperial (lb)')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByLabelText('Units: imperial. Switch to metric')));
   expect(mockUpdateSettings).toHaveBeenCalledWith({ units: 'metric' });
+});
+
+it("shows the app's version and build number", async () => {
+  await renderList();
+  expect(screen.getByText('rewind 1.0.0 (1)')).toBeTruthy();
 });
