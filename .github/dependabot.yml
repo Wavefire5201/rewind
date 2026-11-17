@@ -12,5 +12,7 @@ updates:
       # v6 moved setup-gradle's caching into a proprietary component under Gradle's Terms of
       # Use (https://blog.gradle.org/github-actions-for-gradle-v6). Stay on v5 (MIT) unless
       # that's accepted.
-      - dependency-name: gradle/actions
+      # Matched by the full action path: the plain `gradle/actions` this rule used to name never
+      # matched, so v6 came in as #69 (reverted).
+      - dependency-name: gradle/actions/setup-gradle
         update-types: [version-update:semver-major]
