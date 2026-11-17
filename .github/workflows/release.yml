@@ -11,7 +11,12 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  # The release key's certificate (public). An APK signed with anything else wouldn't install over
+  # the previous release, so it's never published. Changes only if the key does: never, ideally.
+  RELEASE_CERT_SHA256: b0942a8fdb8717a97556dcbc4051e939afb8040f5902ae83d3faca581c5a697b
 
 concurrency:
   group: release-${{ github.ref }}
@@ -23,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Compare the tag with the app's version
         env:
           TAG: ${{ github.ref_name }}
@@ -33,26 +40,17 @@ jobs:
             exit 1
           fi
 
-  release:
-    name: Create release
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
-
+  # Builds with a read-only token and no stored git credentials: dependency scripts and Gradle code
+  # run here, next to the keystore, and never get a token that could write to the repo.
   apk:
     name: Signed release APK
-    needs: release
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -95,23 +93,48 @@ jobs:
           REWIND_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
-      - name: Check the signature and attach the APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          apk="rewind-$TAG.apk"
-          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
-          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$apksigner" verify --print-certs "$apk" | tee signature.txt
-          # A debug-signed APK would install over nothing the user has: refuse to publish one.
-          if grep -q 'CN=Android Debug' signature.txt; then
-            echo "::error::the APK is debug-signed; check the ANDROID_* secrets"
-            exit 1
-          fi
-          sha256sum "$apk" > "$apk.sha256"
-          gh release upload "$TAG" "$apk" "$apk.sha256"
-
       - name: Remove the keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Check the signature
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/rewind-$TAG.apk"
+          scripts/check-apk-signature.sh "dist/rewind-$TAG.apk" "$RELEASE_CERT_SHA256"
+          (cd dist && sha256sum "rewind-$TAG.apk" > "rewind-$TAG.apk.sha256")
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: dist/
+          if-no-files-found: error
+
+  # Only this job can write: it publishes what the build produced. The release stays a draft until
+  # the APK is attached, so a failed build never leaves a release without one, and every step can
+  # be re-run.
+  publish:
+    name: Publish release
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: apk
+          path: dist
+
+      - name: Create (as a draft), attach, publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag --draft
+          fi
+          gh release upload "$TAG" dist/* --clobber
+          gh release edit "$TAG" --draft=false

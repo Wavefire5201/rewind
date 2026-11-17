@@ -135,8 +135,11 @@ git commit -am "chore(release): 1.1.0"
 git tag v1.1.0 && git push origin main v1.1.0
 ```
 
-The `release` workflow checks that the tag matches `app.json`, creates the release, and attaches
-`rewind-v1.1.0.apk` (and its `.sha256`), built for arm64 and signed with the release key. Every
+The `release` workflow checks that the tag matches `app.json`, then builds `rewind-v1.1.0.apk` (and
+its `.sha256`) for arm64, signed with the release key. Before publishing it,
+`scripts/check-apk-signature.sh` checks that the APK verifies and is signed with the certificate
+pinned in the workflow (`RELEASE_CERT_SHA256`). The release is created as a draft and published only
+once the APK is attached. Every
 release is signed with the same key, so each APK installs over the last and keeps the app's data.
 
 The key comes from four repository secrets: `ANDROID_KEYSTORE_BASE64` (the PKCS12 keystore,
